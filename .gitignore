@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+*.log
+*.log.*
+.DS_Store
+Thumbs.db
+agent-logs
