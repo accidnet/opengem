@@ -1,12 +1,12 @@
 # Repository Guidelines
 
 ## 프로젝트 구조
-- `src/`: React 앱 진입점(`main.jsx`), 루트 화면(`App.jsx`), 스타일(`App.css`)
+- `src/`: React 앱 진입점(`main.tsx`), 루트 화면(`App.tsx`), 스타일(`App.css`)
 - `src-tauri/`: Rust 진입점(`src/main.rs`), `tauri.conf.json`, `Cargo.toml`
 - `vite.config.js`: Vite 빌드 설정
 
 ## 버전 기준
-- 현재 기준은 Tauri 2.x와 React 18으로 맞춰 유지한다.
+- 현재 기준은 Tauri 2.x, React 19, TypeScript로 맞춰 유지한다.
 - `tauri`/`@tauri-apps/*` 및 Rust 설정은 `package.json`과 `src-tauri/Cargo.toml`에서 함께 확인한다.
 
 ## 실행 명령
@@ -19,7 +19,7 @@
 - `npm run preview`
 
 ## 코딩 규칙
-- JavaScript는 2칸 들여쓰기, 세미콜론, 의미 있는 식별자 사용
+- TypeScript/JavaScript는 2칸 들여쓰기, 세미콜론, 의미 있는 식별자 사용
 - React는 함수형 컴포넌트를 우선 사용
 - 네이밍: 함수/변수 `camelCase`, 컴포넌트/클래스 `PascalCase`
 - Rust는 `rustfmt` 스타일과 `snake_case`를 따른다
