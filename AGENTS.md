@@ -19,10 +19,11 @@
 - `npm run preview`
 
 ## 코딩 규칙
-- TypeScript/JavaScript는 2칸 들여쓰기, 세미콜론, 의미 있는 식별자 사용
+- TypeScript(React)는 2칸 들여쓰기, 세미콜론, 의미 있는 식별자 사용
 - React는 함수형 컴포넌트를 우선 사용
 - 네이밍: 함수/변수 `camelCase`, 컴포넌트/클래스 `PascalCase`
 - Rust는 `rustfmt` 스타일과 `snake_case`를 따른다
+- 주석 및 설명은 기본적으로 한글로 합니다.
 
 ## 검증
 - 테스트 프레임워크 미설치 상태

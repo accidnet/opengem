@@ -1,720 +1,808 @@
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-const CHAT_MODEL = "gpt-4o-mini";
-const STORAGE_KEY = "opengem:chat-session-v1";
-const THEME_KEY = "opengem:theme";
-const VIEW_MODE_KEY = "opengem:view-mode";
-const API_KEY_KEY = "opengem:api-key";
-const AGENTS_KEY = "opengem:agent-list";
-const SYSTEM_PROMPT = "너는 친절하고 간결한 한국어 챗봇 어시스턴트야.";
-const DEFAULT_THEME = "light";
-const DEFAULT_VIEW_MODE = "studio";
+type MessageType = "text" | "plan" | "search" | "typing" | "status";
 
-type Theme = "light" | "dark";
-type ViewMode = "studio" | "messenger";
+type MessageSide = "agent" | "user" | "status";
 
-interface Agent {
+type Message = {
   id: string;
-  name: string;
-  emoji: string;
-  emojiClass?: string;
-  model: string;
-  prompt: string;
-}
+  side: MessageSide;
+  type: MessageType;
+  sender?: string;
+  byline?: string;
+  avatarText?: string;
+  icon?: string;
+  iconColor?: string;
+  text?: string;
+  statusText?: string;
+  planTitle?: string;
+  steps?: string[];
+  logs?: string[];
+};
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  ts: string;
-}
+type ActivityState = "done" | "active" | "working" | "pending";
 
-interface ActivityLog {
-  type: string;
+type ActivityItem = {
+  id: string;
+  source: string;
+  byline?: string;
   text: string;
-  ts: string;
-}
+  state: ActivityState;
+  progress?: ActivityState[];
+  faded?: boolean;
+};
 
-interface StoredSession {
-  messages?: unknown[];
-}
+type AgentColor = "indigo" | "emerald" | "amber" | "violet" | "rose";
 
-const DEFAULT_AGENTS: Agent[] = [
+type AgentItem = {
+  name: string;
+  icon: string;
+  status: string;
+  color: AgentColor;
+  active?: boolean;
+};
+
+type SessionItem = {
+  name: string;
+  time: string;
+  active?: boolean;
+};
+
+type ThemeMode = "dark" | "light";
+
+type IconBadgeProps = {
+  icon: string;
+  text?: string;
+  color?: string;
+};
+
+type MessageCardProps = {
+  message: Message;
+  onApprovePlan: () => void;
+  onModifyPlan: () => void;
+};
+
+type ActivityCardProps = {
+  item: ActivityItem;
+};
+
+const SESSION_MESSAGES: Message[] = [
   {
-    id: "admin",
-    name: "관리자",
-    emoji: "👤",
-    emojiClass: "agent-emoji-admin",
-    model: CHAT_MODEL,
-    prompt: SYSTEM_PROMPT,
+    id: "seed-1",
+    side: "agent",
+    sender: "System",
+    byline: "10:23 AM",
+    icon: "smart_toy",
+    iconColor: "#94a3b8",
+    type: "text",
+    text: "멀티 에이전트 오케스트레이터에 오신 것을 환영합니다. 복잡한 워크플로우를 단계별로 분해하고 에이전트를 조율할 수 있습니다. 무엇을 도와드릴까요?",
   },
   {
-    id: "frontend",
-    name: "프론트개발자",
-    emoji: "👨🏽‍💻",
-    emojiClass: "agent-emoji-frontend",
-    model: CHAT_MODEL,
-    prompt: SYSTEM_PROMPT,
+    id: "seed-2",
+    side: "user",
+    sender: "You",
+    byline: "10:24 AM",
+    avatarText: "JD",
+    type: "text",
+    text: "2024년 AI 하드웨어 스타트업 상위 3곳에 대한 시장 분석이 필요해. 자금 조달 현황과 핵심 기술 차별화 요소도 포함해줘.",
   },
   {
-    id: "backend",
-    name: "백엔드개발자",
-    emoji: "👩🏾‍💻",
-    emojiClass: "agent-emoji-backend",
-    model: CHAT_MODEL,
-    prompt: SYSTEM_PROMPT,
+    id: "seed-3",
+    side: "agent",
+    sender: "Planner Agent",
+    byline: "10:24 AM",
+    icon: "account_tree",
+    iconColor: "#a5b4fc",
+    type: "plan",
+    planTitle: "요청을 다음 단계로 분해했습니다.",
+    steps: [
+      '연구 에이전트가 2024년 AI 하드웨어 스타트업 상위 3곳을 선정하고, 공개 출처에서 자금 조달 데이터를 수집합니다.',
+      '각 후보사의 기술 문서 및 백서를 검토한 뒤 핵심 차별화 요소를 정리합니다.',
+      '분석 에이전트가 비교 표를 작성하고 주요 인사이트를 추출합니다.',
+    ],
+  },
+  {
+    id: "seed-4",
+    side: "status",
+    type: "status",
+    statusText: "사용자가 계획을 승인했습니다",
+  },
+  {
+    id: "seed-5",
+    side: "agent",
+    sender: "Researcher Agent",
+    byline: "10:25 AM",
+    icon: "travel_explore",
+    iconColor: "#6ee7b7",
+    type: "search",
+    text: '"AI 하드웨어 스타트업 자금 조달 2024"를 검색 중입니다.',
+    logs: [
+      '> search_tool 쿼리 실행 중 query="AI hardware startups funding 2024"',
+      '> 검색 결과 12건 발견',
+      '> 높은 관련성 결과 필터링 중',
+      '> 후보 추출 완료: [Cerebras, Groq, SambaNova]',
+    ],
+  },
+  {
+    id: "seed-6",
+    side: "agent",
+    sender: "Researcher Agent",
+    byline: "",
+    icon: "travel_explore",
+    iconColor: "#86efac",
+    type: "typing",
+    text: "기술 차별화 요소 분석 중...",
   },
 ];
 
-function ensureAgentDefaults(agents: unknown[]): Agent[] {
-  const list = Array.isArray(agents) ? agents : [];
-  const mapped = list
-    .map((item): Agent | null => {
-      if (!item || typeof item !== "object") return null;
-      const o = item as Record<string, unknown>;
-      const name = typeof o.name === "string" ? o.name.trim() : "";
-      const model = typeof o.model === "string" ? o.model.trim() : CHAT_MODEL;
-      const prompt = typeof o.prompt === "string" ? o.prompt.trim() : SYSTEM_PROMPT;
-      if (!name) return null;
-      return {
-        id: typeof o.id === "string" && o.id.trim() ? o.id.trim() : `agent-${Date.now()}`,
-        name,
-        emoji: typeof o.emoji === "string" && o.emoji.trim() ? o.emoji.trim() : "👤",
-        emojiClass:
-          typeof o.emojiClass === "string" && o.emojiClass.trim() ? o.emojiClass.trim() : "",
-        model: model || CHAT_MODEL,
-        prompt,
-      };
-    })
-    .filter((x): x is Agent => x !== null);
+const INITIAL_ACTIVITY: ActivityItem[] = [
+  {
+    id: "act-1",
+    source: "Orchestrator",
+    byline: "10:24:05",
+    text: 'Workflow "Market Analysis" started with 2 agents assigned.',
+    state: "done",
+  },
+  {
+    id: "act-2",
+    source: "Planner",
+    byline: "10:24:12",
+    text: "Execution plan created.",
+    state: "active",
+    progress: ["done", "pending", "pending"],
+  },
+  {
+    id: "act-3",
+    source: "Researcher",
+    byline: "",
+    text: "Google Search API\nCollecting URL 1...",
+    state: "working",
+  },
+  {
+    id: "act-4",
+    source: "Analyst",
+    byline: "Queue",
+    text: "Waiting for research data...",
+    state: "pending",
+    faded: true,
+  },
+];
 
-  if (mapped.length === 0) {
-    return DEFAULT_AGENTS.map((item) => ({
-      ...item,
-      model: CHAT_MODEL,
-      prompt: SYSTEM_PROMPT,
-    }));
-  }
+const MODES = ["Orchestrator", "Dev Mode", "Custom"] as const;
+type Mode = (typeof MODES)[number];
 
-  return mapped;
-}
+const AGENTS: AgentItem[] = [
+  { name: "관리자", icon: "account_tree", status: "대기 중", color: "indigo" },
+  {
+    name: "프론트개발자",
+    icon: "travel_explore",
+    status: "수집 중...",
+    color: "emerald",
+    active: true,
+  },
+  { name: "백엔드개발자", icon: "code", status: "오프라인", color: "amber" },
+  { name: "오신엽", icon: "design_services", status: "오프라인", color: "violet" },
+  { name: "김상현", icon: "database", status: "오프라인", color: "rose" },
+];
 
-function loadAgents(): Agent[] {
-  try {
-    const raw = localStorage.getItem(AGENTS_KEY);
-    if (!raw) {
-      return DEFAULT_AGENTS.map((item) => ({
-        ...item,
-        model: CHAT_MODEL,
-        prompt: SYSTEM_PROMPT,
-      }));
-    }
-    const parsed = JSON.parse(raw) as { agents?: unknown[] };
-    const parsedAgents = parsed && typeof parsed === "object" ? (parsed.agents ?? []) : [];
-    return ensureAgentDefaults(Array.isArray(parsedAgents) ? parsedAgents : []);
-  } catch {
-    return DEFAULT_AGENTS.map((item) => ({
-      ...item,
-      model: CHAT_MODEL,
-      prompt: SYSTEM_PROMPT,
-    }));
-  }
-}
+const TOOLS: string[] = ["웹 브라우저", "Python Repl", "파일 시스템"];
 
-function createNewAgentId(): string {
-  return `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
+const SESSIONS: SessionItem[] = [
+  { name: "Market Analysis #42", time: "Today, 10:23 AM", active: true },
+  { name: "Code Review: Auth Service", time: "Yesterday" },
+  { name: "Product Roadmap Q4", time: "Oct 24" },
+];
 
-function formatTime(): string {
+function nowTime(): string {
   return new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function loadStorage(): StoredSession | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredSession | null;
-    if (!parsed || typeof parsed !== "object") return null;
-    return {
-      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-function normalizeMessage(item: unknown): Message | null {
-  if (!item || typeof item !== "object") return null;
-  const o = item as Record<string, unknown>;
-  if (o.role !== "user" && o.role !== "assistant") return null;
-  const content = typeof o.content === "string" ? o.content.trim() : "";
-  if (!content) return null;
+function buildTypingMessage(text: string): Message {
   return {
-    role: o.role as "user" | "assistant",
-    content,
-    ts: (typeof o.ts === "string" ? o.ts : formatTime()) as string,
+    id: `typing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    side: "agent",
+    sender: "연구 에이전트",
+    byline: nowTime(),
+    icon: "travel_explore",
+    iconColor: "#86efac",
+    type: "typing",
+    text,
   };
 }
 
-function loadTheme(): Theme {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "light" || saved === "dark") return saved;
-    return DEFAULT_THEME;
-  } catch {
-    return DEFAULT_THEME;
-  }
+function buildReplyMessage(input: string): Message {
+  const summary = input.length > 120 ? `${input.slice(0, 120)}...` : input;
+  return {
+    id: `reply-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    side: "agent",
+    sender: "기획 에이전트",
+    byline: nowTime(),
+    icon: "account_tree",
+    iconColor: "#a5b4fc",
+    type: "text",
+    text: `요청을 반영해 실행 계획을 갱신했습니다. 핵심 키워드는 "${summary}"이며, Researcher/Analyst 에이전트를 추가로 할당해 자금 조달 및 기술 차별화 항목을 정리하겠습니다.`,
+  };
 }
 
-function loadViewMode(): ViewMode {
-  try {
-    const saved = localStorage.getItem(VIEW_MODE_KEY);
-    if (saved === "messenger" || saved === "studio") return saved;
-    return DEFAULT_VIEW_MODE;
-  } catch {
-    return DEFAULT_VIEW_MODE;
-  }
+function buildActivity(statusText: string, source: string): ActivityItem {
+  return {
+    id: `act-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    source,
+    byline: nowTime(),
+    text: statusText,
+    state: "working",
+  };
 }
 
-function loadApiKey(): string {
-  try {
-    return localStorage.getItem(API_KEY_KEY) || "";
-  } catch {
-    return "";
+function IconBadge({ icon, text, color }: IconBadgeProps) {
+  return (
+    <span
+      className={`icon-badge ${color ? `icon-badge-${color}` : ""}`}
+      aria-hidden="true"
+      role="img"
+    >
+      <span className="material-symbols-outlined" style={{ color: color || "#94a3b8" }}>
+        {icon}
+      </span>
+      {text}
+    </span>
+  );
+}
+
+function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCardProps) {
+  const text = typeof message.text === "string" ? message.text : "";
+  const bubbleText = text.trim();
+
+  if (message.type === "status") {
+    if (!message.statusText || !String(message.statusText).trim()) {
+      return null;
+    }
+
+    return (
+      <div className="message-status-wrap" key={message.id}>
+        <span className="status-pill">{message.statusText}</span>
+      </div>
+    );
   }
+
+  if (message.side === "user") {
+    if (!bubbleText) {
+      return null;
+    }
+
+    return (
+        <div className="message-row user" key={message.id}>
+          <div className="message-bubble user-bubble">
+            <div className="bubble-meta-right">
+              <span className="bubble-time">{message.byline}</span>
+              <span className="bubble-name" style={{ color: "#fff" }}>
+                {message.sender}
+              </span>
+            </div>
+            <p className="bubble-text">{bubbleText}</p>
+          </div>
+          <div className="message-avatar avatar-user">{message.avatarText}</div>
+        </div>
+    );
+  }
+
+  const classes = ["message-row", "agent", message.type === "typing" ? "typing" : ""].filter(Boolean);
+  const logs = Array.isArray(message.logs) ? message.logs : [];
+
+  return (
+    <div className={classes.join(" ")} key={message.id}>
+      <div className="message-avatar avatar-agent" style={{ color: message.iconColor || "#94a3b8" }}>
+        <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+          {message.icon}
+        </span>
+      </div>
+      <div className="message-bubble">
+        <div className="bubble-meta">
+          <span className="bubble-name" style={{ color: message.iconColor || "#a5b4fc" }}>
+            {message.sender}
+          </span>
+          {message.byline ? <span className="bubble-time">{message.byline}</span> : null}
+        </div>
+        {message.type === "plan" ? (
+          <>
+            <p className="bubble-text plan-text">{message.planTitle}</p>
+            <ol className="plan-list">
+              {(message.steps ?? []).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+              <div className="message-actions">
+                <button type="button" className="pill-btn" onClick={onApprovePlan}>
+                  계획 승인
+                </button>
+                <button type="button" className="pill-btn outline" onClick={onModifyPlan}>
+                  수정 요청
+                </button>
+              </div>
+            </>
+          ) : null}
+        {message.type === "search" ? (
+          <>
+            {bubbleText ? <p className="bubble-text">{bubbleText}</p> : null}
+              <div className="tool-log-box">
+                <div className="tool-log-title">
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "14px", color: "#94a3b8" }}
+                  >
+                    terminal
+                  </span>
+                  <span>tool_execution.log</span>
+                </div>
+               <div className="tool-log-body">
+                 <pre>
+                   {logs.map((line) => `${line}\n`).join("")}
+                 </pre>
+               </div>
+            </div>
+          </>
+        ) : null}
+        {message.type === "text" && bubbleText ? <p className="bubble-text">{bubbleText}</p> : null}
+        {message.type === "typing" ? (
+          <div className="typing-inline">
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+            {bubbleText ? <span className="bubble-text">{bubbleText}</span> : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ActivityCard({ item }: ActivityCardProps) {
+  const timelineDotClass: Record<ActivityState, string> = {
+    done: "timeline-dot-done",
+    active: "timeline-dot-active",
+    working: "timeline-dot-working",
+    pending: "timeline-dot-pending",
+  };
+
+  return (
+    <div className={`timeline-item ${item.faded ? "timeline-item-faded" : ""}`}>
+      <div className={`timeline-dot ${timelineDotClass[item.state]}`} />
+      <div className="timeline-body">
+        <div className="timeline-title-wrap">
+          <span className="timeline-name">{item.source}</span>
+            <span className="timeline-time">{item.byline || "진행 중"}</span>
+        </div>
+        <p className="timeline-text">{item.text}</p>
+        {item.progress ? (
+          <div className="progress-wrap">
+            {item.progress.map((state, idx) => (
+              <span key={idx} className={`progress-seg ${state}`} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
-  const persisted = loadStorage();
+  const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
+  const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
+  const [resourceToken, setResourceToken] = useState(2405);
+  const [resourceCost, setResourceCost] = useState(0.04);
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const [apiKey, setApiKey] = useState<string>(loadApiKey);
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const normalized = (persisted?.messages ?? [])
-      .map(normalizeMessage)
-      .filter((x): x is Message => x !== null);
-    return normalized;
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [errorCode, setErrorCode] = useState("");
-  const [theme, setTheme] = useState<Theme>(loadTheme);
-  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
-  const [agentOptions, setAgentOptions] = useState<Agent[]>(loadAgents);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsApiKey, setSettingsApiKey] = useState("");
-  const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
-  const [newAgentName, setNewAgentName] = useState("");
-  const [newAgentModel, setNewAgentModel] = useState(CHAT_MODEL);
-  const [newAgentPrompt, setNewAgentPrompt] = useState("");
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => [
-    { type: "system", text: "워크스페이스가 준비되었습니다.", ts: formatTime() },
-  ]);
+  // 테마 변경 시 document에 data-theme 속성 적용
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
+
+  const canSend = inputValue.trim().length > 0 && !isLoading;
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        messages,
-      })
-    );
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      // ignore
-    }
-  }, [theme]);
+    const timer = setInterval(() => {
+      setResourceToken((value) => Math.min(9999, value + 9));
+      setResourceCost((value) => Number((value + 0.001).toFixed(3)));
+    }, 6500);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(VIEW_MODE_KEY, viewMode);
-    } catch {
-      // ignore
-    }
-  }, [viewMode]);
+    return () => clearInterval(timer);
+  }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(API_KEY_KEY, apiKey);
-    } catch {
-      // ignore
-    }
-  }, [apiKey]);
+  const tokenPercent = useMemo(() => {
+    return Math.max(5, Math.min(90, Math.round((resourceToken / 12000) * 100)));
+  }, [resourceToken]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(AGENTS_KEY, JSON.stringify({ agents: agentOptions }));
-    } catch {
-      // ignore
-    }
-  }, [agentOptions]);
+  const costPercent = useMemo(() => {
+    return Math.max(10, Math.min(65, Math.round((resourceCost / 0.35) * 100)));
+  }, [resourceCost]);
 
-  useEffect(() => {
-    if (!isSettingsOpen) return;
-    setSettingsApiKey(apiKey);
-  }, [isSettingsOpen, apiKey]);
+  const sendMessage = (): void => {
+    if (!canSend) return;
 
-  useEffect(() => {
-    if (!selectedAgent && agentOptions.length > 0) {
-      setSelectedAgent(agentOptions[0]);
-    }
-  }, [agentOptions, selectedAgent]);
-
-  const canSend = apiKey.trim().length > 0 && message.trim().length > 0 && !loading;
-
-  const pushActivity = (type: string, text: string) => {
-    setActivityLogs((prev) => [...prev, { type, text, ts: formatTime() }]);
-  };
-
-  const appendMessage = (role: "user" | "assistant", content: string) => {
-    setMessages((prev) => [...prev, { role, content, ts: formatTime() }]);
-  };
-
-  const toggleTheme = () => {
-    setTheme((value) => (value === "dark" ? "light" : "dark"));
-  };
-
-  const toggleViewMode = () => {
-    const nextMode: ViewMode = viewMode === "studio" ? "messenger" : "studio";
-    setViewMode(nextMode);
-    pushActivity(
-      "system",
-      `모드를 ${nextMode === "studio" ? "스튜디오" : "메신저"}로 변경했습니다.`
-    );
-  };
-
-  const openSettings = () => {
-    setIsSettingsOpen(true);
-  };
-
-  const closeSettings = () => {
-    setIsSettingsOpen(false);
-  };
-
-  const saveSettings = () => {
-    const trimmed = settingsApiKey.trim();
-    setApiKey(trimmed);
-    setIsSettingsOpen(false);
-    if (trimmed) {
-      pushActivity("system", "설정에서 API 키를 업데이트했습니다.");
-    } else {
-      pushActivity("system", "설정에서 API 키를 제거했습니다.");
-    }
-  };
-
-  const openAddAgent = () => {
-    setNewAgentName("");
-    setNewAgentModel(CHAT_MODEL);
-    setNewAgentPrompt("");
-    setError("");
-    setIsAddAgentOpen(true);
-  };
-
-  const closeAddAgent = () => {
-    setError("");
-    setIsAddAgentOpen(false);
-  };
-
-  const saveAddAgent = () => {
-    const trimmedName = newAgentName.trim();
-    const trimmedModel = newAgentModel.trim() || CHAT_MODEL;
-    const trimmedPrompt = newAgentPrompt.trim() || SYSTEM_PROMPT;
-
-    if (!trimmedName) {
-      setError("에이전트 이름을 입력해 주세요.");
+    const text = inputValue.trim();
+    if (!text) {
       return;
     }
 
-    const nextAgent: Agent = {
-      id: createNewAgentId(),
-      name: trimmedName,
-      emoji: "👤",
-      model: trimmedModel,
-      prompt: trimmedPrompt,
+    const userMessage: Message = {
+      id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      side: "user",
+      sender: "사용자",
+      byline: nowTime(),
+      avatarText: "JD",
+      type: "text",
+      text,
     };
 
-    setAgentOptions((prev) => [...prev, nextAgent]);
-    setSelectedAgent(nextAgent);
-    setIsAddAgentOpen(false);
-    setError("");
-    pushActivity("system", `${trimmedName} 에이전트를 추가했습니다.`);
+    const typingMessage = buildTypingMessage("워크플로우를 분석하고 실행 흐름을 준비 중입니다...");
+
+    setMessages((prev) => [...prev, userMessage, typingMessage]);
+    setActivity((prev) => [
+      ...prev,
+      buildActivity(`새 메시지 수신: "${text.slice(0, 32)}"`, "오케스트레이터"),
+    ]);
+    setInputValue("");
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const reply = buildReplyMessage(text);
+      setMessages((prev) => prev.map((entry) => (entry.id === typingMessage.id ? reply : entry)));
+      setActivity((prev) => [...prev, buildActivity("에이전트 응답 생성 완료", "기획자")]);
+      setIsLoading(false);
+    }, 1100);
   };
 
-  const sendMessage = async () => {
-    const text = message.trim();
-    if (!text || loading) return;
+  const appendStatusMessage = (text: string): void => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `status-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        side: "status",
+        type: "status",
+        statusText: text,
+      },
+    ]);
+  };
 
-    if (!apiKey.trim()) {
-      setError("설정에서 OpenAI API 키를 먼저 입력하세요.");
-      setErrorCode("MISSING_API_KEY");
-      pushActivity("error", "API 키가 없어 요청을 보낼 수 없습니다.");
+  const handleApprovePlan = () => {
+    appendStatusMessage("사용자가 계획을 승인했습니다");
+    setActivity((prev) => [
+      ...prev,
+      buildActivity("사용자가 계획을 승인했습니다. 연구 에이전트가 실행을 시작합니다.", "기획자"),
+    ]);
+  };
+
+  const handleModifyPlan = () => {
+    setInputValue("실행 전에 계획을 구체적으로 수정해줘.");
+    appendStatusMessage("사용자가 계획 수정 요청");
+    setActivity((prev) => [
+      ...prev,
+      buildActivity("사용자가 계획 수정을 요청했습니다.", "Planner"),
+    ]);
+  };
+
+  const clearContext = () => {
+    setMessages(SESSION_MESSAGES);
+    setInputValue("");
+    setActivity([
+      ...INITIAL_ACTIVITY,
+      buildActivity("세션이 초기화되어 기본 상태로 되돌아갑니다.", "시스템"),
+    ]);
+  };
+
+  const exportChat = async () => {
+    const text = messages
+      .map((item) => {
+        if (item.side === "status") return `[status] ${item.statusText}`;
+        return `${item.sender} ${item.byline || ""}\n${item.text || ""}`;
+      })
+      .join("\n\n");
+
+    if (!navigator?.clipboard) {
       return;
     }
 
-    if (!apiKey.startsWith("sk-")) {
-      setError("유효하지 않은 형식의 API 키일 수 있습니다.");
-      setErrorCode("INVALID_API_KEY");
-      pushActivity("error", "API 키 형식이 올바르지 않습니다.");
-      return;
-    }
-
-    const outgoing: Message = {
-      role: "user",
-      content: text,
-      ts: formatTime(),
-    };
-    setMessages((prev) => [...prev, outgoing]);
-    setMessage("");
-    setLoading(true);
-    setError("");
-    setErrorCode("");
-    pushActivity("request", "모델로 메시지를 전송했습니다.");
-
-    try {
-      const chatHistory = [
-        { role: "system", content: selectedAgent?.prompt || SYSTEM_PROMPT },
-        ...messages.map(({ role, content }) => ({ role, content })),
-        outgoing,
-      ];
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: selectedAgent?.model || CHAT_MODEL,
-          messages: chatHistory,
-          temperature: 0.6,
-        }),
-      });
-
-      if (!response.ok) {
-        const nextCode = response.status === 401 ? "UNAUTHORIZED" : `HTTP_${response.status}`;
-        const err = new Error(`요청 실패: ${response.status} ${response.statusText}`) as Error & {
-          code?: string;
-        };
-        err.code = nextCode;
-        throw err;
-      }
-
-      const data = (await response.json()) as {
-        choices?: Array<{
-          message?: { content?: string };
-        }>;
-      };
-      const answer =
-        data?.choices?.[0]?.message?.content ??
-        "응답 형식이 맞지 않습니다. 잠시 후 다시 시도해 주세요.";
-      appendMessage("assistant", answer);
-      pushActivity("success", "에이전트 응답을 받았습니다.");
-    } catch (e) {
-      const err = e as Error & { code?: string };
-      const errCode = err?.code ?? "NETWORK";
-      const msg = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
-      setErrorCode(typeof errCode === "string" && errCode ? errCode : "NETWORK");
-      setError(msg);
-      appendMessage("assistant", "요청 실패. API 키, 네트워크, 또는 권한 이슈를 확인해 주세요.");
-      pushActivity("error", `요청 실패: ${typeof errCode === "string" ? errCode : "NETWORK"}`);
-    } finally {
-      setLoading(false);
-    }
+    await navigator.clipboard.writeText(text);
+    setActivity((prev) => [...prev, buildActivity("채팅 기록을 클립보드에 복사했습니다.", "시스템")]);
   };
 
-  const panelHead = "shrink-0 pb-[0.55rem] border-b border-[var(--stroke)]";
-  const panelTitle = "m-0 text-[var(--text-strong)] text-[0.82rem] tracking-[0.08em] uppercase";
-  const panelBase =
-    "min-h-0 bg-[var(--panel)] border border-[var(--stroke)] rounded-[14px] p-[0.85rem] flex flex-col backdrop-blur-[12px]";
+  const onEnterSubmit = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
-    <main
-      className={`h-full w-[min(1680px,100%)] mx-auto p-[0.8rem] flex flex-col gap-[0.65rem] max-[640px]:p-[0.55rem]`}
-    >
-      <header className="min-h-[2.1rem] flex justify-end items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={toggleViewMode}>
-          {viewMode === "studio" ? "Studio" : "Messenger"}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleTheme}
-          aria-label={theme === "light" ? "다크 모드로" : "라이트 모드로"}
-        >
-          {theme === "light" ? "🌙" : "☀️"}
-        </Button>
+    <div className="app-shell">
+      <header className="top-bar">
+        <div className="top-left">
+          <div className="brand-chip">
+            <div className="brand-mark">
+              <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                smart_toy
+              </span>
+            </div>
+            <div className="brand-copy">
+              <p className="brand-title">OpenGem</p>
+            </div>
+          </div>
+          <div className="separator" />
+          <div className="session-label-wrap">
+            <h2>Market Analysis Session #42</h2>
+            <span className="running-pill">Running</span>
+          </div>
+        </div>
+        <div className="top-center">
+          <button className="nav-link active">Chat</button>
+          <button className="nav-link">Dashboard</button>
+        </div>
+        <div className="top-right">
+          <button className="icon-btn" title="Export Chat" onClick={exportChat}>
+            <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+              ios_share
+            </span>
+          </button>
+          <button className="icon-btn" title="Clear Context" onClick={clearContext}>
+            <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+              delete_sweep
+            </span>
+          </button>
+          {/* 다크/라이트 모드 토글 버튼 */}
+          <button
+            className="theme-toggle-btn"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+          <span className="profile-dot">JD</span>
+        </div>
       </header>
 
-      <section
-        className={`flex-1 min-h-0 grid gap-0 max-xl:grid-cols-[230px_minmax(0,1fr)_260px] max-[980px]:grid-cols-1 max-[980px]:min-h-0 ${
-          viewMode === "studio"
-            ? "grid-cols-[280px_minmax(0,1fr)_320px]"
-            : "grid-cols-[260px_minmax(0,1fr)_300px]"
-        }`}
-      >
-        <aside className={`${panelBase} mr-3 max-[980px]:mr-0 max-[980px]:min-h-[38vh]`}>
-          <div className={panelHead}>
-            <p className={panelTitle}>Session</p>
-          </div>
-
-          <ul className="list-none m-0 p-0 flex-1 min-h-0 overflow-auto grid gap-2 mt-[0.7rem]">
-            <li className="border border-[var(--stroke)] rounded-[10px] p-[0.62rem] bg-[var(--panel-soft)]">
-              <p className="m-0 text-[var(--text-strong)] font-bold text-[0.9rem]">새 세션</p>
-              <p className="mt-0.5 text-[var(--text-soft)] text-[0.82rem]">새 대화를 시작하세요</p>
-              <p className="mt-[0.34rem] text-[var(--text-subtle)] text-[0.75rem]">초안</p>
-            </li>
-          </ul>
-
-          <Button variant="outline" className="mt-[0.55rem]" onClick={openSettings}>
-            설정
-          </Button>
-        </aside>
-
-        <section
-          className={`${panelBase} border-r-0 rounded-tr-none rounded-br-none gap-3 max-[980px]:border-r max-[980px]:border-[var(--stroke)] max-[980px]:min-h-[38vh]`}
-        >
-          {errorCode && (
-            <p className="m-0 text-[var(--error)] text-[0.86rem]">마지막 오류: {errorCode}</p>
-          )}
-
-          <ul className="list-none m-0 p-0 flex-1 min-h-0 overflow-auto grid gap-[0.65rem] pr-0.5">
-            {messages.map((item, idx) => (
-              <li
-                key={`${item.ts}-${idx}`}
-                className="border border-[var(--stroke)] rounded-[10px] p-[0.68rem_0.78rem] bg-[var(--panel-soft)]"
-              >
-                <span className="inline-flex text-[var(--text-subtle)] text-[0.74rem] mb-[0.22rem]">
-                  {item.role === "user" ? "사용자" : "에이전트"}
+      <main className="body-grid">
+        <aside className="left-panel">
+          <section className="panel-block">
+            <div className="section-head-with-action">
+              <h3 className="section-title">Operation Mode</h3>
+              <button className="new-session-btn new-session-btn-small" type="button">
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  add
                 </span>
-                <p className="m-0 text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">
-                  {item.content}
-                </p>
-                <small className="inline-block mt-[0.33rem] text-[var(--text-subtle)]">
-                  {item.ts}
-                </small>
-              </li>
-            ))}
-            {loading && (
-              <li className="border border-[var(--stroke)] rounded-[10px] p-[0.68rem_0.78rem] bg-[var(--panel-soft)]">
-                <span className="inline-flex text-[var(--text-subtle)] text-[0.74rem] mb-[0.22rem]">
-                  에이전트
-                </span>
-                <p className="m-0 text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">
-                  응답 생성 중...
-                </p>
-                <small className="inline-block mt-[0.33rem] text-[var(--text-subtle)]">
-                  {formatTime()}
-                </small>
-              </li>
-            )}
-          </ul>
-
-          <form
-            className="mt-0 grid grid-cols-[1fr_auto] [grid-template-areas:'input_send'_'bottom_send'] gap-[0.55rem] max-[640px]:grid-cols-1 max-[640px]:[grid-template-areas:'input'_'bottom'_'send']"
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendMessage();
-            }}
-          >
-            <Textarea
-              className="[grid-area:input] min-h-[80px] resize-none"
-              rows={2}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="메시지를 입력하세요"
-              disabled={loading}
-            />
-            <div className="[grid-area:bottom] w-full min-w-0">
-              <div
-                className="grid gap-[0.45rem] max-[640px]:grid-cols-2 max-[640px]:gap-[0.35rem] grid-cols-[repeat(4,4.2rem)]"
-                role="list"
-                aria-label="에이전트 선택"
+                Session
+              </button>
+            </div>
+            <div className="mode-card">
+              <button
+                type="button"
+                className={`mode-btn ${selectedMode === MODES[0] ? "is-active" : ""}`}
+                onClick={() => setSelectedMode(MODES[0])}
               >
-                {agentOptions.map((item) => (
-                  <button
-                    key={item.id}
-                    className={`relative grid justify-items-center content-center gap-[0.18rem] p-2 w-[4.2rem] h-[4.2rem] overflow-hidden cursor-pointer rounded-lg text-ellipsis border bg-[var(--chip-bg)] before:content-[''] before:absolute before:top-[0.34rem] before:left-[0.34rem] before:w-[0.46rem] before:h-[0.46rem] before:rounded-full before:bg-red-500 before:shadow-[0_0_0_1px_var(--panel)] hover:bg-[var(--chip-hover)] focus-visible:bg-[var(--chip-hover)] ${
-                      selectedAgent?.id === item.id
-                        ? "border-[color-mix(in_oklab,var(--accent-cyan),transparent_50%)] bg-[color-mix(in_oklab,var(--chip-hover),var(--panel)_60%)] before:bg-green-500"
-                        : "border-[color-mix(in_oklab,var(--stroke),transparent_90%)]"
-                    }`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAgent(item);
-                      pushActivity("system", `${item.name}로 전환했습니다.`);
-                    }}
-                    aria-label={`${item.name}로 변경`}
+                <div className="btn-side">
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "20px", color: "#38bdf8" }}
                   >
-                    <span
-                      className={`text-base leading-none ${item.emojiClass === "agent-emoji-admin" ? "text-gray-600" : item.emojiClass === "agent-emoji-frontend" ? "text-blue-600" : item.emojiClass === "agent-emoji-backend" ? "text-green-600" : ""}`.trim()}
-                      aria-hidden="true"
-                    >
-                      {item.emoji}
-                    </span>
-                    <span
-                      className={`text-[0.64rem] leading-[1.05] break-words text-center text-[var(--text-main)] max-w-full overflow-hidden ${
-                        item.id === "frontend" || item.id === "backend"
-                          ? "whitespace-nowrap text-ellipsis"
-                          : ""
-                      }`}
-                    >
-                      {item.name}
-                    </span>
+                    smart_toy
+                  </span>
+                  <span>Orchestrator</span>
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                  expand_more
+                </span>
+              </button>
+              <div className="sub-session-list">
+                {SESSIONS.map((session) => (
+                  <button
+                    key={session.name}
+                    type="button"
+                    className={`session-row ${session.active ? "session-row-active" : ""}`}
+                  >
+                    <span>{session.name}</span>
+                    <span>{session.time}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="mode-list">
+              {MODES.slice(1).map((mode) => (
                 <button
-                  className="relative grid justify-items-center content-center gap-[0.18rem] p-2 w-[4.2rem] h-[4.2rem] overflow-hidden cursor-pointer rounded-lg border border-dashed border-[color-mix(in_oklab,var(--stroke),transparent_80%)] bg-[var(--chip-bg)] before:hidden hover:bg-[var(--chip-hover)] focus-visible:bg-[var(--chip-hover)]"
+                  key={mode}
                   type="button"
-                  aria-label="에이전트 추가"
-                  onClick={openAddAgent}
+                  className={`mode-btn ${selectedMode === mode ? "is-active" : ""}`}
+                  onClick={() => setSelectedMode(mode)}
                 >
-                  <span className="text-base leading-none" aria-hidden="true">
-                    +
+                  <div className="btn-side">
+                    <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                      {mode === "Dev Mode" ? "terminal" : "tune"}
+                    </span>
+                    <span>{mode}</span>
+                  </div>
+                  <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                    expand_more
                   </span>
-                  <span className="text-[0.64rem] leading-[1.05] break-words text-center text-[var(--text-main)] max-w-full overflow-hidden">
-                    추가
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-block">
+            <div className="section-head-with-action">
+              <h3 className="section-title">Active Agents</h3>
+              <button className="small-icon-btn" type="button">
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  add
+                </span>
+              </button>
+            </div>
+            <div className="agent-stack">
+              {AGENTS.map((agent) => (
+                <div key={agent.name} className="agent-entry">
+                  <div className={`agent-dot ${agent.color}`}>
+                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                      {agent.icon}
+                    </span>
+                    <span
+                      className={`status-dot status-dot-${agent.active ? "active" : "idle"}`}
+                      title={agent.active ? "활성" : "대기"}
+                    />
+                  </div>
+                  <div className="agent-copy">
+                    <p className="agent-name">{agent.name}</p>
+                    <p className={`agent-state ${agent.active ? "agent-state-active" : ""}`}>
+                      {agent.status}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-block">
+            <h3 className="section-title">Enabled Tools</h3>
+            <div className="tool-list">
+                {TOOLS.map((tool) => (
+                  <div key={tool} className="tool-item">
+                    <IconBadge
+                      icon={tool === "웹 브라우저" ? "public" : tool === "Python Repl" ? "terminal" : "folder_open"}
+                    />
+                    <span className="tool-label">{tool}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+        </aside>
+
+        <section className="chat-panel">
+          <div className="chat-scroll">
+            <div className="chat-content">
+              {messages.map((message) => (
+                <MessageCard
+                  key={message.id}
+                  message={message}
+                  onApprovePlan={handleApprovePlan}
+                  onModifyPlan={handleModifyPlan}
+                />
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+          </div>
+
+          <footer className="composer-wrap">
+            <div className="composer-floating-actions">
+              <button type="button" className="chip">
+                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                  add_circle
+                </span>
+                Use File
+              </button>
+              <button type="button" className="chip">
+                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                  tune
+                </span>
+                Configure Agent
+              </button>
+            </div>
+            <div className="composer-box">
+            <textarea
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              onKeyDown={onEnterSubmit}
+              placeholder="오케스트레이터에게 메시지 입력..."
+              rows={1}
+            />
+              <div className="composer-actions">
+                <button className="icon-btn" type="button">
+                  <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                    attach_file
+                  </span>
+                </button>
+                <button className="icon-btn" type="button">
+                  <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                    mic
+                  </span>
+                </button>
+                <button
+                  className="send-btn"
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={!canSend}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                    arrow_upward
                   </span>
                 </button>
               </div>
             </div>
-            <Button
-              className="[grid-area:send] max-[640px]:[grid-area:send]"
-              type="submit"
-              disabled={!canSend}
-            >
-              전송
-            </Button>
-          </form>
-          {error && <p className="m-0 text-[var(--error)] text-[0.86rem]">{error}</p>}
+            <p className="disclaimer">AI can make mistakes. Verify critical information.</p>
+          </footer>
         </section>
 
-        <aside className={`${panelBase} rounded-tl-none rounded-bl-none max-[980px]:min-h-[38vh]`}>
-          <div className={panelHead}>
-            <p className={panelTitle}>Logs</p>
+        <aside className="right-panel">
+          <header className="right-head">
+            <h3>Activity Log</h3>
+            <div className="toolbar-icons">
+              <button className="small-icon-btn" type="button" title="View Graph">
+                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                  hub
+                </span>
+              </button>
+              <button className="small-icon-btn" type="button" title="View Logs">
+                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                  list_alt
+                </span>
+              </button>
+            </div>
+          </header>
+          <div className="activity-scroll">
+            <div className="activity-timeline">
+              {activity.map((item) => (
+                <ActivityCard key={item.id} item={item} />
+              ))}
+            </div>
           </div>
-
-          <ul className="list-none m-0 p-0 flex-1 min-h-0 overflow-auto mt-[0.7rem] grid gap-[0.45rem] pr-0.5">
-            {[...activityLogs].reverse().map((item, idx) => (
-              <li
-                key={`${item.ts}-${idx}`}
-                className={`border rounded-[10px] bg-[var(--panel-soft)] px-[0.6rem] py-[0.52rem] ${
-                  item.type === "error"
-                    ? "border-[color-mix(in_oklab,var(--error),transparent_55%)]"
-                    : item.type === "success"
-                      ? "border-[color-mix(in_oklab,var(--accent-green),transparent_52%)]"
-                      : "border-[var(--stroke)]"
-                }`}
-              >
-                <p className="m-0 text-[0.82rem] text-[var(--text-main)]">{item.text}</p>
-                <small className="inline-block mt-0.5 text-[var(--text-subtle)]">{item.ts}</small>
-              </li>
-            ))}
-          </ul>
+          <section className="system-resources">
+            <h4>System Resources</h4>
+            <div className="resource">
+              <div className="resource-head">
+                <span>Tokens Used (Session)</span>
+                <span className="resource-value">{resourceToken.toLocaleString()}</span>
+              </div>
+              <div className="bar-track">
+                <div className="bar-fill bar-fill-primary" style={{ width: `${tokenPercent}%` }} />
+              </div>
+            </div>
+            <div className="resource">
+              <div className="resource-head">
+                <span>API Cost Est.</span>
+                <span className="resource-value">${resourceCost.toFixed(2)}</span>
+              </div>
+              <div className="bar-track">
+                <div className="bar-fill bar-fill-green" style={{ width: `${costPercent}%` }} />
+              </div>
+            </div>
+          </section>
         </aside>
-      </section>
-
-      <Dialog open={isSettingsOpen} onOpenChange={(open) => !open && closeSettings()}>
-        <DialogContent className="sm:max-w-[440px]" showCloseButton>
-          <DialogHeader>
-            <DialogTitle>설정</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <div className="grid gap-2">
-              <Label htmlFor="settings-api-key">OpenAI API 키</Label>
-              <Input
-                id="settings-api-key"
-                type="password"
-                value={settingsApiKey}
-                onChange={(e) => setSettingsApiKey(e.target.value)}
-                placeholder="sk-..."
-              />
-            </div>
-            <p className="m-0 text-sm text-muted-foreground">API 키는 로컬 저장소에 저장됩니다.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={closeSettings}>
-              취소
-            </Button>
-            <Button type="button" onClick={saveSettings}>
-              저장
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isAddAgentOpen} onOpenChange={(open) => !open && closeAddAgent()}>
-        <DialogContent className="sm:max-w-[440px]" showCloseButton>
-          <DialogHeader>
-            <DialogTitle>에이전트 추가</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="add-agent-name">에이전트 이름</Label>
-              <Input
-                id="add-agent-name"
-                type="text"
-                value={newAgentName}
-                onChange={(e) => setNewAgentName(e.target.value)}
-                placeholder="예: 기획자"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-agent-model">모델 선택</Label>
-              <Input
-                id="add-agent-model"
-                type="text"
-                value={newAgentModel}
-                onChange={(e) => setNewAgentModel(e.target.value)}
-                placeholder="예: gpt-4o-mini"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-agent-prompt">프롬프트</Label>
-              <Textarea
-                id="add-agent-prompt"
-                rows={3}
-                className="min-h-[5.2rem] resize-y"
-                value={newAgentPrompt}
-                onChange={(e) => setNewAgentPrompt(e.target.value)}
-                placeholder="이 에이전트에게 줄 시스템 프롬프트를 입력하세요"
-              />
-            </div>
-            {error && <p className="m-0 text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={closeAddAgent}>
-              취소
-            </Button>
-            <Button type="button" onClick={saveAddAgent}>
-              저장
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </main>
+      </main>
+    </div>
   );
 }
