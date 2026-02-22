@@ -319,6 +319,7 @@ body {
 
 .left-panel {
   border-left: 1px solid var(--border);
+  overflow-y: auto;
 }
 
 .panel-block {
