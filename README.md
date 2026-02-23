@@ -39,3 +39,14 @@ pnpm run env:check
 - **에이전트**: 기본 에이전트 선택 또는 `추가`로 커스텀 에이전트 생성
 - **모드**: Studio / Messenger 뷰 전환, 라이트/다크 테마 전환
 - 메시지·에이전트·테마 등은 로컬 저장소에 유지됩니다.
+
+## LLM 설정 (환경 변수)
+- `.env.local` 또는 `.env`에서 아래 값을 설정하면 실제 API 호출로 동작합니다.
+
+```bash
+VITE_LLM_BASE_URL=https://api.openai.com/v1
+VITE_LLM_MODEL=gpt-4o-mini
+VITE_LLM_API_KEY=sk-...
+```
+
+- `VITE_LLM_API_KEY`가 비어 있으면 응답은 임시 모의 텍스트로 동작합니다.

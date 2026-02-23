@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { sendToLLM, type LLMMessage } from "./lib/llm"
 
 type MessageType = "text" | "plan" | "search" | "typing" | "status";
 
@@ -55,6 +56,92 @@ type IconBadgeProps = {
   text?: string;
   color?: string;
 };
+
+const env = import.meta.env;
+
+const LLM_CONFIG = {
+  baseUrl: env.VITE_LLM_BASE_URL || "https://api.openai.com/v1",
+  model: env.VITE_LLM_MODEL || "gpt-4o-mini",
+  apiKey: env.VITE_LLM_API_KEY,
+} as const;
+
+const LLM_SYSTEM_PROMPT =
+  "당신은 멀티 에이전트 오케스트레이션 환경의 AI 오케스트레이터입니다. 사용자의 요청에 대해 구체적이고 실행 가능한 답변을 한국어로 제공합니다. 답변은 간결한 도입부, 핵심 요약, 권장 액션 순서로 작성합니다.";
+
+function extractLLMMessageText(message: Message): string | undefined {
+  if (message.type === "plan") {
+    const planParts = [message.planTitle, ...(message.steps ?? [])];
+    const planText = planParts.filter(Boolean).join("\n");
+    if (planText) {
+      return `${message.sender ?? "Assistant"} 계획:\n${planText}`;
+    }
+  }
+
+  if (message.type === "search") {
+    const lines: string[] = [];
+    if (message.text) {
+      lines.push(message.text);
+    }
+    if (Array.isArray(message.logs)) {
+      lines.push(...message.logs);
+    }
+    const searchText = lines.filter((line) => line.trim().length > 0).join("\n");
+    if (searchText) {
+      return `${message.sender ?? "Assistant"} 검색:\n${searchText}`;
+    }
+  }
+
+  if (message.type === "typing") {
+    if (message.text && message.text.trim().length > 0) {
+      return message.text;
+    }
+    return undefined;
+  }
+
+  if (message.text && message.text.trim().length > 0) {
+    return message.text;
+  }
+
+  if (Array.isArray(message.logs)) {
+    const logs = message.logs.filter((line) => line.trim().length > 0);
+    if (logs.length > 0) {
+      return logs.join("\n");
+    }
+  }
+
+  return undefined;
+}
+
+function buildLLMMessages(messages: Message[]): LLMMessage[] {
+  const chatMessages = messages
+    .filter((message) => message.side !== "status" && message.type !== "status")
+    .map((message): LLMMessage | null => {
+      const content = extractLLMMessageText(message);
+      if (!content) {
+        return null;
+      }
+
+      return {
+        role: message.side === "user" ? "user" : "assistant",
+        content,
+      };
+    })
+    .filter((entry): entry is LLMMessage => entry !== null);
+
+  return [{ role: "system", content: LLM_SYSTEM_PROMPT }, ...chatMessages];
+}
+
+function appendChunkToMessage(messages: Message[], id: string, text: string): Message[] {
+  return messages.map((entry) =>
+    entry.id === id
+      ? {
+          ...entry,
+          type: "text",
+          text,
+        }
+      : entry,
+  );
+}
 
 type MessageCardProps = {
   message: Message;
@@ -433,7 +520,7 @@ export default function App() {
     return Math.max(10, Math.min(65, Math.round((resourceCost / 0.35) * 100)));
   }, [resourceCost]);
 
-  const sendMessage = (): void => {
+  const sendMessage = async (): Promise<void> => {
     if (!canSend) return;
 
     const text = inputValue.trim();
@@ -451,7 +538,7 @@ export default function App() {
       text,
     };
 
-    const typingMessage = buildTypingMessage("워크플로우를 분석하고 실행 흐름을 준비 중입니다...");
+    const typingMessage = buildTypingMessage("응답을 생성 중입니다...");
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
     setActivity((prev) => [
@@ -461,12 +548,96 @@ export default function App() {
     setInputValue("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      const reply = buildReplyMessage(text);
-      setMessages((prev) => prev.map((entry) => (entry.id === typingMessage.id ? reply : entry)));
-      setActivity((prev) => [...prev, buildActivity("에이전트 응답 생성 완료", "기획자")]);
+    const latestMessages = [...messages, userMessage];
+    const requestMessages = buildLLMMessages(latestMessages);
+
+    if (!LLM_CONFIG.apiKey) {
+      const fallbackReply = buildReplyMessage(text);
+      setMessages((prev) => prev.map((entry) => (entry.id === typingMessage.id ? fallbackReply : entry)));
+      setActivity((prev) => [
+        ...prev,
+        buildActivity("LLM API 키가 없어 샘플 응답으로 대체했습니다.", "기획자"),
+      ]);
       setIsLoading(false);
-    }, 1100);
+      return;
+    }
+
+    setMessages((prev) =>
+      prev.map((entry) =>
+        entry.id === typingMessage.id
+          ? {
+              ...entry,
+              type: "text",
+              text: "",
+            }
+          : entry,
+      ),
+    );
+
+    let streamedText = "";
+
+    try {
+      const response = await sendToLLM({
+        apiBaseUrl: LLM_CONFIG.baseUrl,
+        apiKey: LLM_CONFIG.apiKey,
+        model: LLM_CONFIG.model,
+        messages: requestMessages,
+        stream: true,
+        onChunk: (chunk) => {
+          streamedText += chunk;
+          setMessages((prev) => appendChunkToMessage(prev, typingMessage.id, streamedText));
+        },
+      });
+
+      setMessages((prev) =>
+        prev.map((entry) =>
+          entry.id === typingMessage.id
+            ? {
+                ...entry,
+                type: "text",
+                text: response.text || streamedText || "(빈 응답)",
+              }
+            : entry,
+        ),
+      );
+
+      if (typeof response.usage?.totalTokens === "number") {
+        const usedTokens = response.usage.totalTokens;
+        setResourceToken((prev) => Math.min(9999, prev + usedTokens));
+      }
+
+      const estimatedCost = response.usage?.totalTokens ? response.usage.totalTokens * 0.000005 : 0;
+      if (estimatedCost > 0) {
+        setResourceCost((prev) => Number((prev + estimatedCost).toFixed(3)));
+      }
+
+      const usageText = response.usage?.totalTokens
+        ? ` 토큰 ${response.usage.totalTokens}개 사용`
+        : "";
+      setActivity((prev) => [
+        ...prev,
+        buildActivity(`에이전트 응답 수신 완료${usageText}`.trim(), "기획자"),
+      ]);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+      setMessages((prev) =>
+        prev.map((entry) =>
+          entry.id === typingMessage.id
+            ? {
+                ...entry,
+                type: "text",
+                text: `요청 처리 실패: ${reason}`,
+              }
+            : entry,
+        ),
+      );
+      setActivity((prev) => [
+        ...prev,
+        buildActivity("LLM 응답 수신 중 오류가 발생했습니다.", "시스템"),
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const appendStatusMessage = (text: string): void => {
