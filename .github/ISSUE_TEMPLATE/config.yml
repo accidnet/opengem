@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "질문/논의는 Discussions 사용"
+    url: "https://github.com/accidnet/opengem/discussions"
+    about: "버그/기능 이슈 템플릿 외의 일반 문의는 Discussions에서 남겨주세요."
