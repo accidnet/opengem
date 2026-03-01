@@ -1,0 +1,55 @@
+:root {
+  --font-main: "Manrope", "Noto Sans KR", sans-serif;
+  --bg: #0f1115;
+  --panel: #181b21;
+  --panel-soft: #1f232b;
+  --panel-lift: rgba(255, 255, 255, 0.03);
+  --border: #2a2f3a;
+  --text-main: #e2e8f0;
+  --text-soft: #94a3b8;
+  --text-muted: #64748b;
+  --primary: #2a6fbe;
+  --success: #22c55e;
+  --shadow: rgba(3, 7, 18, 0.45);
+  --radius: 12px;
+  --app-max-width: 1240px;
+  --app-gutter: clamp(12px, 2.2vw, 24px);
+  --app-radius: 16px;
+  /* 스크롤바 */
+  --scrollbar-thumb: #3a4050;
+  --scrollbar-track: #181b21;
+  /* 채팅 패널 배경 */
+  --chat-bg: #0f1115;
+  --composer-bg: #0f1115;
+  --composer-box-bg: #1e222b;
+  --message-bubble-bg: #22262e;
+  --tool-log-bg: #0d1117;
+  --tool-log-head: #202834;
+  --timeline-body-bg: #1c2028;
+  --bar-track-bg: #1f2937;
+}
+
+/* ===== 라이트 모드 ===== */
+[data-theme="light"] {
+  --bg: #f1f5f9;
+  --panel: #ffffff;
+  --panel-soft: #f8fafc;
+  --panel-lift: rgba(0, 0, 0, 0.02);
+  --border: #e2e8f0;
+  --text-main: #1e293b;
+  --text-soft: #475569;
+  --text-muted: #94a3b8;
+  --primary: #2a6fbe;
+  --success: #16a34a;
+  --shadow: rgba(100, 116, 139, 0.18);
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-track: #f1f5f9;
+  --chat-bg: #f8fafc;
+  --composer-bg: #f1f5f9;
+  --composer-box-bg: #ffffff;
+  --message-bubble-bg: #ffffff;
+  --tool-log-bg: #f1f5f9;
+  --tool-log-head: #e2e8f0;
+  --timeline-body-bg: #f8fafc;
+  --bar-track-bg: #e2e8f0;
+}

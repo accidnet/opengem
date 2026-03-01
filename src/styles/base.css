@@ -1,0 +1,68 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-main);
+  color: var(--text-main);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+#root {
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  box-sizing: border-box;
+  background: radial-gradient(circle at top, rgba(23, 53, 89, 0.26), rgba(10, 14, 23, 0) 52%),
+    radial-gradient(circle at right center, rgba(35, 84, 58, 0.2), rgba(10, 14, 23, 0) 48%),
+    var(--bg);
+  overflow: hidden;
+}
+
+[data-theme="light"] #root {
+  background: radial-gradient(circle at top, rgba(186, 215, 250, 0.35), rgba(241, 245, 249, 0) 52%),
+    radial-gradient(circle at right center, rgba(187, 247, 208, 0.25), rgba(241, 245, 249, 0) 48%),
+    var(--bg);
+}
+
+/* ===== 커스텀 스크롤바 (전역) ===== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 1px solid var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
