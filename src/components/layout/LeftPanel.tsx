@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { IconBadge } from "@/components/IconBadge";
 import type { AgentItem, SessionItem } from "@/types/chat";
 import type { Mode } from "@/data/appData";
@@ -19,6 +20,18 @@ export function LeftPanel({
   sessions,
   tools,
 }: LeftPanelProps) {
+  const [isPrimaryModeOpen, setIsPrimaryModeOpen] = useState(true);
+
+  const handlePrimaryModeClick = () => {
+    if (selectedMode !== modes[0]) {
+      onModeSelect(modes[0]);
+      setIsPrimaryModeOpen(true);
+      return;
+    }
+
+    setIsPrimaryModeOpen((prev) => !prev);
+  };
+
   return (
     <aside className="left-panel">
       <section className="panel-block">
@@ -35,7 +48,9 @@ export function LeftPanel({
           <button
             type="button"
             className={`mode-btn ${selectedMode === modes[0] ? "is-active" : ""}`}
-            onClick={() => onModeSelect(modes[0])}
+            onClick={handlePrimaryModeClick}
+            aria-expanded={isPrimaryModeOpen}
+            aria-controls="orchestrator-sub-sessions"
           >
             <div className="btn-side">
               <span
@@ -47,15 +62,20 @@ export function LeftPanel({
               <span>Orchestrator</span>
             </div>
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-              expand_more
+              {isPrimaryModeOpen ? "expand_less" : "expand_more"}
             </span>
           </button>
-          <div className="sub-session-list">
+          <div
+            id="orchestrator-sub-sessions"
+            className={`sub-session-list ${isPrimaryModeOpen ? "is-open" : ""}`}
+            aria-hidden={!isPrimaryModeOpen}
+          >
             {sessions.map((session) => (
               <button
                 key={session.name}
                 type="button"
                 className={`session-row ${session.active ? "session-row-active" : ""}`}
+                tabIndex={isPrimaryModeOpen ? 0 : -1}
               >
                 <span>{session.name}</span>
                 <span>{session.time}</span>

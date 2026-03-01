@@ -193,4 +193,11 @@
 .left-panel {
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+@supports not (scrollbar-gutter: stable) {
+  .left-panel {
+    overflow-y: scroll;
+  }
 }
