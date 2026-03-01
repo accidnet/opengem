@@ -1,0 +1,89 @@
+.theme-toggle-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-soft);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.18s, border-color 0.18s, transform 0.15s;
+  flex-shrink: 0;
+}
+
+.theme-toggle-btn:hover {
+  border-color: var(--primary);
+  background: var(--panel-lift);
+  transform: rotate(12deg) scale(1.08);
+}
+
+/* ===== 라이트 모드 추가 오버라이드 ===== */
+[data-theme="light"] .icon-btn:hover {
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.07);
+}
+
+[data-theme="light"] .small-icon-btn:hover {
+  color: var(--text-main);
+}
+
+[data-theme="light"] .agent-entry:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .user-bubble {
+  border-color: var(--border);
+}
+
+[data-theme="light"] .send-btn:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .app-shell {
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+[data-theme="light"] .session-row-active {
+  background: rgba(19, 127, 236, 0.06);
+  color: var(--text-main);
+}
+
+[data-theme="light"] .tool-log-body {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .right-head {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .section-title {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .system-resources h4 {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .resource-head {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .timeline-text {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .plan-list {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .disclaimer {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .composer-box textarea::placeholder {
+  color: var(--text-muted);
+}

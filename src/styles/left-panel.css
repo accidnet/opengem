@@ -1,0 +1,253 @@
+.panel-block {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  margin: 0 0 0 0;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.mode-card,
+.mode-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mode-btn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--text-soft);
+  padding: 10px;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.mode-btn:hover,
+.mode-btn.is-active {
+  border-color: var(--primary);
+  background: var(--panel-lift);
+}
+
+.btn-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-main);
+}
+
+.sub-session-list {
+  padding-left: 16px;
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.session-row {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 8px;
+  border-left: 2px solid transparent;
+}
+
+.session-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row span:last-child {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.session-row-active {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--primary);
+  color: #e2e8f0;
+}
+
+.section-head-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.small-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #7c8794;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.small-icon-btn:hover {
+  color: #e2e8f0;
+}
+
+.agent-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-entry {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.agent-entry:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.agent-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.agent-dot.indigo {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.32);
+  color: #a5b4fc;
+}
+
+.agent-dot.emerald {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  color: #6ee7b7;
+}
+
+.agent-dot.amber {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  color: #fcd34d;
+}
+
+.agent-dot.violet {
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  color: #c4b5fd;
+}
+
+.agent-dot.rose {
+  background: rgba(244, 63, 94, 0.18);
+  border: 1px solid rgba(244, 63, 94, 0.32);
+  color: #fda4af;
+}
+
+.status-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+}
+
+.status-dot-active {
+  background: #f59e0b;
+}
+
+.status-dot-idle {
+  background: #64748b;
+}
+
+.agent-copy {
+  min-width: 0;
+}
+
+.agent-name {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.agent-state {
+  margin: 0;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.agent-state-active {
+  color: #60a5fa;
+}
+
+.tool-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--text-soft);
+  padding: 6px 0;
+}
+
+.tool-label {
+  font-size: 12px;
+}
+
+.icon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-session-btn {
+  margin: 10px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.new-session-btn:hover {
+  background: #235ea6;
+}
+
+.new-session-btn-small {
+  margin: 2px 0 0 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 6px;
+}
