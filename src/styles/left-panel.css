@@ -12,8 +12,7 @@
   font-weight: 700;
 }
 
-.mode-card,
-.mode-list {
+.panel-list {
   display: grid;
   gap: 8px;
 }
@@ -120,11 +119,6 @@
   color: #e2e8f0;
 }
 
-.agent-stack {
-  display: grid;
-  gap: 8px;
-}
-
 .agent-entry {
   display: flex;
   gap: 12px;
@@ -214,11 +208,6 @@
 
 .agent-state-active {
   color: #60a5fa;
-}
-
-.tool-list {
-  display: grid;
-  gap: 8px;
 }
 
 .tool-item {

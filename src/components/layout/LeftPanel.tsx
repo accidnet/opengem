@@ -44,7 +44,7 @@ export function LeftPanel({
             Session
           </button>
         </div>
-        <div className="mode-card">
+        <div className="panel-list">
           <button
             type="button"
             className={`mode-btn ${selectedMode === modes[0] ? "is-active" : ""}`}
@@ -82,9 +82,6 @@ export function LeftPanel({
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="mode-list">
           {modes.slice(1).map((mode) => (
             <button
               key={mode}
@@ -115,7 +112,7 @@ export function LeftPanel({
             </span>
           </button>
         </div>
-        <div className="agent-stack">
+        <div className="panel-list">
           {agents.map((agent) => (
             <div key={agent.name} className="agent-entry">
               <div className={`agent-dot ${agent.color}`}>
@@ -140,7 +137,7 @@ export function LeftPanel({
 
       <section className="panel-block">
         <h3 className="section-title">Enabled Tools</h3>
-        <div className="tool-list">
+        <div className="panel-list">
           {tools.map((tool) => (
             <div key={tool} className="tool-item">
               <IconBadge
