@@ -20,4 +20,4 @@ color: secondary
 
 ## 업무 범위
 
-- `src/` 트리
+- `src/`
