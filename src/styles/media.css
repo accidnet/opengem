@@ -38,7 +38,8 @@
 
 @media (max-width: 1150px) {
   #root {
-    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))
+      12px;
   }
 
   .app-shell {
@@ -131,6 +132,16 @@
   .top-right .icon-btn {
     width: 30px;
     height: 30px;
+  }
+
+  .new-session-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+  }
+
+  .new-session-label {
+    display: none;
   }
 
   .chat-scroll {
