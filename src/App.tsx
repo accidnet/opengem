@@ -7,12 +7,15 @@ import { LeftPanel } from "./components/layout/LeftPanel";
 import { RightPanel } from "./components/layout/RightPanel";
 import {
   AGENTS,
+  DEFAULT_MODE_ICONS,
   INITIAL_ACTIVITY,
   LLM_CONFIG,
+  MODE_ICON_OPTIONS,
   MODES,
   SESSIONS,
   SESSION_MESSAGES,
   TOOLS,
+  type ModeIcon,
   type Mode,
 } from "./data/appData";
 import {
@@ -30,7 +33,9 @@ export default function App() {
   const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
+  const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
   const [resourceToken, setResourceToken] = useState(2405);
   const [resourceCost, setResourceCost] = useState(0.04);
   const [theme, setTheme] = useState<ThemeMode>("dark");
@@ -219,6 +224,105 @@ export default function App() {
     ]);
   };
 
+  const startNewChat = () => {
+    setMessages(SESSION_MESSAGES);
+    setInputValue("");
+    setActivity([...INITIAL_ACTIVITY, buildActivity("새 채팅 세션을 시작했습니다.", "시스템")]);
+    setSelectedMode(modes[0] || "Orchestrator");
+  };
+
+  const addOperationMode = (name: string, icon: ModeIcon) => {
+    setModes((prev) => [...prev, name]);
+    setModeIcons((prev) => ({ ...prev, [name]: icon }));
+    setSelectedMode(name);
+    setActivity((prev) => [
+      ...prev,
+      buildActivity(`Operation Mode "${name}"가 생성되었습니다.`, "관리자"),
+    ]);
+  };
+
+  const removeOperationMode = (mode: Mode) => {
+    if (mode === modes[0]) {
+      return;
+    }
+
+    setModes((prev) => prev.filter((item) => item !== mode));
+    setModeIcons((prev) => {
+      const nextIcons = { ...prev };
+      delete nextIcons[mode];
+      return nextIcons;
+    });
+
+    if (selectedMode === mode) {
+      setSelectedMode(modes[0]);
+    }
+
+    setActivity((prev) => [
+      ...prev,
+      buildActivity(`Operation Mode "${mode}"가 제거되었습니다.`, "관리자"),
+    ]);
+  };
+
+  const moveOperationMode = (mode: Mode, direction: "up" | "down") => {
+    setModes((prev) => {
+      const currentIndex = prev.findIndex((item) => item === mode);
+      if (currentIndex <= 0) {
+        return prev;
+      }
+
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex <= 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+      return next;
+    });
+  };
+
+  const renameOperationMode = (mode: Mode, nextName: string) => {
+    if (!nextName.trim() || mode === modes[0]) {
+      return;
+    }
+
+    setModes((prev) => prev.map((item) => (item === mode ? nextName : item)));
+    setModeIcons((prev) => {
+      const nextIcons = { ...prev };
+      const prevIcon = nextIcons[mode] || "tune";
+      delete nextIcons[mode];
+      nextIcons[nextName] = prevIcon;
+      return nextIcons;
+    });
+
+    if (selectedMode === mode) {
+      setSelectedMode(nextName);
+    }
+
+    setActivity((prev) => [
+      ...prev,
+      buildActivity(`Operation Mode 이름이 "${mode}" -> "${nextName}"로 변경되었습니다.`, "관리자"),
+    ]);
+  };
+
+  const changeOperationModeIcon = (mode: Mode, icon: ModeIcon) => {
+    setModeIcons((prev) => ({ ...prev, [mode]: icon }));
+  };
+
+  const resetOperationModes = () => {
+    setModes([...MODES]);
+    setModeIcons({ ...DEFAULT_MODE_ICONS });
+    setSelectedMode(MODES[0]);
+    setActivity((prev) => [
+      ...prev,
+      buildActivity("Operation Mode 구성이 기본값으로 복원되었습니다.", "시스템"),
+    ]);
+  };
+
+  const getModeIcon = (mode: Mode): ModeIcon => {
+    return modeIcons[mode] || MODE_ICON_OPTIONS[2];
+  };
+
   const exportChat = async () => {
     const text = messages
       .map((item) => {
@@ -255,6 +359,7 @@ export default function App() {
     <div className="app-shell">
       <AppHeader
         theme={theme}
+        onNewChat={startNewChat}
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
@@ -262,9 +367,16 @@ export default function App() {
 
       <main className="body-grid">
         <LeftPanel
-          modes={MODES}
+          modes={modes}
           selectedMode={selectedMode}
           onModeSelect={setSelectedMode}
+          onAddMode={addOperationMode}
+          onRemoveMode={removeOperationMode}
+          onMoveMode={moveOperationMode}
+          onRenameMode={renameOperationMode}
+          onChangeModeIcon={changeOperationModeIcon}
+          onResetModes={resetOperationModes}
+          getModeIcon={getModeIcon}
           agents={AGENTS}
           sessions={SESSIONS}
           tools={TOOLS}

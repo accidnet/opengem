@@ -2,12 +2,19 @@ import type { ThemeMode } from "@/types/chat";
 
 type AppHeaderProps = {
   theme: ThemeMode;
+  onNewChat: () => void;
   onExportChat: () => void;
   onClearContext: () => void;
   onThemeToggle: () => void;
 };
 
-export function AppHeader({ theme, onExportChat, onClearContext, onThemeToggle }: AppHeaderProps) {
+export function AppHeader({
+  theme,
+  onNewChat,
+  onExportChat,
+  onClearContext,
+  onThemeToggle,
+}: AppHeaderProps) {
   return (
     <header className="top-bar">
       <div className="top-left">
@@ -26,6 +33,12 @@ export function AppHeader({ theme, onExportChat, onClearContext, onThemeToggle }
           <h2>Market Analysis Session #42</h2>
           <span className="running-pill">Running</span>
         </div>
+        <button className="new-session-btn" type="button" title="새 채팅 시작" onClick={onNewChat}>
+          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+            add
+          </span>
+          <span className="new-session-label">New Chat</span>
+        </button>
       </div>
 
       <div className="top-center">
