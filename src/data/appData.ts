@@ -120,9 +120,28 @@ export const INITIAL_ACTIVITY: ActivityItem[] = [
   },
 ];
 
-export const MODES = ["Orchestrator", "Dev Mode", "Custom"] as const;
+export type Mode = string;
 
-export type Mode = (typeof MODES)[number];
+export const MODES: Mode[] = ["Orchestrator", "Dev Mode", "Custom"];
+
+export const MODE_ICON_OPTIONS = [
+  "smart_toy",
+  "terminal",
+  "tune",
+  "bolt",
+  "build",
+  "settings",
+  "rocket_launch",
+  "integration_instructions",
+] as const;
+
+export type ModeIcon = (typeof MODE_ICON_OPTIONS)[number];
+
+export const DEFAULT_MODE_ICONS: Record<Mode, ModeIcon> = {
+  Orchestrator: "smart_toy",
+  "Dev Mode": "terminal",
+  Custom: "tune",
+};
 
 export const AGENTS: AgentItem[] = [
   { name: "관리자", icon: "account_tree", status: "대기 중", color: "indigo" },
