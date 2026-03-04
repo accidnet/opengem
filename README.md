@@ -8,14 +8,16 @@
 - Desktop Runtime: Tauri 2 (`src-tauri/src/main.rs`, `src-tauri/Cargo.toml`)
 - Language: TypeScript(React), Rust
 
-## 개발 환경 설정
+## 빠른 개발 시작
+
+- 자세한 개발 환경 설정 가이드는 다음 [링크](docs/development-setup.md)를 참고하세요.
 
 - 개발 시에는 기본적으로 `pnpm`을 활용합니다.
 
 ### 1. 사전 설치
 
 - `node` 설치: [Node.js 공식 설치 가이드](https://nodejs.org/ko/download)
-- `pnpm` 설치(권장):
+- `pnpm` 설치:
 
   ```bash
   npm install -g pnpm
@@ -23,12 +25,11 @@
 
 - `rustc`/`cargo` 설치: [rustup](https://rustup.rs)
 
-- `tauri-cli`는 `@tauri-apps/cli` devDependencies로 포함되어 있어, 아래 의존성 설치 시 함께 준비됩니다.
-
-- (Option) 아래의 명령어를 실행하여 설치 현황을 확인할 수 있습니다.
+- Linux에서 Tauri 실행 시, 아래 시스템 패키지가 필요합니다.
 
   ```bash
-  pnpm run env:check
+  sudo apt update
+  sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 
 ### 2. 의존성 설치
