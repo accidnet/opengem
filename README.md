@@ -1,6 +1,6 @@
 # opengem
 
-`opengem`은 Tauri 2.x + React 19 기반의 데스크톱 챗봇 뼈대 프로젝트입니다.
+`opengem`은 Tauri 2.x + React 19 기반의 데스크톱 AI 에이전트 프로젝트입니다.
 
 ## 기술 스택
 
@@ -8,62 +8,45 @@
 - Desktop Runtime: Tauri 2 (`src-tauri/src/main.rs`, `src-tauri/Cargo.toml`)
 - Language: TypeScript(React), Rust
 
-## 프로젝트 구조
+## 개발 환경 설정
 
-- `src/main.tsx`: React 엔트리
-- `src/App.tsx`: 챗봇 UI/상태 관리
-- `src/App.css`: UI 스타일
-- `tsconfig.json`: TypeScript 설정
-- `src-tauri/src/main.rs`: Tauri 진입점
-- `src-tauri/tauri.conf.json`: Tauri 실행/빌드 설정
-- `vite.config.js`: Vite 빌드 설정
+- 개발 시에는 기본적으로 `pnpm`을 활용합니다.
 
-## 시작하기
+### 1. 사전 설치
+
+- `node` 설치: [Node.js 공식 설치 가이드](https://nodejs.org/ko/download)
+- `pnpm` 설치(권장):
+
+  ```bash
+  npm install -g pnpm
+  ```
+
+- `rustc`/`cargo` 설치: [rustup](https://rustup.rs)
+
+- `tauri-cli`는 `@tauri-apps/cli` devDependencies로 포함되어 있어, 아래 의존성 설치 시 함께 준비됩니다.
+
+- (Option) 아래의 명령어를 실행하여 설치 현황을 확인할 수 있습니다.
+
+  ```bash
+  pnpm run env:check
+  ```
+
+### 2. 의존성 설치
 
 ```bash
-pnpm install   # 또는 npm install
-pnpm run env:check
+pnpm install
 ```
 
-## 실행 명령
+### 3. 실행
 
-- `pnpm run dev`: Vite 개발 서버 실행
+```bash
+pnpm run tauri:dev
+```
+
+#### 실행 명령 참고
+
+- `pnpm run dev`: 웹 UI만 개발 시 실행
 - `pnpm run tauri:dev`: 데스크톱 앱 실행
 - `pnpm run build`: 프론트엔드 빌드 (`dist/`)
 - `pnpm run tauri:build`: Tauri 앱 배포 빌드
 - `pnpm run preview`: 빌드 결과 미리보기
-
-## 기여 가이드
-
-- 기여 방법과 PR 규칙은 `CONTRIBUTING.md`를 참고하세요.
-- PR 템플릿은 `.github/PULL_REQUEST_TEMPLATE.md`에 있습니다.
-
-## 이슈 템플릿
-
-- 버그 이슈는 `.github/ISSUE_TEMPLATE/bug_report.md`
-- 기능 요청은 `.github/ISSUE_TEMPLATE/feature_request.md`
-
-## 데스크톱 실행 전 필수 조건
-
-- `Node.js`와 함께 `cargo`/`rustc`가 필요합니다.
-- Rust 설치 확인: `rustc --version`, `cargo --version`
-
-## 주요 동작
-
-- **설정**: 상단/세션 패널의 `설정`에서 OpenAI API 키 입력·저장 (로컬 저장)
-- **채팅**: 메시지 입력 후 `Enter`(Shift+Enter는 개행) 또는 `전송`
-- **에이전트**: 기본 에이전트 선택 또는 `추가`로 커스텀 에이전트 생성
-- **모드**: Studio / Messenger 뷰 전환, 라이트/다크 테마 전환
-- 메시지·에이전트·테마 등은 로컬 저장소에 유지됩니다.
-
-## LLM 설정 (환경 변수)
-
-- `.env.local` 또는 `.env`에서 아래 값을 설정하면 실제 API 호출로 동작합니다.
-
-```bash
-VITE_LLM_BASE_URL=https://api.openai.com/v1
-VITE_LLM_MODEL=gpt-4o-mini
-VITE_LLM_API_KEY=sk-...
-```
-
-- `VITE_LLM_API_KEY`가 비어 있으면 응답은 임시 모의 텍스트로 동작합니다.
