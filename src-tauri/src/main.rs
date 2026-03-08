@@ -8,8 +8,13 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use tauri::Manager;
 
-const MIGRATIONS: [(&str, &str); 1] =
-    [("001_init", include_str!("../sql/migrations/001_init.sql"))];
+const MIGRATIONS: [(&str, &str); 2] = [
+    ("001_init", include_str!("../sql/migrations/001_init.sql")),
+    (
+        "002_llm_settings",
+        include_str!("../sql/migrations/002_llm_settings.sql"),
+    ),
+];
 
 fn run_migrations(connection: &mut Connection) -> Result<(), String> {
     connection
@@ -99,7 +104,14 @@ fn main() {
             commands::operation_mode::load_operation_mode,
             commands::operation_mode::save_operation_mode,
             commands::operation_mode::select_operation_mode,
-            commands::operation_mode::delete_operation_mode
+            commands::operation_mode::delete_operation_mode,
+            commands::settings::get_llm_settings,
+            commands::settings::save_llm_settings,
+            commands::settings::resolve_llm_settings,
+            commands::settings::begin_chatgpt_login,
+            commands::settings::open_external_url,
+            commands::settings::send_chatgpt_message,
+            commands::settings::logout_chatgpt
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -21,3 +21,7 @@ color: secondary
 ## 업무 범위
 
 - `src/`
+
+## 작업 규칙
+
+- `css` 관련 작업을 할 때는 `tailwind css`를 우선으로 사용해주고, 불가능하다면 순수 css로 작업해

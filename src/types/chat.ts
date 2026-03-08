@@ -55,7 +55,18 @@ export type IconBadgeProps = {
 };
 
 export type LLMConfig = {
+  providerKind: "api_key" | "chatgpt_oauth";
   baseUrl: string;
   model: string;
   apiKey?: string;
+};
+
+export type LLMSettings = LLMConfig & {
+  chatgptLoggedIn: boolean;
+  chatgptEmail?: string;
+};
+
+export type ResolvedLLMSettings = LLMConfig & {
+  accessToken?: string;
+  accountId?: string;
 };

@@ -1,4 +1,4 @@
-# 개발 환경 설정 가이드 (Windows, macOS, Linux)
+# 개발 환경 구성 가이드 (Windows, macOS, Linux)
 
 `opengem`은 Tauri 2.x + React 19 기반 프로젝트입니다.
 

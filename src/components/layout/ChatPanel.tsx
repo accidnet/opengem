@@ -36,6 +36,14 @@ export function ChatPanel({
     <section className="chat-panel">
       <div className="chat-scroll">
         <div className="chat-content">
+          {messages.length === 0 && (
+            <div className="chat-empty-state" aria-live="polite">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                forum
+              </span>
+              <p>오늘은 무슨 일을 해볼까?</p>
+            </div>
+          )}
           {messages.map((message) => (
             <MessageCard
               key={message.id}
@@ -69,7 +77,7 @@ export function ChatPanel({
             value={inputValue}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={onEnterSubmit}
-            placeholder="오케스트레이터에게 메시지 입력..."
+            placeholder="메시지 입력..."
             rows={1}
           />
           <div className="composer-actions">

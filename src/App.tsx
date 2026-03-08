@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import { sendToLLM } from "./lib/llm";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ChatPanel } from "./components/layout/ChatPanel";
 import { LeftPanel } from "./components/layout/LeftPanel";
 import { RightPanel } from "./components/layout/RightPanel";
+import { ProviderDialog } from "./components/layout/ProviderDialog";
 import {
   AGENTS,
   DEFAULT_MODE_ICONS,
@@ -26,7 +28,21 @@ import {
   buildTypingMessage,
   nowTime,
 } from "./utils/chat";
-import type { ActivityItem, Message, ThemeMode } from "./types/chat";
+import type {
+  ActivityItem,
+  LLMSettings,
+  Message,
+  ResolvedLLMSettings,
+  ThemeMode,
+} from "./types/chat";
+
+type StartChatgptLoginPayload = {
+  authorizationUrl: string;
+};
+
+async function openExternalUrl(url: string): Promise<void> {
+  await invoke("open_external_url", { url });
+}
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
@@ -39,10 +55,39 @@ export default function App() {
   const [resourceToken, setResourceToken] = useState(2405);
   const [resourceCost, setResourceCost] = useState(0.04);
   const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [settings, setSettings] = useState<LLMSettings>(LLM_CONFIG);
+  const [isProviderDialogOpen, setIsProviderDialogOpen] = useState(false);
+  const [isSavingProvider, setIsSavingProvider] = useState(false);
+  const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
+  const [isChatGPTLoginWaiting, setIsChatGPTLoginWaiting] = useState(false);
+  const [chatGPTLoginUrl, setChatGPTLoginUrl] = useState("");
+  const [providerError, setProviderError] = useState("");
+
+  useEffect(() => {
+    void loadProviderSettings();
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  const loadProviderSettings = async () => {
+    try {
+      const next = await invoke<LLMSettings>("get_llm_settings");
+      setSettings((prev) => ({ ...prev, ...next }));
+      setProviderError("");
+    } catch {
+      setSettings((prev) => ({ ...LLM_CONFIG, ...prev }));
+    }
+  };
+
+  const resolveProviderSettings = async (): Promise<ResolvedLLMSettings> => {
+    try {
+      return await invoke<ResolvedLLMSettings>("resolve_llm_settings");
+    } catch {
+      return settings;
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -95,7 +140,25 @@ export default function App() {
     const latestMessages = [...messages, userMessage];
     const requestMessages = buildLLMMessages(latestMessages);
 
-    if (!LLM_CONFIG.apiKey) {
+    const activeSettings = await resolveProviderSettings();
+
+    if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
+      setMessages((prev) =>
+        prev.map((entry) =>
+          entry.id === typingMessage.id
+            ? {
+                ...entry,
+                type: "text",
+                text: "ChatGPT 로그인이 필요합니다. 프로바이더 메뉴에서 다시 로그인해줘.",
+              }
+            : entry
+        )
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (activeSettings.providerKind !== "chatgpt_oauth" && !activeSettings.apiKey) {
       const fallbackReply = buildReplyMessage(text);
       setMessages((prev) =>
         prev.map((entry) => (entry.id === typingMessage.id ? fallbackReply : entry))
@@ -124,9 +187,12 @@ export default function App() {
 
     try {
       const response = await sendToLLM({
-        apiBaseUrl: LLM_CONFIG.baseUrl,
-        apiKey: LLM_CONFIG.apiKey,
-        model: LLM_CONFIG.model,
+        providerKind: activeSettings.providerKind,
+        apiBaseUrl: activeSettings.baseUrl,
+        apiKey: activeSettings.apiKey,
+        accessToken: activeSettings.accessToken,
+        accountId: activeSettings.accountId,
+        model: activeSettings.model,
         messages: requestMessages,
         stream: true,
         onChunk: (chunk) => {
@@ -345,6 +411,10 @@ export default function App() {
   };
 
   const onEnterSubmit = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
@@ -355,14 +425,86 @@ export default function App() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
+  const saveProviderSettings = async () => {
+    setIsSavingProvider(true);
+    try {
+      const next = await invoke<LLMSettings>("save_llm_settings", { input: settings });
+      setSettings(next);
+      setProviderError("");
+      setIsProviderDialogOpen(false);
+    } catch (error) {
+      setProviderError(
+        error instanceof Error ? error.message : "프로바이더 설정을 저장하지 못했습니다."
+      );
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  const loginChatGPT = async () => {
+    if (chatGPTLoginUrl) {
+      await openExternalUrl(chatGPTLoginUrl);
+      return;
+    }
+
+    setIsChatGPTLoginBusy(true);
+    try {
+      const auth = await invoke<StartChatgptLoginPayload>("begin_chatgpt_login");
+      setChatGPTLoginUrl(auth.authorizationUrl);
+      await openExternalUrl(auth.authorizationUrl);
+      setProviderError("");
+
+      setIsChatGPTLoginWaiting(true);
+      const timeoutAt = Date.now() + 305_000;
+      while (Date.now() < timeoutAt) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1200);
+        });
+
+        const next = await invoke<LLMSettings>("get_llm_settings");
+        setSettings((prev) => ({ ...prev, ...next }));
+        if (next.chatgptLoggedIn) {
+          setChatGPTLoginUrl("");
+          return;
+        }
+      }
+
+      setProviderError("로그인 완료를 확인하지 못했습니다. 링크를 다시 열어 인증 상태를 확인해줘.");
+    } catch (error) {
+      setProviderError(
+        error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
+      );
+    } finally {
+      setIsChatGPTLoginWaiting(false);
+      setIsChatGPTLoginBusy(false);
+    }
+  };
+
+  const logoutChatGPT = async () => {
+    setIsChatGPTLoginBusy(true);
+    try {
+      const next = await invoke<LLMSettings>("logout_chatgpt");
+      setSettings(next);
+      setChatGPTLoginUrl("");
+      setIsChatGPTLoginWaiting(false);
+      setProviderError("");
+    } catch (error) {
+      setProviderError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
+    } finally {
+      setIsChatGPTLoginBusy(false);
+    }
+  };
+
   return (
     <div className="app-shell">
       <AppHeader
         theme={theme}
+        isLoggedIn={settings.chatgptLoggedIn}
         onNewChat={startNewChat}
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
+        onOpenProviderDialog={() => setIsProviderDialogOpen(true)}
       />
 
       <main className="body-grid">
@@ -401,6 +543,26 @@ export default function App() {
           costPercent={costPercent}
         />
       </main>
+
+      <ProviderDialog
+        settings={settings}
+        isOpen={isProviderDialogOpen}
+        isSaving={isSavingProvider}
+        isLoginBusy={isChatGPTLoginBusy}
+        isLoginWaiting={isChatGPTLoginWaiting}
+        loginUrl={chatGPTLoginUrl}
+        errorMessage={providerError}
+        onClose={() => setIsProviderDialogOpen(false)}
+        onChange={(patch) => {
+          setSettings((prev) => ({ ...prev, ...patch }));
+          if (providerError) {
+            setProviderError("");
+          }
+        }}
+        onSave={saveProviderSettings}
+        onLoginChatGPT={loginChatGPT}
+        onLogoutChatGPT={logoutChatGPT}
+      />
     </div>
   );
 }

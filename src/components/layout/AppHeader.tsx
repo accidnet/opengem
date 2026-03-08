@@ -1,20 +1,51 @@
+import { useEffect, useRef, useState } from "react";
+
 import type { ThemeMode } from "@/types/chat";
 
 type AppHeaderProps = {
   theme: ThemeMode;
+  isLoggedIn: boolean;
   onNewChat: () => void;
   onExportChat: () => void;
   onClearContext: () => void;
   onThemeToggle: () => void;
+  onOpenProviderDialog: () => void;
 };
 
 export function AppHeader({
   theme,
+  isLoggedIn,
   onNewChat,
   onExportChat,
   onClearContext,
   onThemeToggle,
+  onOpenProviderDialog,
 }: AppHeaderProps) {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   return (
     <header className="top-bar">
       <div className="top-left">
@@ -59,12 +90,43 @@ export function AppHeader({
         </button>
         <button
           className="theme-toggle-btn"
+          type="button"
           onClick={onThemeToggle}
           title={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
         >
           {theme === "dark" ? "☀️" : "🌙"}
         </button>
-        <span className="profile-dot">JD</span>
+        <div className="profile-menu-wrap" ref={profileMenuRef}>
+          <button
+            className="profile-dot"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={isProfileMenuOpen}
+            aria-label="사용자 메뉴 열기"
+            title={isLoggedIn ? "ChatGPT 연결됨" : "로그인 안 됨"}
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+          >
+            <span className="material-symbols-outlined profile-dot-icon" aria-hidden="true">
+              {isLoggedIn ? "person" : "person_off"}
+            </span>
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="profile-menu" role="menu" aria-label="프로필 메뉴">
+              <button
+                className="profile-menu-item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onOpenProviderDialog();
+                }}
+              >
+                프로바이더
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

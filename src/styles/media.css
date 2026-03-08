@@ -111,6 +111,29 @@
 }
 
 @media (max-width: 640px) {
+  .settings-overlay {
+    padding: 12px;
+  }
+
+  .settings-modal {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .settings-card-head,
+  .settings-auth-row,
+  .settings-footer {
+    flex-direction: column;
+  }
+
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-provider-tabs {
+    grid-template-columns: 1fr;
+  }
+
   .top-bar {
     padding: 0 8px;
     gap: 8px;
