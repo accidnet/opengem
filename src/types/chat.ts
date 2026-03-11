@@ -70,3 +70,8 @@ export type ResolvedLLMSettings = LLMConfig & {
   accessToken?: string;
   accountId?: string;
 };
+
+export type OperationModeState = {
+  modes: string[];
+  selectedMode: string;
+};

@@ -163,16 +163,16 @@
   color: var(--text-main);
 }
 
-.mode-settings-description {
-  margin: 6px 0 0;
-  color: var(--text-soft);
-  font-size: 13px;
-}
-
 .mode-settings-create {
   display: grid;
-  grid-template-columns: 1.5fr 1fr auto;
+  grid-template-columns: auto 1.5fr 1fr auto;
   gap: 8px;
+}
+
+.mode-settings-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .mode-settings-input,
@@ -187,10 +187,36 @@
   padding: 0 10px;
 }
 
+.mode-settings-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  color: var(--text-main);
+  -webkit-text-fill-color: var(--text-main);
+  font-weight: 600;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-main) 50%),
+    linear-gradient(135deg, var(--text-main) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 15px,
+    calc(100% - 12px) 15px;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+  padding-left: 10px;
+  padding-right: 30px;
+}
+
 .mode-settings-input:focus,
 .mode-settings-select:focus {
   outline: 1px solid var(--primary);
   border-color: var(--primary);
+}
+
+.mode-settings-select option {
+  color: var(--text-main);
+  background: var(--panel);
 }
 
 .mode-settings-action {
@@ -235,7 +261,7 @@
   justify-content: center;
   background: transparent;
   color: var(--text-main);
-  cursor: pointer;
+  cursor: default;
 }
 
 .mode-settings-mode-btn.is-selected {
@@ -245,7 +271,9 @@
 
 .mode-settings-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 .mode-settings-sub-action {

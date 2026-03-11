@@ -8,11 +8,15 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use tauri::Manager;
 
-const MIGRATIONS: [(&str, &str); 2] = [
+const MIGRATIONS: [(&str, &str); 3] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
         include_str!("../sql/migrations/002_llm_settings.sql"),
+    ),
+    (
+        "003_operation_mode_default",
+        include_str!("../sql/migrations/003_operation_mode_default.sql"),
     ),
 ];
 

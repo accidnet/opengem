@@ -14,12 +14,35 @@ const SQL_DELETE_OPERATION_MODE: &str =
 const SQL_SELECT_FIRST_OPERATION_MODE: &str =
     include_str!("../../sql/queries/operation_mode/select_first.sql");
 
-const DEFAULT_OPERATION_MODES: [&str; 1] = ["operator"];
+const DEFAULT_OPERATION_MODES: [&str; 1] = ["Orchestrator"];
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationModeState {
     modes: Vec<String>,
     selected_mode: String,
+}
+
+fn ensure_default_operation_mode(
+    connection: &rusqlite::Connection,
+) -> Result<OperationModeState, String> {
+    let default_mode = DEFAULT_OPERATION_MODES[0].to_string();
+
+    connection
+        .execute(SQL_DELETE_OPERATION_MODES, [])
+        .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            SQL_INSERT_OPERATION_MODE,
+            params![&default_mode, 0_i64, 1_i64],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(OperationModeState {
+        modes: vec![default_mode.clone()],
+        selected_mode: default_mode,
+    })
 }
 
 #[tauri::command]
@@ -49,13 +72,7 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
     }
 
     if modes.is_empty() {
-        return Ok(OperationModeState {
-            modes: DEFAULT_OPERATION_MODES
-                .iter()
-                .map(|mode| (*mode).to_string())
-                .collect(),
-            selected_mode: DEFAULT_OPERATION_MODES[0].to_string(),
-        });
+        return ensure_default_operation_mode(&connection);
     }
 
     let resolved_selected_mode = selected_mode.unwrap_or_else(|| modes[0].clone());

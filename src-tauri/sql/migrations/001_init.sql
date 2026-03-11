@@ -10,4 +10,4 @@ CREATE INDEX IF NOT EXISTS idx_operation_modes_display_order
 ON operation_modes (display_order, id);
 
 INSERT OR IGNORE INTO operation_modes (mode_name, display_order, is_selected)
-VALUES ('orchestrator', 0, 1);
+VALUES ('Orchestrator', 0, 1);

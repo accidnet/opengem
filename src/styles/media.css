@@ -115,14 +115,41 @@
     padding: 12px;
   }
 
-  .settings-modal {
-    padding: 16px;
+  .provider-modal {
+    max-height: calc(100vh - 24px);
     border-radius: 16px;
+  }
+
+  .provider-header {
+    padding: 16px;
+  }
+
+  .settings-title {
+    font-size: 24px;
+  }
+
+  .provider-body {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border) 86%);
+    padding: 14px 16px;
+  }
+
+  .provider-main {
+    padding: 16px;
+  }
+
+  .provider-main-copy h4 {
+    font-size: 32px;
   }
 
   .settings-card-head,
   .settings-auth-row,
-  .settings-footer {
+  .settings-footer,
+  .provider-header {
     flex-direction: column;
   }
 
@@ -130,8 +157,8 @@
     grid-template-columns: 1fr;
   }
 
-  .settings-provider-tabs {
-    grid-template-columns: 1fr;
+  .settings-footer {
+    padding: 16px;
   }
 
   .top-bar {

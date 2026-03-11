@@ -122,7 +122,7 @@ export function AppHeader({
                   onOpenProviderDialog();
                 }}
               >
-                프로바이더
+                Provider
               </button>
             </div>
           )}

@@ -32,6 +32,7 @@ import type {
   ActivityItem,
   LLMSettings,
   Message,
+  OperationModeState,
   ResolvedLLMSettings,
   ThemeMode,
 } from "./types/chat";
@@ -59,11 +60,11 @@ export default function App() {
   const [isProviderDialogOpen, setIsProviderDialogOpen] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
-  const [isChatGPTLoginWaiting, setIsChatGPTLoginWaiting] = useState(false);
   const [chatGPTLoginUrl, setChatGPTLoginUrl] = useState("");
   const [providerError, setProviderError] = useState("");
 
   useEffect(() => {
+    void loadOperationModes();
     void loadProviderSettings();
   }, []);
 
@@ -78,6 +79,48 @@ export default function App() {
       setProviderError("");
     } catch {
       setSettings((prev) => ({ ...LLM_CONFIG, ...prev }));
+    }
+  };
+
+  const loadOperationModes = async () => {
+    try {
+      const next = await invoke<OperationModeState>("load_operation_mode");
+      if (next.modes.length === 0) {
+        return;
+      }
+
+      setModes(next.modes);
+      setSelectedMode(next.selectedMode);
+      setModeIcons((prev) => {
+        const nextIcons = { ...prev };
+        next.modes.forEach((mode, index) => {
+          if (!nextIcons[mode]) {
+            nextIcons[mode] = index === 0 ? "smart_toy" : "tune";
+          }
+        });
+        return nextIcons;
+      });
+    } catch {
+      setModes([...MODES]);
+      setSelectedMode(MODES[0]);
+    }
+  };
+
+  const persistOperationModes = async (nextModes: Mode[], nextSelectedMode: Mode) => {
+    await invoke("save_operation_mode", {
+      modes: nextModes,
+      selectedMode: nextSelectedMode,
+    });
+  };
+
+  const selectOperationMode = async (mode: Mode) => {
+    const previousMode = selectedMode;
+    setSelectedMode(mode);
+
+    try {
+      await invoke("select_operation_mode", { selectedMode: mode });
+    } catch {
+      setSelectedMode(previousMode);
     }
   };
 
@@ -294,94 +337,34 @@ export default function App() {
     setMessages(SESSION_MESSAGES);
     setInputValue("");
     setActivity([...INITIAL_ACTIVITY, buildActivity("새 채팅 세션을 시작했습니다.", "시스템")]);
-    setSelectedMode(modes[0] || "Orchestrator");
   };
 
-  const addOperationMode = (name: string, icon: ModeIcon) => {
-    setModes((prev) => [...prev, name]);
-    setModeIcons((prev) => ({ ...prev, [name]: icon }));
-    setSelectedMode(name);
-    setActivity((prev) => [
-      ...prev,
-      buildActivity(`Operation Mode "${name}"가 생성되었습니다.`, "관리자"),
-    ]);
-  };
+  const saveOperationModeSettings = async (
+    nextModes: Mode[],
+    nextModeIcons: Record<Mode, ModeIcon>,
+    nextSelectedMode: Mode
+  ) => {
+    const previousModes = modes;
+    const previousModeIcons = modeIcons;
+    const previousSelectedMode = selectedMode;
 
-  const removeOperationMode = (mode: Mode) => {
-    if (mode === modes[0]) {
+    setModes(nextModes);
+    setModeIcons(nextModeIcons);
+    setSelectedMode(nextSelectedMode);
+
+    try {
+      await persistOperationModes(nextModes, nextSelectedMode);
+    } catch {
+      setModes(previousModes);
+      setModeIcons(previousModeIcons);
+      setSelectedMode(previousSelectedMode);
+      void loadOperationModes();
       return;
     }
 
-    setModes((prev) => prev.filter((item) => item !== mode));
-    setModeIcons((prev) => {
-      const nextIcons = { ...prev };
-      delete nextIcons[mode];
-      return nextIcons;
-    });
-
-    if (selectedMode === mode) {
-      setSelectedMode(modes[0]);
-    }
-
     setActivity((prev) => [
       ...prev,
-      buildActivity(`Operation Mode "${mode}"가 제거되었습니다.`, "관리자"),
-    ]);
-  };
-
-  const moveOperationMode = (mode: Mode, direction: "up" | "down") => {
-    setModes((prev) => {
-      const currentIndex = prev.findIndex((item) => item === mode);
-      if (currentIndex <= 0) {
-        return prev;
-      }
-
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-      if (targetIndex <= 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-
-      const next = [...prev];
-      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
-      return next;
-    });
-  };
-
-  const renameOperationMode = (mode: Mode, nextName: string) => {
-    if (!nextName.trim() || mode === modes[0]) {
-      return;
-    }
-
-    setModes((prev) => prev.map((item) => (item === mode ? nextName : item)));
-    setModeIcons((prev) => {
-      const nextIcons = { ...prev };
-      const prevIcon = nextIcons[mode] || "tune";
-      delete nextIcons[mode];
-      nextIcons[nextName] = prevIcon;
-      return nextIcons;
-    });
-
-    if (selectedMode === mode) {
-      setSelectedMode(nextName);
-    }
-
-    setActivity((prev) => [
-      ...prev,
-      buildActivity(`Operation Mode 이름이 "${mode}" -> "${nextName}"로 변경되었습니다.`, "관리자"),
-    ]);
-  };
-
-  const changeOperationModeIcon = (mode: Mode, icon: ModeIcon) => {
-    setModeIcons((prev) => ({ ...prev, [mode]: icon }));
-  };
-
-  const resetOperationModes = () => {
-    setModes([...MODES]);
-    setModeIcons({ ...DEFAULT_MODE_ICONS });
-    setSelectedMode(MODES[0]);
-    setActivity((prev) => [
-      ...prev,
-      buildActivity("Operation Mode 구성이 기본값으로 복원되었습니다.", "시스템"),
+      buildActivity("Operation Mode 설정이 저장되었습니다.", "시스템"),
     ]);
   };
 
@@ -453,8 +436,8 @@ export default function App() {
       setChatGPTLoginUrl(auth.authorizationUrl);
       await openExternalUrl(auth.authorizationUrl);
       setProviderError("");
+      setIsChatGPTLoginBusy(false);
 
-      setIsChatGPTLoginWaiting(true);
       const timeoutAt = Date.now() + 305_000;
       while (Date.now() < timeoutAt) {
         await new Promise((resolve) => {
@@ -475,7 +458,6 @@ export default function App() {
         error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
       );
     } finally {
-      setIsChatGPTLoginWaiting(false);
       setIsChatGPTLoginBusy(false);
     }
   };
@@ -486,7 +468,6 @@ export default function App() {
       const next = await invoke<LLMSettings>("logout_chatgpt");
       setSettings(next);
       setChatGPTLoginUrl("");
-      setIsChatGPTLoginWaiting(false);
       setProviderError("");
     } catch (error) {
       setProviderError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
@@ -511,13 +492,8 @@ export default function App() {
         <LeftPanel
           modes={modes}
           selectedMode={selectedMode}
-          onModeSelect={setSelectedMode}
-          onAddMode={addOperationMode}
-          onRemoveMode={removeOperationMode}
-          onMoveMode={moveOperationMode}
-          onRenameMode={renameOperationMode}
-          onChangeModeIcon={changeOperationModeIcon}
-          onResetModes={resetOperationModes}
+          onModeSelect={selectOperationMode}
+          onSaveModeSettings={saveOperationModeSettings}
           getModeIcon={getModeIcon}
           agents={AGENTS}
           sessions={SESSIONS}
@@ -549,7 +525,6 @@ export default function App() {
         isOpen={isProviderDialogOpen}
         isSaving={isSavingProvider}
         isLoginBusy={isChatGPTLoginBusy}
-        isLoginWaiting={isChatGPTLoginWaiting}
         loginUrl={chatGPTLoginUrl}
         errorMessage={providerError}
         onClose={() => setIsProviderDialogOpen(false)}

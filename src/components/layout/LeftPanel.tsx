@@ -1,18 +1,35 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { IconBadge } from "@/components/IconBadge";
 import type { AgentItem, SessionItem } from "@/types/chat";
 import { MODE_ICON_OPTIONS, type Mode, type ModeIcon } from "@/data/appData";
 
+type DraftModeItem = {
+  id: string;
+  name: string;
+  icon: ModeIcon;
+  originalName?: Mode;
+};
+
+const MODE_ICON_LABELS: Record<ModeIcon, string> = {
+  smart_toy: "스마트 토이",
+  terminal: "터미널",
+  tune: "커스텀",
+  bolt: "볼트",
+  build: "빌드",
+  settings: "설정",
+  rocket_launch: "런치",
+  integration_instructions: "연동",
+};
+
 type LeftPanelProps = {
   modes: readonly Mode[];
   selectedMode: Mode;
-  onModeSelect: (mode: Mode) => void;
-  onAddMode: (name: string, icon: ModeIcon) => void;
-  onRemoveMode: (mode: Mode) => void;
-  onMoveMode: (mode: Mode, direction: "up" | "down") => void;
-  onRenameMode: (mode: Mode, nextName: string) => void;
-  onChangeModeIcon: (mode: Mode, icon: ModeIcon) => void;
-  onResetModes: () => void;
+  onModeSelect: (mode: Mode) => void | Promise<void>;
+  onSaveModeSettings: (
+    nextModes: Mode[],
+    nextModeIcons: Record<Mode, ModeIcon>,
+    nextSelectedMode: Mode
+  ) => void | Promise<void>;
   getModeIcon: (mode: Mode) => ModeIcon;
   agents: AgentItem[];
   sessions: SessionItem[];
@@ -23,12 +40,7 @@ export function LeftPanel({
   modes,
   selectedMode,
   onModeSelect,
-  onAddMode,
-  onRemoveMode,
-  onMoveMode,
-  onRenameMode,
-  onChangeModeIcon,
-  onResetModes,
+  onSaveModeSettings,
   getModeIcon,
   agents,
   sessions,
@@ -39,6 +51,29 @@ export function LeftPanel({
   const [newModeName, setNewModeName] = useState("");
   const [newModeIcon, setNewModeIcon] = useState<ModeIcon>("tune");
   const [modeNameError, setModeNameError] = useState("");
+  const [draftModes, setDraftModes] = useState<DraftModeItem[]>([]);
+  const suppressOverlayCloseRef = useRef(false);
+  const draftModeIdRef = useRef(0);
+  const primaryMode = modes[0] || "Orchestrator";
+
+  const openModeSettings = () => {
+    setDraftModes(
+      modes.map((mode, index) => ({
+        id: `saved-${index}-${mode}`,
+        name: mode,
+        icon: getModeIcon(mode),
+        originalName: mode,
+      }))
+    );
+    setNewModeName("");
+    setNewModeIcon("tune");
+    setModeNameError("");
+    setIsModeSettingsOpen(true);
+  };
+
+  const closeModeSettings = () => {
+    setIsModeSettingsOpen(false);
+  };
 
   useEffect(() => {
     if (!isModeSettingsOpen) {
@@ -47,7 +82,7 @@ export function LeftPanel({
 
     const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsModeSettingsOpen(false);
+        closeModeSettings();
       }
     };
 
@@ -55,9 +90,24 @@ export function LeftPanel({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isModeSettingsOpen]);
 
+  useEffect(() => {
+    if (!isModeSettingsOpen) {
+      return;
+    }
+
+    const handleMouseUp = () => {
+      window.setTimeout(() => {
+        suppressOverlayCloseRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [isModeSettingsOpen]);
+
   const handlePrimaryModeClick = () => {
-    if (selectedMode !== modes[0]) {
-      onModeSelect(modes[0]);
+    if (selectedMode !== primaryMode) {
+      onModeSelect(primaryMode);
       setIsPrimaryModeOpen(true);
       return;
     }
@@ -72,15 +122,26 @@ export function LeftPanel({
       return;
     }
 
-    const exists = modes.some((mode) => mode.toLowerCase() === trimmedName.toLowerCase());
+    const exists = draftModes.some(
+      (mode) => mode.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
     if (exists) {
       setModeNameError("이미 같은 이름의 모드가 있어.");
       return;
     }
 
-    onAddMode(trimmedName, newModeIcon);
+    draftModeIdRef.current += 1;
+    setDraftModes((prev) => [
+      ...prev,
+      {
+        id: `draft-${draftModeIdRef.current}`,
+        name: trimmedName,
+        icon: newModeIcon,
+      },
+    ]);
     setModeNameError("");
     setNewModeName("");
+    setNewModeIcon("tune");
   };
 
   const handleCreateModeOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -90,20 +151,93 @@ export function LeftPanel({
     }
   };
 
-  const handleRenameBlur = (mode: Mode, value: string) => {
-    const trimmedValue = value.trim();
-    if (!trimmedValue || trimmedValue === mode) {
+  const handleDraftModeNameChange = (id: string, value: string) => {
+    setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, name: value } : mode)));
+    if (modeNameError) {
+      setModeNameError("");
+    }
+  };
+
+  const handleDraftModeIconChange = (id: string, icon: ModeIcon) => {
+    setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, icon } : mode)));
+  };
+
+  const handleMoveDraftMode = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex <= 0 || targetIndex >= draftModes.length) {
       return;
     }
 
-    const exists = modes.some(
-      (modeName) => modeName !== mode && modeName.toLowerCase() === trimmedValue.toLowerCase()
-    );
-    if (exists) {
+    setDraftModes((prev) => {
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  };
+
+  const handleRemoveDraftMode = (id: string) => {
+    setDraftModes((prev) => prev.filter((mode) => mode.id !== id));
+  };
+
+  const handleResetDraftModes = () => {
+    setDraftModes([
+      {
+        id: "saved-0-Orchestrator",
+        name: "Orchestrator",
+        icon: "smart_toy",
+        originalName: primaryMode,
+      },
+    ]);
+    setNewModeName("");
+    setNewModeIcon("tune");
+    setModeNameError("");
+  };
+
+  const getModeIconLabel = (icon: ModeIcon) => {
+    return MODE_ICON_LABELS[icon] || icon;
+  };
+
+  const handleModeSettingsOverlayClick = () => {
+    if (suppressOverlayCloseRef.current) {
+      suppressOverlayCloseRef.current = false;
       return;
     }
 
-    onRenameMode(mode, trimmedValue);
+    closeModeSettings();
+  };
+
+  const handleSaveModeSettings = async () => {
+    const normalizedModes = draftModes.map((mode) => ({
+      ...mode,
+      name: mode.name.trim(),
+    }));
+
+    if (normalizedModes.length === 0) {
+      setModeNameError("최소 한 개의 모드는 필요해.");
+      return;
+    }
+
+    if (normalizedModes.some((mode) => !mode.name)) {
+      setModeNameError("모드 이름을 비워둘 수 없어.");
+      return;
+    }
+
+    const normalizedNames = normalizedModes.map((mode) => mode.name.toLowerCase());
+    if (new Set(normalizedNames).size !== normalizedNames.length) {
+      setModeNameError("이미 같은 이름의 모드가 있어.");
+      return;
+    }
+
+    const nextModes = normalizedModes.map((mode) => mode.name);
+    const nextModeIcons = normalizedModes.reduce<Record<Mode, ModeIcon>>((acc, mode, index) => {
+      acc[mode.name] = mode.icon || (index === 0 ? "smart_toy" : "tune");
+      return acc;
+    }, {});
+    const selectedDraftMode = normalizedModes.find((mode) => mode.originalName === selectedMode);
+    const nextSelectedMode = selectedDraftMode?.name || nextModes[0];
+
+    await onSaveModeSettings(nextModes, nextModeIcons, nextSelectedMode);
+    closeModeSettings();
   };
 
   return (
@@ -115,7 +249,7 @@ export function LeftPanel({
             className="small-icon-btn"
             type="button"
             title="모드 설정"
-            onClick={() => setIsModeSettingsOpen(true)}
+            onClick={openModeSettings}
           >
             <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
               add
@@ -125,7 +259,7 @@ export function LeftPanel({
         <div className="panel-list">
           <button
             type="button"
-            className={`mode-btn ${selectedMode === modes[0] ? "is-active" : ""}`}
+            className={`mode-btn ${selectedMode === primaryMode ? "is-active" : ""}`}
             onClick={handlePrimaryModeClick}
             aria-expanded={isPrimaryModeOpen}
             aria-controls="orchestrator-sub-sessions"
@@ -135,9 +269,9 @@ export function LeftPanel({
                 className="material-symbols-outlined"
                 style={{ fontSize: "20px", color: "#38bdf8" }}
               >
-                smart_toy
+                {getModeIcon(primaryMode)}
               </span>
-              <span>Orchestrator</span>
+              <span>{primaryMode}</span>
             </div>
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
               {isPrimaryModeOpen ? "expand_less" : "expand_more"}
@@ -237,7 +371,7 @@ export function LeftPanel({
         <div
           className="mode-settings-overlay"
           role="presentation"
-          onClick={() => setIsModeSettingsOpen(false)}
+          onClick={handleModeSettingsOverlayClick}
         >
           <section
             className="mode-settings-modal"
@@ -251,15 +385,12 @@ export function LeftPanel({
                 <h4 id="mode-settings-title" className="mode-settings-title">
                   Operation Mode 설정
                 </h4>
-                <p className="mode-settings-description">
-                  추가, 제거, 순서 변경, 아이콘 변경, 이름 수정까지 한 번에 관리할 수 있어.
-                </p>
               </div>
               <button
                 className="small-icon-btn"
                 type="button"
                 aria-label="설정 창 닫기"
-                onClick={() => setIsModeSettingsOpen(false)}
+                onClick={closeModeSettings}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
                   close
@@ -268,11 +399,19 @@ export function LeftPanel({
             </header>
 
             <div className="mode-settings-create">
+              <div className="mode-settings-mode-btn is-selected" aria-hidden="true">
+                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                  {newModeIcon}
+                </span>
+              </div>
               <input
                 type="text"
                 className="mode-settings-input"
                 placeholder="새 모드 이름"
                 value={newModeName}
+                onMouseDown={() => {
+                  suppressOverlayCloseRef.current = true;
+                }}
                 onChange={(event) => {
                   setNewModeName(event.target.value);
                   if (modeNameError) {
@@ -282,18 +421,20 @@ export function LeftPanel({
                 onKeyDown={handleCreateModeOnEnter}
                 aria-label="새 operation mode 이름"
               />
-              <select
-                className="mode-settings-select"
-                value={newModeIcon}
-                onChange={(event) => setNewModeIcon(event.target.value as ModeIcon)}
-                aria-label="새 operation mode 아이콘"
-              >
-                {MODE_ICON_OPTIONS.map((iconName) => (
-                  <option key={iconName} value={iconName}>
-                    {iconName}
-                  </option>
-                ))}
-              </select>
+              <div className="mode-settings-select-wrap">
+                <select
+                  className="mode-settings-select"
+                  value={newModeIcon}
+                  onChange={(event) => setNewModeIcon(event.target.value as ModeIcon)}
+                  aria-label="새 operation mode 아이콘"
+                >
+                  {MODE_ICON_OPTIONS.map((iconName) => (
+                    <option key={iconName} value={iconName}>
+                      {getModeIconLabel(iconName)}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button className="mode-settings-action" type="button" onClick={handleCreateMode}>
                 추가
               </button>
@@ -301,43 +442,45 @@ export function LeftPanel({
             {modeNameError && <p className="mode-settings-error">{modeNameError}</p>}
 
             <div className="mode-settings-list" role="list" aria-label="Operation mode 목록">
-              {modes.map((mode, index) => {
+              {draftModes.map((mode, index) => {
                 const isProtectedMode = index === 0;
                 return (
-                  <div className="mode-settings-item" role="listitem" key={mode}>
-                    <button
-                      type="button"
-                      className={`mode-settings-mode-btn ${selectedMode === mode ? "is-selected" : ""}`}
-                      onClick={() => onModeSelect(mode)}
-                    >
+                  <div className="mode-settings-item" role="listitem" key={mode.id}>
+                    <div className="mode-settings-mode-btn" aria-hidden="true">
                       <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-                        {getModeIcon(mode)}
+                        {mode.icon}
                       </span>
-                    </button>
+                    </div>
                     <input
                       className="mode-settings-input"
-                      defaultValue={mode}
-                      disabled={isProtectedMode}
-                      aria-label={`${mode} 이름 수정`}
-                      onBlur={(event) => handleRenameBlur(mode, event.target.value)}
+                      value={mode.name}
+                      aria-label={`${mode.name || "mode"} 이름 수정`}
+                      onMouseDown={() => {
+                        suppressOverlayCloseRef.current = true;
+                      }}
+                      onChange={(event) => handleDraftModeNameChange(mode.id, event.target.value)}
                     />
-                    <select
-                      className="mode-settings-select"
-                      value={getModeIcon(mode)}
-                      onChange={(event) => onChangeModeIcon(mode, event.target.value as ModeIcon)}
-                      aria-label={`${mode} 아이콘 변경`}
-                    >
-                      {MODE_ICON_OPTIONS.map((iconName) => (
-                        <option key={iconName} value={iconName}>
-                          {iconName}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mode-settings-select-wrap">
+                      <select
+                        className="mode-settings-select"
+                        value={mode.icon}
+                        onChange={(event) =>
+                          handleDraftModeIconChange(mode.id, event.target.value as ModeIcon)
+                        }
+                        aria-label={`${mode.name || "mode"} 아이콘 변경`}
+                      >
+                        {MODE_ICON_OPTIONS.map((iconName) => (
+                          <option key={iconName} value={iconName}>
+                            {getModeIconLabel(iconName)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <button
                       className="small-icon-btn"
                       type="button"
                       title="위로 이동"
-                      onClick={() => onMoveMode(mode, "up")}
+                      onClick={() => handleMoveDraftMode(index, "up")}
                       disabled={isProtectedMode || index === 1}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
@@ -348,8 +491,8 @@ export function LeftPanel({
                       className="small-icon-btn"
                       type="button"
                       title="아래로 이동"
-                      onClick={() => onMoveMode(mode, "down")}
-                      disabled={index === modes.length - 1 || isProtectedMode}
+                      onClick={() => handleMoveDraftMode(index, "down")}
+                      disabled={index === draftModes.length - 1 || isProtectedMode}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
                         arrow_downward
@@ -359,7 +502,7 @@ export function LeftPanel({
                       className="small-icon-btn danger"
                       type="button"
                       title="모드 제거"
-                      onClick={() => onRemoveMode(mode)}
+                      onClick={() => handleRemoveDraftMode(mode.id)}
                       disabled={isProtectedMode}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
@@ -372,8 +515,19 @@ export function LeftPanel({
             </div>
 
             <footer className="mode-settings-footer">
-              <button className="mode-settings-sub-action" type="button" onClick={onResetModes}>
+              <button
+                className="mode-settings-sub-action"
+                type="button"
+                onClick={handleResetDraftModes}
+              >
                 기본 모드로 복원
+              </button>
+              <button
+                className="mode-settings-action"
+                type="button"
+                onClick={handleSaveModeSettings}
+              >
+                저장
               </button>
             </footer>
           </section>
