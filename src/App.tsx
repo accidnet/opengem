@@ -14,7 +14,6 @@ import {
   LLM_CONFIG,
   MODE_ICON_OPTIONS,
   MODES,
-  SESSIONS,
   SESSION_MESSAGES,
   TOOLS,
   type ModeIcon,
@@ -25,6 +24,7 @@ import {
   buildActivity,
   buildLLMMessages,
   buildReplyMessage,
+  buildSessionTitle,
   buildTypingMessage,
   nowTime,
 } from "./utils/chat";
@@ -34,6 +34,8 @@ import type {
   Message,
   OperationModeState,
   ResolvedLLMSettings,
+  SessionDetail,
+  SessionItem,
   ThemeMode,
 } from "./types/chat";
 
@@ -47,9 +49,13 @@ async function openExternalUrl(url: string): Promise<void> {
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
   const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
   const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
@@ -66,6 +72,7 @@ export default function App() {
   useEffect(() => {
     void loadOperationModes();
     void loadProviderSettings();
+    void loadSessions();
   }, []);
 
   useEffect(() => {
@@ -79,6 +86,49 @@ export default function App() {
       setProviderError("");
     } catch {
       setSettings((prev) => ({ ...LLM_CONFIG, ...prev }));
+    }
+  };
+
+  const applySessionList = (nextSessions: SessionItem[], activeSessionId?: string | null) => {
+    const resolvedActiveSessionId =
+      activeSessionId === undefined ? currentSessionId : activeSessionId;
+    setSessions(
+      nextSessions.map((session) => ({
+        ...session,
+        active: session.id === resolvedActiveSessionId,
+      }))
+    );
+  };
+
+  const refreshSessions = async (activeSessionId?: string | null) => {
+    const nextSessions = await invoke<SessionItem[]>("list_chat_sessions");
+    applySessionList(nextSessions, activeSessionId);
+    return nextSessions;
+  };
+
+  const loadSession = async (sessionId: string) => {
+    setIsSessionLoading(true);
+    try {
+      const detail = await invoke<SessionDetail>("get_chat_session", { sessionId });
+      setCurrentSessionId(detail.session.id);
+      setCurrentSessionTitle(detail.session.title);
+      setMessages(detail.messages);
+      await refreshSessions(detail.session.id);
+    } finally {
+      setIsSessionLoading(false);
+    }
+  };
+
+  const loadSessions = async () => {
+    try {
+      const nextSessions = await refreshSessions(currentSessionId);
+      if (currentSessionId || nextSessions.length === 0) {
+        return;
+      }
+
+      await loadSession(nextSessions[0].id);
+    } catch {
+      setSessions([]);
     }
   };
 
@@ -141,7 +191,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const canSend = inputValue.trim().length > 0 && !isLoading;
+  const canSend = inputValue.trim().length > 0 && !isLoading && !isSessionLoading;
 
   const tokenPercent = useMemo(() => {
     return Math.max(5, Math.min(90, Math.round((resourceToken / 12000) * 100)));
@@ -149,6 +199,42 @@ export default function App() {
   const costPercent = useMemo(() => {
     return Math.max(10, Math.min(65, Math.round((resourceCost / 0.35) * 100)));
   }, [resourceCost]);
+
+  const persistMessage = async (sessionId: string, message: Message) => {
+    await invoke("append_chat_message", {
+      input: {
+        sessionId,
+        message,
+      },
+    });
+  };
+
+  const ensureSession = async (text: string) => {
+    if (currentSessionId) {
+      return {
+        id: currentSessionId,
+        title: currentSessionTitle,
+      };
+    }
+
+    const created = await invoke<SessionItem>("create_chat_session", {
+      input: {
+        title: buildSessionTitle(text),
+      },
+    });
+
+    setCurrentSessionId(created.id);
+    setCurrentSessionTitle(created.title);
+    await refreshSessions(created.id);
+
+    return created;
+  };
+
+  const replaceTypingMessage = (typingMessageId: string, nextMessage: Message) => {
+    setMessages((prev) =>
+      prev.map((entry) => (entry.id === typingMessageId ? nextMessage : entry))
+    );
+  };
 
   const sendMessage = async (): Promise<void> => {
     if (!canSend) {
@@ -180,55 +266,56 @@ export default function App() {
     setInputValue("");
     setIsLoading(true);
 
-    const latestMessages = [...messages, userMessage];
-    const requestMessages = buildLLMMessages(latestMessages);
+    let activeSessionId = currentSessionId;
 
-    const activeSettings = await resolveProviderSettings();
+    try {
+      const session = await ensureSession(text);
+      activeSessionId = session.id;
+      await persistMessage(session.id, userMessage);
 
-    if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
+      const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
+        sessionId: session.id,
+      });
+      const requestMessages = buildLLMMessages(sessionDetail.messages);
+      const activeSettings = await resolveProviderSettings();
+
+      if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
+        const loginMessage: Message = {
+          ...typingMessage,
+          type: "text",
+          text: "ChatGPT 로그인이 필요합니다. 프로바이더 메뉴에서 다시 로그인해줘.",
+        };
+        replaceTypingMessage(typingMessage.id, loginMessage);
+        await persistMessage(session.id, loginMessage);
+        await refreshSessions(session.id);
+        return;
+      }
+
+      if (activeSettings.providerKind !== "chatgpt_oauth" && !activeSettings.apiKey) {
+        const fallbackReply = buildReplyMessage(text);
+        replaceTypingMessage(typingMessage.id, fallbackReply);
+        await persistMessage(session.id, fallbackReply);
+        await refreshSessions(session.id);
+        setActivity((prev) => [
+          ...prev,
+          buildActivity("LLM API 키가 없어 샘플 응답으로 대체했습니다.", "기획자"),
+        ]);
+        return;
+      }
+
       setMessages((prev) =>
         prev.map((entry) =>
           entry.id === typingMessage.id
             ? {
                 ...entry,
                 type: "text",
-                text: "ChatGPT 로그인이 필요합니다. 프로바이더 메뉴에서 다시 로그인해줘.",
+                text: "",
               }
             : entry
         )
       );
-      setIsLoading(false);
-      return;
-    }
 
-    if (activeSettings.providerKind !== "chatgpt_oauth" && !activeSettings.apiKey) {
-      const fallbackReply = buildReplyMessage(text);
-      setMessages((prev) =>
-        prev.map((entry) => (entry.id === typingMessage.id ? fallbackReply : entry))
-      );
-      setActivity((prev) => [
-        ...prev,
-        buildActivity("LLM API 키가 없어 샘플 응답으로 대체했습니다.", "기획자"),
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
-    setMessages((prev) =>
-      prev.map((entry) =>
-        entry.id === typingMessage.id
-          ? {
-              ...entry,
-              type: "text",
-              text: "",
-            }
-          : entry
-      )
-    );
-
-    let streamedText = "";
-
-    try {
+      let streamedText = "";
       const response = await sendToLLM({
         providerKind: activeSettings.providerKind,
         apiBaseUrl: activeSettings.baseUrl,
@@ -244,17 +331,15 @@ export default function App() {
         },
       });
 
-      setMessages((prev) =>
-        prev.map((entry) =>
-          entry.id === typingMessage.id
-            ? {
-                ...entry,
-                type: "text",
-                text: response.text || streamedText || "(빈 응답)",
-              }
-            : entry
-        )
-      );
+      const assistantMessage: Message = {
+        ...typingMessage,
+        type: "text",
+        text: response.text || streamedText || "(빈 응답)",
+      };
+
+      replaceTypingMessage(typingMessage.id, assistantMessage);
+      await persistMessage(session.id, assistantMessage);
+      await refreshSessions(session.id);
 
       const totalTokens = response.usage?.totalTokens;
       if (typeof totalTokens === "number") {
@@ -275,17 +360,22 @@ export default function App() {
       ]);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
-      setMessages((prev) =>
-        prev.map((entry) =>
-          entry.id === typingMessage.id
-            ? {
-                ...entry,
-                type: "text",
-                text: `요청 처리 실패: ${reason}`,
-              }
-            : entry
-        )
-      );
+      const errorMessage: Message = {
+        ...typingMessage,
+        type: "text",
+        text: `요청 처리 실패: ${reason}`,
+      };
+      replaceTypingMessage(typingMessage.id, errorMessage);
+
+      if (activeSessionId) {
+        try {
+          await persistMessage(activeSessionId, errorMessage);
+          await refreshSessions(activeSessionId);
+        } catch {
+          // 저장 실패는 화면 응답을 막지 않음
+        }
+      }
+
       setActivity((prev) => [
         ...prev,
         buildActivity("LLM 응답 수신 중 오류가 발생했습니다.", "시스템"),
@@ -326,17 +416,42 @@ export default function App() {
 
   const clearContext = () => {
     setMessages(SESSION_MESSAGES);
+    setCurrentSessionId(null);
+    setCurrentSessionTitle("새 채팅");
     setInputValue("");
     setActivity([
       ...INITIAL_ACTIVITY,
       buildActivity("세션이 초기화되어 기본 상태로 되돌아갑니다.", "시스템"),
     ]);
+    void refreshSessions(null);
   };
 
   const startNewChat = () => {
     setMessages(SESSION_MESSAGES);
+    setCurrentSessionId(null);
+    setCurrentSessionTitle("새 채팅");
     setInputValue("");
     setActivity([...INITIAL_ACTIVITY, buildActivity("새 채팅 세션을 시작했습니다.", "시스템")]);
+    void refreshSessions(null);
+  };
+
+  const handleSessionSelect = async (sessionId: string) => {
+    if (sessionId === currentSessionId) {
+      return;
+    }
+
+    try {
+      await loadSession(sessionId);
+      setActivity((prev) => [...prev, buildActivity("기존 세션을 불러왔습니다.", "시스템")]);
+    } catch (error) {
+      setActivity((prev) => [
+        ...prev,
+        buildActivity(
+          error instanceof Error ? error.message : "세션을 불러오지 못했습니다.",
+          "시스템"
+        ),
+      ]);
+    }
   };
 
   const saveOperationModeSettings = async (
@@ -481,6 +596,8 @@ export default function App() {
       <AppHeader
         theme={theme}
         isLoggedIn={settings.chatgptLoggedIn}
+        sessionTitle={currentSessionTitle}
+        hasActiveSession={Boolean(currentSessionId)}
         onNewChat={startNewChat}
         onExportChat={exportChat}
         onClearContext={clearContext}
@@ -496,7 +613,8 @@ export default function App() {
           onSaveModeSettings={saveOperationModeSettings}
           getModeIcon={getModeIcon}
           agents={AGENTS}
-          sessions={SESSIONS}
+          sessions={sessions}
+          onSessionSelect={handleSessionSelect}
           tools={TOOLS}
         />
 

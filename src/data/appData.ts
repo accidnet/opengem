@@ -1,4 +1,4 @@
-import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType, SessionItem } from "@/types/chat";
+import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
 
 const env = import.meta.env;
 
@@ -86,12 +86,6 @@ export const AGENTS: AgentItem[] = [
 ];
 
 export const TOOLS: string[] = ["웹 브라우저", "Python Repl", "파일 시스템"];
-
-export const SESSIONS: SessionItem[] = [
-  { name: "Market Analysis #42", time: "Today, 10:23 AM", active: true },
-  { name: "Code Review: Auth Service", time: "Yesterday" },
-  { name: "Product Roadmap Q4", time: "Oct 24" },
-];
 
 export const LLM_ALLOWED_MESSAGE_TYPES: MessageType[] = [
   "text",

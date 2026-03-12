@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use tauri::Manager;
 
-const MIGRATIONS: [(&str, &str); 3] = [
+const MIGRATIONS: [(&str, &str); 4] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -17,6 +17,10 @@ const MIGRATIONS: [(&str, &str); 3] = [
     (
         "003_operation_mode_default",
         include_str!("../sql/migrations/003_operation_mode_default.sql"),
+    ),
+    (
+        "004_chat_session",
+        include_str!("../sql/migrations/004_chat_session.sql"),
     ),
 ];
 
@@ -109,6 +113,10 @@ fn main() {
             commands::operation_mode::save_operation_mode,
             commands::operation_mode::select_operation_mode,
             commands::operation_mode::delete_operation_mode,
+            commands::session::list_chat_sessions,
+            commands::session::create_chat_session,
+            commands::session::get_chat_session,
+            commands::session::append_chat_message,
             commands::settings::get_llm_settings,
             commands::settings::save_llm_settings,
             commands::settings::resolve_llm_settings,

@@ -41,9 +41,15 @@ export type AgentItem = {
 };
 
 export type SessionItem = {
-  name: string;
-  time: string;
+  id: string;
+  title: string;
+  updatedAt: number;
   active?: boolean;
+};
+
+export type SessionDetail = {
+  session: SessionItem;
+  messages: Message[];
 };
 
 export type ThemeMode = "dark" | "light";

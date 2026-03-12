@@ -5,6 +5,8 @@ import type { ThemeMode } from "@/types/chat";
 type AppHeaderProps = {
   theme: ThemeMode;
   isLoggedIn: boolean;
+  sessionTitle: string;
+  hasActiveSession: boolean;
   onNewChat: () => void;
   onExportChat: () => void;
   onClearContext: () => void;
@@ -15,6 +17,8 @@ type AppHeaderProps = {
 export function AppHeader({
   theme,
   isLoggedIn,
+  sessionTitle,
+  hasActiveSession,
   onNewChat,
   onExportChat,
   onClearContext,
@@ -61,8 +65,8 @@ export function AppHeader({
         </div>
         <div className="separator" />
         <div className="session-label-wrap">
-          <h2>Market Analysis Session #42</h2>
-          <span className="running-pill">Running</span>
+          <h2>{sessionTitle}</h2>
+          <span className="running-pill">{hasActiveSession ? "Session" : "Draft"}</span>
         </div>
         <button className="new-session-btn" type="button" title="새 채팅 시작" onClick={onNewChat}>
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>

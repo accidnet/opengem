@@ -3,6 +3,8 @@ import type { LLMMessage } from "@/lib/llm";
 import { LLM_SYSTEM_PROMPT } from "@/data/appData";
 import type { ActivityItem, Message } from "@/types/chat";
 
+const SESSION_TITLE_MAX_LENGTH = 40;
+
 export function extractLLMMessageText(message: Message): string | undefined {
   if (message.type === "plan") {
     const planParts = [message.planTitle, ...(message.steps ?? [])];
@@ -74,6 +76,51 @@ export function nowTime(): string {
   return new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+export function buildSessionTitle(input: string): string {
+  const normalized = input.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "새 채팅";
+  }
+
+  if (normalized.length <= SESSION_TITLE_MAX_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, SESSION_TITLE_MAX_LENGTH)}...`;
+}
+
+export function formatSessionTime(updatedAt: number): string {
+  if (!updatedAt) {
+    return "방금 전";
+  }
+
+  const date = new Date(updatedAt);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (sameDay) {
+    if (diffMinutes < 1) {
+      return "방금 전";
+    }
+
+    if (diffMinutes < 60) {
+      return `${diffMinutes}분 전`;
+    }
+
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
   });
 }
 

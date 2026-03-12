@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { IconBadge } from "@/components/IconBadge";
 import type { AgentItem, SessionItem } from "@/types/chat";
 import { MODE_ICON_OPTIONS, type Mode, type ModeIcon } from "@/data/appData";
+import { formatSessionTime } from "@/utils/chat";
 
 type DraftModeItem = {
   id: string;
@@ -33,6 +34,7 @@ type LeftPanelProps = {
   getModeIcon: (mode: Mode) => ModeIcon;
   agents: AgentItem[];
   sessions: SessionItem[];
+  onSessionSelect: (sessionId: string) => void | Promise<void>;
   tools: string[];
 };
 
@@ -44,6 +46,7 @@ export function LeftPanel({
   getModeIcon,
   agents,
   sessions,
+  onSessionSelect,
   tools,
 }: LeftPanelProps) {
   const [isPrimaryModeOpen, setIsPrimaryModeOpen] = useState(true);
@@ -284,13 +287,14 @@ export function LeftPanel({
           >
             {sessions.map((session) => (
               <button
-                key={session.name}
+                key={session.id}
                 type="button"
                 className={`session-row ${session.active ? "session-row-active" : ""}`}
                 tabIndex={isPrimaryModeOpen ? 0 : -1}
+                onClick={() => onSessionSelect(session.id)}
               >
-                <span>{session.name}</span>
-                <span>{session.time}</span>
+                <span>{session.title}</span>
+                <span>{formatSessionTime(session.updatedAt)}</span>
               </button>
             ))}
           </div>
