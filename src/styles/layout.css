@@ -514,6 +514,30 @@
   color: var(--text-main);
 }
 
+select.settings-input {
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--text-main);
+  -webkit-text-fill-color: var(--text-main);
+  font-weight: 500;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-main) 50%),
+    linear-gradient(135deg, var(--text-main) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 17px,
+    calc(100% - 12px) 17px;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
+select.settings-input option {
+  color: var(--text-main);
+  background: var(--panel);
+}
+
 .settings-input:focus {
   outline: 1px solid var(--primary);
   border-color: var(--primary);
