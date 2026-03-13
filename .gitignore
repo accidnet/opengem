@@ -8,3 +8,7 @@ Thumbs.db
 agent-logs
 tmp*
 temp*
+.env
+.env.local
+.env.production
+/data/

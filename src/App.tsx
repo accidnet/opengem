@@ -30,6 +30,7 @@ import {
 } from "./utils/chat";
 import type {
   ActivityItem,
+  AgentItem,
   LLMSettings,
   Message,
   OperationModeState,
@@ -43,13 +44,31 @@ type StartChatgptLoginPayload = {
   authorizationUrl: string;
 };
 
+type OperationModeInput = {
+  name: string;
+  originalName?: string;
+};
+
+type PersistedAgent = Omit<AgentItem, "status">;
+
+const toAgentStatus = (active?: boolean) => {
+  return active ? "대기 중" : "오프라인";
+};
+
+const normalizeAgentsForUi = (items: PersistedAgent[]) => {
+  return items.map((agent) => ({
+    ...agent,
+    status: toAgentStatus(agent.active),
+  }));
+};
+
 async function openExternalUrl(url: string): Promise<void> {
   await invoke("open_external_url", { url });
 }
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
-  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
   const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
@@ -62,6 +81,7 @@ export default function App() {
   const [resourceToken, setResourceToken] = useState(2405);
   const [resourceCost, setResourceCost] = useState(0.04);
   const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [agents, setAgents] = useState<AgentItem[]>(normalizeAgentsForUi([...AGENTS]));
   const [settings, setSettings] = useState<LLMSettings>(LLM_CONFIG);
   const [isProviderDialogOpen, setIsProviderDialogOpen] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
@@ -72,7 +92,6 @@ export default function App() {
   useEffect(() => {
     void loadOperationModes();
     void loadProviderSettings();
-    void loadSessions();
   }, []);
 
   useEffect(() => {
@@ -89,47 +108,89 @@ export default function App() {
     }
   };
 
-  const applySessionList = (nextSessions: SessionItem[], activeSessionId?: string | null) => {
+  const applySessionList = (
+    nextSessions: SessionItem[],
+    nextModes: ReadonlyArray<Mode>,
+    activeSessionId?: string | null
+  ) => {
     const resolvedActiveSessionId =
       activeSessionId === undefined ? currentSessionId : activeSessionId;
-    setSessions(
-      nextSessions.map((session) => ({
+    const grouped = nextModes.reduce<Record<Mode, SessionItem[]>>(
+      (acc, mode) => {
+        acc[mode] = [];
+        return acc;
+      },
+      {} as Record<Mode, SessionItem[]>
+    );
+
+    nextSessions.forEach((session) => {
+      const normalizedSession = {
         ...session,
         active: session.id === resolvedActiveSessionId,
-      }))
-    );
+      };
+
+      if (!grouped[session.modeName]) {
+        grouped[session.modeName] = [];
+      }
+
+      grouped[session.modeName].push(normalizedSession);
+    });
+
+    setSessionsByMode(grouped);
   };
 
-  const refreshSessions = async (activeSessionId?: string | null) => {
+  const refreshSessions = async (
+    nextModes: ReadonlyArray<Mode>,
+    activeSessionId?: string | null
+  ) => {
     const nextSessions = await invoke<SessionItem[]>("list_chat_sessions");
-    applySessionList(nextSessions, activeSessionId);
+    applySessionList(nextSessions, nextModes, activeSessionId);
     return nextSessions;
   };
 
-  const loadSession = async (sessionId: string) => {
+  const resetCurrentSession = () => {
+    setMessages(SESSION_MESSAGES);
+    setCurrentSessionId(null);
+    setCurrentSessionTitle("새 채팅");
+    setInputValue("");
+  };
+
+  const loadSession = async (sessionId: string, nextModes: ReadonlyArray<Mode> = modes) => {
     setIsSessionLoading(true);
     try {
       const detail = await invoke<SessionDetail>("get_chat_session", { sessionId });
       setCurrentSessionId(detail.session.id);
       setCurrentSessionTitle(detail.session.title);
       setMessages(detail.messages);
-      await refreshSessions(detail.session.id);
+      await refreshSessions(nextModes, detail.session.id);
     } finally {
       setIsSessionLoading(false);
     }
   };
 
-  const loadSessions = async () => {
-    try {
-      const nextSessions = await refreshSessions(currentSessionId);
-      if (currentSessionId || nextSessions.length === 0) {
-        return;
-      }
+  const syncModeSessions = async (
+    mode: Mode,
+    nextModes: ReadonlyArray<Mode>,
+    preferredSessionId?: string | null
+  ) => {
+    const nextSessions = await refreshSessions(nextModes, preferredSessionId);
+    const modeSessions = nextSessions.filter((session) => session.modeName === mode);
+    const candidateSessionId =
+      preferredSessionId && modeSessions.some((session) => session.id === preferredSessionId)
+        ? preferredSessionId
+        : modeSessions[0]?.id;
 
-      await loadSession(nextSessions[0].id);
-    } catch {
-      setSessions([]);
+    if (!candidateSessionId) {
+      resetCurrentSession();
+      return;
     }
+
+    if (candidateSessionId === currentSessionId) {
+      await refreshSessions(nextModes, candidateSessionId);
+      return;
+    }
+
+    await loadSession(candidateSessionId, nextModes);
   };
 
   const loadOperationModes = async () => {
@@ -141,6 +202,14 @@ export default function App() {
 
       setModes(next.modes);
       setSelectedMode(next.selectedMode);
+      try {
+        const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
+          modeName: next.selectedMode,
+        });
+        setAgents(normalizeAgentsForUi(nextAgents));
+      } catch {
+        setAgents(normalizeAgentsForUi([...AGENTS]));
+      }
       setModeIcons((prev) => {
         const nextIcons = { ...prev };
         next.modes.forEach((mode, index) => {
@@ -150,27 +219,45 @@ export default function App() {
         });
         return nextIcons;
       });
+      await syncModeSessions(next.selectedMode, next.modes, null);
     } catch {
       setModes([...MODES]);
       setSelectedMode(MODES[0]);
+      setAgents(normalizeAgentsForUi([...AGENTS]));
+      setSessionsByMode({});
     }
   };
 
-  const persistOperationModes = async (nextModes: Mode[], nextSelectedMode: Mode) => {
+  const persistOperationModes = async (nextModes: OperationModeInput[], nextSelectedMode: Mode) => {
     await invoke("save_operation_mode", {
       modes: nextModes,
       selectedMode: nextSelectedMode,
     });
   };
 
+  const loadAgentsForMode = async (mode: Mode) => {
+    try {
+      const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
+        modeName: mode,
+      });
+      setAgents(normalizeAgentsForUi(nextAgents));
+    } catch {
+      setAgents(normalizeAgentsForUi([...AGENTS]));
+    }
+  };
+
   const selectOperationMode = async (mode: Mode) => {
     const previousMode = selectedMode;
+    const previousAgents = agents;
     setSelectedMode(mode);
 
     try {
       await invoke("select_operation_mode", { selectedMode: mode });
+      await loadAgentsForMode(mode);
+      await syncModeSessions(mode, modes, null);
     } catch {
       setSelectedMode(previousMode);
+      setAgents(previousAgents);
     }
   };
 
@@ -220,12 +307,13 @@ export default function App() {
     const created = await invoke<SessionItem>("create_chat_session", {
       input: {
         title: buildSessionTitle(text),
+        modeName: selectedMode,
       },
     });
 
     setCurrentSessionId(created.id);
     setCurrentSessionTitle(created.title);
-    await refreshSessions(created.id);
+    await refreshSessions(modes, created.id);
 
     return created;
   };
@@ -287,7 +375,7 @@ export default function App() {
         };
         replaceTypingMessage(typingMessage.id, loginMessage);
         await persistMessage(session.id, loginMessage);
-        await refreshSessions(session.id);
+        await refreshSessions(modes, session.id);
         return;
       }
 
@@ -295,7 +383,7 @@ export default function App() {
         const fallbackReply = buildReplyMessage(text);
         replaceTypingMessage(typingMessage.id, fallbackReply);
         await persistMessage(session.id, fallbackReply);
-        await refreshSessions(session.id);
+        await refreshSessions(modes, session.id);
         setActivity((prev) => [
           ...prev,
           buildActivity("LLM API 키가 없어 샘플 응답으로 대체했습니다.", "기획자"),
@@ -339,7 +427,7 @@ export default function App() {
 
       replaceTypingMessage(typingMessage.id, assistantMessage);
       await persistMessage(session.id, assistantMessage);
-      await refreshSessions(session.id);
+      await refreshSessions(modes, session.id);
 
       const totalTokens = response.usage?.totalTokens;
       if (typeof totalTokens === "number") {
@@ -370,7 +458,7 @@ export default function App() {
       if (activeSessionId) {
         try {
           await persistMessage(activeSessionId, errorMessage);
-          await refreshSessions(activeSessionId);
+          await refreshSessions(modes, activeSessionId);
         } catch {
           // 저장 실패는 화면 응답을 막지 않음
         }
@@ -415,33 +503,33 @@ export default function App() {
   };
 
   const clearContext = () => {
-    setMessages(SESSION_MESSAGES);
-    setCurrentSessionId(null);
-    setCurrentSessionTitle("새 채팅");
-    setInputValue("");
+    resetCurrentSession();
     setActivity([
       ...INITIAL_ACTIVITY,
       buildActivity("세션이 초기화되어 기본 상태로 되돌아갑니다.", "시스템"),
     ]);
-    void refreshSessions(null);
+    void refreshSessions(modes, null);
   };
 
   const startNewChat = () => {
-    setMessages(SESSION_MESSAGES);
-    setCurrentSessionId(null);
-    setCurrentSessionTitle("새 채팅");
-    setInputValue("");
+    resetCurrentSession();
     setActivity([...INITIAL_ACTIVITY, buildActivity("새 채팅 세션을 시작했습니다.", "시스템")]);
-    void refreshSessions(null);
+    void refreshSessions(modes, null);
   };
 
-  const handleSessionSelect = async (sessionId: string) => {
-    if (sessionId === currentSessionId) {
+  const handleSessionSelect = async (session: SessionItem) => {
+    if (session.id === currentSessionId) {
       return;
     }
 
     try {
-      await loadSession(sessionId);
+      if (session.modeName !== selectedMode) {
+        setSelectedMode(session.modeName);
+        await invoke("select_operation_mode", { selectedMode: session.modeName });
+        await loadAgentsForMode(session.modeName);
+      }
+
+      await loadSession(session.id, modes);
       setActivity((prev) => [...prev, buildActivity("기존 세션을 불러왔습니다.", "시스템")]);
     } catch (error) {
       setActivity((prev) => [
@@ -457,22 +545,27 @@ export default function App() {
   const saveOperationModeSettings = async (
     nextModes: Mode[],
     nextModeIcons: Record<Mode, ModeIcon>,
-    nextSelectedMode: Mode
+    nextSelectedMode: Mode,
+    modeItems: OperationModeInput[]
   ) => {
     const previousModes = modes;
     const previousModeIcons = modeIcons;
     const previousSelectedMode = selectedMode;
+    const previousAgents = agents;
 
     setModes(nextModes);
     setModeIcons(nextModeIcons);
     setSelectedMode(nextSelectedMode);
 
     try {
-      await persistOperationModes(nextModes, nextSelectedMode);
+      await persistOperationModes(modeItems, nextSelectedMode);
+      await loadAgentsForMode(nextSelectedMode);
+      await syncModeSessions(nextSelectedMode, nextModes, null);
     } catch {
       setModes(previousModes);
       setModeIcons(previousModeIcons);
       setSelectedMode(previousSelectedMode);
+      setAgents(previousAgents);
       void loadOperationModes();
       return;
     }
@@ -485,6 +578,27 @@ export default function App() {
 
   const getModeIcon = (mode: Mode): ModeIcon => {
     return modeIcons[mode] || MODE_ICON_OPTIONS[2];
+  };
+
+  const saveAgentsForSelectedMode = async (nextAgents: AgentItem[]) => {
+    const previousAgents = agents;
+    const normalizedAgents = normalizeAgentsForUi(
+      nextAgents.map(({ status: _status, ...agent }) => ({
+        ...agent,
+      }))
+    );
+
+    setAgents(normalizedAgents);
+
+    try {
+      await invoke("save_mode_agents", {
+        modeName: selectedMode,
+        agents: normalizedAgents.map(({ status: _status, ...agent }) => agent),
+      });
+    } catch {
+      setAgents(previousAgents);
+      throw new Error("에이전트 설정 저장에 실패했습니다.");
+    }
   };
 
   const exportChat = async () => {
@@ -611,9 +725,10 @@ export default function App() {
           selectedMode={selectedMode}
           onModeSelect={selectOperationMode}
           onSaveModeSettings={saveOperationModeSettings}
+          onSaveAgents={saveAgentsForSelectedMode}
           getModeIcon={getModeIcon}
-          agents={AGENTS}
-          sessions={sessions}
+          agents={agents}
+          sessionsByMode={sessionsByMode}
           onSessionSelect={handleSessionSelect}
           tools={TOOLS}
         />

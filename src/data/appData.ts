@@ -50,7 +50,7 @@ export const INITIAL_ACTIVITY: ActivityItem[] = [
 
 export type Mode = string;
 
-export const MODES: Mode[] = ["Orchestrator", "Dev Mode", "Custom"];
+export const MODES: Mode[] = ["Orchestration", "Dev Mode", "Custom"];
 
 export const MODE_ICON_OPTIONS = [
   "smart_toy",
@@ -66,23 +66,48 @@ export const MODE_ICON_OPTIONS = [
 export type ModeIcon = (typeof MODE_ICON_OPTIONS)[number];
 
 export const DEFAULT_MODE_ICONS: Record<Mode, ModeIcon> = {
-  Orchestrator: "smart_toy",
+  Orchestration: "smart_toy",
   "Dev Mode": "terminal",
   Custom: "tune",
 };
 
 export const AGENTS: AgentItem[] = [
-  { name: "관리자", icon: "account_tree", status: "대기 중", color: "indigo" },
   {
-    name: "프론트개발자",
+    name: "오케스트레이터",
+    icon: "account_tree",
+    status: "대기 중",
+    color: "indigo",
+    active: true,
+    model: "gpt-5.4",
+    prompt: "전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.",
+    tools: ["웹 브라우저", "파일 시스템"],
+    mcpServers: ["linear"],
+    skills: ["task-routing"],
+  },
+  {
+    name: "프론트엔드 개발자",
     icon: "travel_explore",
     status: "수집 중...",
     color: "emerald",
     active: true,
+    model: "gpt-5.4",
+    prompt: "프론트엔드 UI와 상호작용을 구현하고 시각 완성도를 높여.",
+    tools: ["웹 브라우저", "파일 시스템"],
+    mcpServers: ["figma"],
+    skills: ["design-review"],
   },
-  { name: "백엔드개발자", icon: "code", status: "오프라인", color: "amber" },
-  { name: "오신엽", icon: "design_services", status: "오프라인", color: "violet" },
-  { name: "김상현", icon: "database", status: "오프라인", color: "rose" },
+  {
+    name: "백엔드 개발자",
+    icon: "code",
+    status: "대기 중",
+    color: "amber",
+    active: true,
+    model: "gpt-5.4-mini",
+    prompt: "서버 로직, API, 데이터 흐름을 설계하고 구현해.",
+    tools: ["파일 시스템"],
+    mcpServers: ["postgres"],
+    skills: ["api-design"],
+  },
 ];
 
 export const TOOLS: string[] = ["웹 브라우저", "Python Repl", "파일 시스템"];

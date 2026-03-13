@@ -4,11 +4,15 @@ mod app_state;
 mod commands;
 
 use app_state::AppState;
+use dotenvy::from_path_override;
 use rusqlite::Connection;
-use std::path::PathBuf;
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 use tauri::Manager;
 
-const MIGRATIONS: [(&str, &str); 4] = [
+const MIGRATIONS: [(&str, &str); 7] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -21,6 +25,18 @@ const MIGRATIONS: [(&str, &str); 4] = [
     (
         "004_chat_session",
         include_str!("../sql/migrations/004_chat_session.sql"),
+    ),
+    (
+        "005_operation_mode_agents",
+        include_str!("../sql/migrations/005_operation_mode_agents.sql"),
+    ),
+    (
+        "006_seed_default_mode_agents",
+        include_str!("../sql/migrations/006_seed_default_mode_agents.sql"),
+    ),
+    (
+        "007_chat_sessions_mode_name",
+        include_str!("../sql/migrations/007_chat_sessions_mode_name.sql"),
     ),
 ];
 
@@ -69,10 +85,7 @@ fn run_migrations(connection: &mut Connection) -> Result<(), String> {
 }
 
 fn init_sqlite(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
+    let app_data_dir = resolve_sqlite_dir(app)?;
 
     std::fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
 
@@ -92,7 +105,60 @@ fn init_sqlite(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(db_path)
 }
 
+fn project_root_dir() -> Result<PathBuf, String> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "프로젝트 루트 경로를 찾지 못했습니다.".to_string())
+}
+
+fn load_env_files() -> Result<(), String> {
+    let project_root = project_root_dir()?;
+    let common_env_path = project_root.join(".env");
+
+    if common_env_path.exists() {
+        from_path_override(&common_env_path).map_err(|error| error.to_string())?;
+    }
+
+    let profile_env_path = if cfg!(debug_assertions) {
+        project_root.join(".env.development")
+    } else {
+        project_root.join(".env.production")
+    };
+
+    if profile_env_path.exists() {
+        from_path_override(&profile_env_path).map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn resolve_sqlite_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        if let Ok(custom_dir) = env::var("OPENGEM_DB_DIR") {
+            let trimmed = custom_dir.trim();
+            if !trimmed.is_empty() {
+                let path = PathBuf::from(trimmed);
+                if path.is_absolute() {
+                    return Ok(path);
+                }
+
+                return Ok(project_root_dir()?.join(path));
+            }
+        }
+
+        return Ok(project_root_dir()?.join("data"));
+    }
+
+    app.path().app_data_dir().map_err(|error| error.to_string())
+}
+
 fn main() {
+    if let Err(error) = load_env_files() {
+        eprintln!("환경변수 파일 로드 실패: {error}");
+    }
+
     tauri::Builder::default()
         .setup(|app| {
             let app_handle = app.handle();
@@ -113,6 +179,8 @@ fn main() {
             commands::operation_mode::save_operation_mode,
             commands::operation_mode::select_operation_mode,
             commands::operation_mode::delete_operation_mode,
+            commands::operation_mode::load_mode_agents,
+            commands::operation_mode::save_mode_agents,
             commands::session::list_chat_sessions,
             commands::session::create_chat_session,
             commands::session::get_chat_session,

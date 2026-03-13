@@ -72,7 +72,7 @@ export function AppHeader({
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
           </span>
-          <span className="new-session-label">New Chat</span>
+          <span className="new-session-label">New Session</span>
         </button>
       </div>
 

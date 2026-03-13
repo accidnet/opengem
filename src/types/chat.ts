@@ -38,12 +38,18 @@ export type AgentItem = {
   status: string;
   color: AgentColor;
   active?: boolean;
+  model?: string;
+  prompt?: string;
+  tools?: string[];
+  mcpServers?: string[];
+  skills?: string[];
 };
 
 export type SessionItem = {
   id: string;
   title: string;
   updatedAt: number;
+  modeName: string;
   active?: boolean;
 };
 

@@ -12,6 +12,7 @@ pub struct SessionSummaryPayload {
     id: String,
     title: String,
     updated_at: i64,
+    mode_name: String,
 }
 
 #[derive(Serialize)]
@@ -43,6 +44,7 @@ pub struct ChatMessagePayload {
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionInput {
     title: Option<String>,
+    mode_name: String,
 }
 
 #[derive(Deserialize)]
@@ -57,7 +59,7 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
     let connection = state.open_connection()?;
     let mut statement = connection
         .prepare(
-            "SELECT id, title, updated_at FROM chat_sessions ORDER BY updated_at DESC, id DESC",
+            "SELECT id, title, updated_at, mode_name FROM chat_sessions ORDER BY mode_name ASC, updated_at DESC, id DESC",
         )
         .map_err(|error| error.to_string())?;
 
@@ -67,6 +69,7 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
                 id: row.get(0)?,
                 title: row.get(1)?,
                 updated_at: row.get(2)?,
+                mode_name: row.get(3)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -85,18 +88,25 @@ pub fn create_chat_session(
     input: Option<CreateSessionInput>,
 ) -> Result<SessionSummaryPayload, String> {
     let connection = state.open_connection()?;
-    let title = normalize_title(input.and_then(|value| value.title));
+    let title = normalize_title(input.as_ref().and_then(|value| value.title.clone()));
+    let mode_name = normalize_mode_name(
+        input
+            .as_ref()
+            .map(|value| value.mode_name.as_str())
+            .unwrap_or_default(),
+    )?;
     let now = now_millis();
     let session = SessionSummaryPayload {
         id: generate_id("session"),
         title,
         updated_at: now,
+        mode_name,
     };
 
     connection
         .execute(
-            "INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-            params![&session.id, &session.title, now, session.updated_at],
+            "INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![&session.id, &session.title, now, session.updated_at, &session.mode_name],
         )
         .map_err(|error| error.to_string())?;
 
@@ -199,13 +209,14 @@ fn load_session_summary(
 ) -> Result<SessionSummaryPayload, String> {
     connection
         .query_row(
-            "SELECT id, title, updated_at FROM chat_sessions WHERE id = ?1",
+            "SELECT id, title, updated_at, mode_name FROM chat_sessions WHERE id = ?1",
             params![session_id],
             |row| {
                 Ok(SessionSummaryPayload {
                     id: row.get(0)?,
                     title: row.get(1)?,
                     updated_at: row.get(2)?,
+                    mode_name: row.get(3)?,
                 })
             },
         )
@@ -271,6 +282,14 @@ fn normalize_title(value: Option<String>) -> String {
         .map(|item| item.trim().to_string())
         .filter(|item| !item.is_empty())
         .unwrap_or_else(|| DEFAULT_SESSION_TITLE.to_string())
+}
+
+fn normalize_mode_name(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("모드 이름이 비어 있습니다.".to_string());
+    }
+    Ok(trimmed.to_string())
 }
 
 fn normalize_message(message: ChatMessagePayload) -> Result<ChatMessagePayload, String> {

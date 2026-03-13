@@ -14,7 +14,12 @@
 
 .panel-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.mode-group {
+  display: grid;
+  gap: 3px;
 }
 
 .mode-btn {
@@ -45,9 +50,8 @@
 
 .sub-session-list {
   padding-left: 16px;
-  margin-top: 10px;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   max-height: 0;
   opacity: 0;
   transform: translateY(-4px);
@@ -276,6 +280,64 @@
   gap: 8px;
 }
 
+.agent-settings-modal {
+  width: min(1120px, 100%);
+}
+
+.agent-provider-modal {
+  width: min(1180px, 100%);
+}
+
+.agent-provider-sidebar {
+  padding-top: 28px;
+}
+
+.agent-provider-main {
+  gap: 18px;
+}
+
+.agent-settings-count {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.agent-create-card,
+.agent-config-card {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-list-card {
+  gap: 12px;
+}
+
+.agent-settings-list {
+  max-height: min(54vh, 520px);
+}
+
+.agent-settings-item {
+  grid-template-columns: auto 1.5fr repeat(2, minmax(0, 1fr)) auto auto auto;
+}
+
+.settings-textarea {
+  min-height: 132px;
+  height: auto;
+  padding: 12px;
+  resize: vertical;
+}
+
+.settings-textarea-compact {
+  min-height: 112px;
+}
+
+.agent-settings-footer {
+  align-items: center;
+}
+
+.agent-settings-footer-actions {
+  display: inline-flex;
+  gap: 10px;
+}
+
 .mode-settings-sub-action {
   cursor: pointer;
   height: 34px;
@@ -288,12 +350,21 @@
     padding: 14px;
   }
 
-  .mode-settings-create {
+  .mode-settings-create,
+  .agent-settings-create,
+  .agent-create-card,
+  .agent-config-card {
     grid-template-columns: 1fr;
   }
 
-  .mode-settings-item {
+  .mode-settings-item,
+  .agent-settings-item {
     grid-template-columns: auto 1fr;
+  }
+
+  .agent-settings-footer-actions {
+    width: 100%;
+    display: grid;
   }
 }
 
