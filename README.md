@@ -51,3 +51,15 @@ pnpm run tauri:dev
 - `pnpm run build`: 프론트엔드 빌드 (`dist/`)
 - `pnpm run tauri:build`: Tauri 앱 배포 빌드
 - `pnpm run preview`: 빌드 결과 미리보기
+
+## UI 미리보기
+
+- 아래 이미지는 현재 데스크톱 UI/UX 화면 예시입니다.
+
+### 메인 화면 1 (일반 모드)
+
+![OpenGem UI 메인 화면](docs/uiux1.PNG)
+
+### 메인 화면 2 (개발 모드)
+
+![OpenGem UI 좌측 패널](docs/uiux2.PNG)
