@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { IconBadge } from "@/components/IconBadge";
-import type { AgentColor, AgentItem, SessionItem } from "@/types/chat";
+import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 import { MODE_ICON_OPTIONS, type Mode, type ModeIcon } from "@/data/appData";
 import { formatSessionTime } from "@/utils/chat";
 
@@ -111,6 +111,29 @@ export function LeftPanel({
   const draftModeIdRef = useRef(0);
   const draftAgentIdRef = useRef(0);
   const isSettingsOpen = isModeSettingsOpen || isAgentSettingsOpen;
+
+  // 토스트 알림 상태
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastKind, setToastKind] = useState<"error" | "success" | "info">("error");
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback(
+    (message: string, kind: "error" | "success" | "info" = "error") => {
+      // 기존 타이머가 있으면 초기화
+      if (toastTimerRef.current !== null) {
+        clearTimeout(toastTimerRef.current);
+      }
+      setToastMessage(message);
+      setToastKind(kind);
+      setToastVisible(true);
+      toastTimerRef.current = setTimeout(() => {
+        setToastVisible(false);
+        toastTimerRef.current = null;
+      }, 3500);
+    },
+    []
+  );
 
   useEffect(() => {
     setOpenModes((prev) => {
@@ -289,6 +312,8 @@ export function LeftPanel({
       return;
     }
 
+    // 이미 main 에이전트가 있으면 sub, 없으면 자동으로 main 설정
+    const hasMain = draftAgents.some((a) => a.role === "main");
     draftAgentIdRef.current += 1;
     setDraftAgents((prev) => [
       ...prev,
@@ -297,6 +322,7 @@ export function LeftPanel({
         name: trimmedName,
         icon: newAgentIcon,
         color: newAgentColor,
+        role: (hasMain ? "sub" : "main") as AgentRole,
         model: newAgentModel.trim() || DEFAULT_AGENT_MODEL,
         prompt: newAgentPrompt.trim(),
         tools: parseConfigList(newAgentTools),
@@ -339,7 +365,25 @@ export function LeftPanel({
   };
 
   const handleRemoveDraftAgent = (id: string) => {
-    setDraftAgents((prev) => prev.filter((agent) => agent.id !== id));
+    setDraftAgents((prev) => {
+      const filtered = prev.filter((agent) => agent.id !== id);
+      // 삭제 후 main이 사라지면 첫 번째 에이전트를 main으로 승격
+      const hasMain = filtered.some((a) => a.role === "main");
+      if (!hasMain && filtered.length > 0) {
+        return filtered.map((a, idx) => (idx === 0 ? { ...a, role: "main" as AgentRole } : a));
+      }
+      return filtered;
+    });
+  };
+
+  /** 특정 에이전트를 main으로 설정하고 나머지는 sub로 변경 */
+  const handleSetMainAgent = (id: string) => {
+    setDraftAgents((prev) =>
+      prev.map((agent) => ({
+        ...agent,
+        role: (agent.id === id ? "main" : "sub") as AgentRole,
+      }))
+    );
   };
 
   const handleMoveDraftAgent = (index: number, direction: "up" | "down") => {
@@ -365,12 +409,14 @@ export function LeftPanel({
   };
 
   const handleSaveAgentSettings = async () => {
-    const normalizedAgents = draftAgents.map((agent) => ({
+    const normalizedAgents = draftAgents.map((agent, index) => ({
       name: agent.name.trim(),
       icon: agent.icon,
       status: agent.status,
       color: agent.color,
       active: agent.active,
+      // role이 없으면 첫 번째를 main, 나머지를 sub로 기본 설정
+      role: (agent.role ?? (index === 0 ? "main" : "sub")) as AgentRole,
       model: agent.model?.trim() || DEFAULT_AGENT_MODEL,
       prompt: agent.prompt?.trim() || "",
       tools: agent.tools || [],
@@ -389,8 +435,19 @@ export function LeftPanel({
       return;
     }
 
-    await onSaveAgents(normalizedAgents);
-    closeAgentSettings();
+    // role 정규화: main이 없으면 첫 번째를 main으로 승격
+    const hasMainAgent = normalizedAgents.some((a) => a.role === "main");
+    if (!hasMainAgent && normalizedAgents.length > 0) {
+      normalizedAgents[0].role = "main";
+    }
+
+    try {
+      await onSaveAgents(normalizedAgents);
+      closeAgentSettings();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+      showToast(reason, "error");
+    }
   };
 
   const handleMoveDraftMode = (index: number, direction: "up" | "down") => {
@@ -476,6 +533,7 @@ export function LeftPanel({
   };
 
   return (
+    <>
     <aside className="left-panel">
       <section className="panel-block">
         <div className="section-head-with-action">
@@ -571,7 +629,18 @@ export function LeftPanel({
                 />
               </div>
               <div className="agent-copy">
-                <p className="agent-name">{agent.name}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                  <p className="agent-name">{agent.name}</p>
+                  {agent.role === "main" && (
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "11px", color: "#fbbf24" }}
+                      title="메인 에이전트 (채팅 수신 대상)"
+                    >
+                      star
+                    </span>
+                  )}
+                </div>
                 <p className={`agent-state ${agent.active ? "agent-state-active" : ""}`}>
                   {agent.status}
                 </p>
@@ -1064,6 +1133,25 @@ export function LeftPanel({
                             <button
                               className="small-icon-btn"
                               type="button"
+                              title={
+                                agent.role === "main"
+                                  ? "메인 에이전트 (채팅 수신 대상)"
+                                  : "메인 에이전트로 설정"
+                              }
+                              disabled={agent.role === "main"}
+                              onClick={() => handleSetMainAgent(agent.id)}
+                              style={{ color: agent.role === "main" ? "#fbbf24" : undefined }}
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "16px" }}
+                              >
+                                {agent.role === "main" ? "star" : "star_border"}
+                              </span>
+                            </button>
+                            <button
+                              className="small-icon-btn"
+                              type="button"
                               title="위로 이동"
                               onClick={() => handleMoveDraftAgent(index, "up")}
                               disabled={index === 0}
@@ -1140,5 +1228,21 @@ export function LeftPanel({
         </div>
       )}
     </aside>
+
+      {toastVisible && (
+        <div className="toast-container" role="alert" aria-live="assertive">
+          <div className={`toast is-${toastKind}`}>
+            <span className="toast-icon material-symbols-outlined" aria-hidden="true">
+              {toastKind === "error"
+                ? "error"
+                : toastKind === "success"
+                  ? "check_circle"
+                  : "info"}
+            </span>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

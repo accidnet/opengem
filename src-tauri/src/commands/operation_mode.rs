@@ -15,6 +15,10 @@ const SQL_SELECT_FIRST_OPERATION_MODE: &str =
 
 const DEFAULT_OPERATION_MODES: [&str; 1] = ["Orchestration"];
 
+fn default_agent_role() -> String {
+    "sub".to_string()
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPayload {
@@ -22,6 +26,8 @@ pub struct AgentPayload {
     icon: String,
     color: String,
     active: bool,
+    #[serde(default = "default_agent_role")]
+    role: String,
     model: Option<String>,
     prompt: Option<String>,
     tools: Option<Vec<String>>,
@@ -50,6 +56,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             icon: "account_tree".to_string(),
             color: "indigo".to_string(),
             active: true,
+            role: "main".to_string(),
             model: Some("gpt-5.4".to_string()),
             prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.".to_string()),
             tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
@@ -61,6 +68,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             icon: "travel_explore".to_string(),
             color: "emerald".to_string(),
             active: true,
+            role: "sub".to_string(),
             model: Some("gpt-5.4".to_string()),
             prompt: Some("프론트엔드 UI와 상호작용을 구현하고 시각 완성도를 높여.".to_string()),
             tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
@@ -72,6 +80,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             icon: "code".to_string(),
             color: "amber".to_string(),
             active: true,
+            role: "sub".to_string(),
             model: Some("gpt-5.4-mini".to_string()),
             prompt: Some("서버 로직, API, 데이터 흐름을 설계하고 구현해.".to_string()),
             tools: Some(vec!["파일 시스템".to_string()]),
@@ -87,6 +96,7 @@ fn default_mode_agents() -> Vec<AgentPayload> {
         icon: "account_tree".to_string(),
         color: "indigo".to_string(),
         active: true,
+        role: "main".to_string(),
         model: Some("gpt-5.4".to_string()),
         prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.".to_string()),
         tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
@@ -173,9 +183,10 @@ fn seed_agents_for_mode(
                     tools,
                     mcp_servers,
                     skills,
+                    agent_role,
                     display_order
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 ",
                 params![
                     mode_id,
@@ -188,6 +199,7 @@ fn seed_agents_for_mode(
                     tools,
                     mcp_servers,
                     skills,
+                    agent.role,
                     index as i64
                 ],
             )
@@ -539,7 +551,8 @@ pub fn load_mode_agents(
                 prompt,
                 tools,
                 mcp_servers,
-                skills
+                skills,
+                agent_role
             FROM operation_mode_agents
             WHERE mode_id = ?1
             ORDER BY display_order ASC, id ASC
@@ -560,6 +573,9 @@ pub fn load_mode_agents(
                 tools: deserialize_json(row.get(6)?)?,
                 mcp_servers: deserialize_json(row.get(7)?)?,
                 skills: deserialize_json(row.get(8)?)?,
+                role: row
+                    .get::<_, Option<String>>(9)?
+                    .unwrap_or_else(|| "sub".to_string()),
             })
         })
         .map_err(|error| error.to_string())?;
@@ -602,12 +618,36 @@ pub fn save_mode_agents(
             icon: agent.icon.trim().to_string(),
             color: agent.color.trim().to_string(),
             active: agent.active,
+            role: if agent.role == "main" {
+                "main".to_string()
+            } else {
+                "sub".to_string()
+            },
             model: normalize_optional_text(agent.model),
             prompt: normalize_optional_text(agent.prompt),
             tools: normalize_optional_list(agent.tools),
             mcp_servers: normalize_optional_list(agent.mcp_servers),
             skills: normalize_optional_list(agent.skills),
         });
+    }
+
+    // role 정규화: main이 없으면 첫 번째를 main으로, 두 개 이상이면 첫 번째만 유지
+    let has_main = normalized_agents.iter().any(|a| a.role == "main");
+    if !has_main {
+        if let Some(first) = normalized_agents.first_mut() {
+            first.role = "main".to_string();
+        }
+    } else {
+        let mut found_main = false;
+        for agent in normalized_agents.iter_mut() {
+            if agent.role == "main" {
+                if found_main {
+                    agent.role = "sub".to_string();
+                } else {
+                    found_main = true;
+                }
+            }
+        }
     }
 
     let mut connection = state.open_connection()?;
@@ -642,9 +682,10 @@ pub fn save_mode_agents(
                     tools,
                     mcp_servers,
                     skills,
+                    agent_role,
                     display_order
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 ",
                 params![
                     mode_id,
@@ -657,6 +698,7 @@ pub fn save_mode_agents(
                     tools,
                     mcp_servers,
                     skills,
+                    agent.role,
                     index as i64
                 ],
             )

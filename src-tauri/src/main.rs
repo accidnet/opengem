@@ -12,7 +12,7 @@ use std::{
 };
 use tauri::Manager;
 
-const MIGRATIONS: [(&str, &str); 7] = [
+const MIGRATIONS: [(&str, &str); 8] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -37,6 +37,10 @@ const MIGRATIONS: [(&str, &str); 7] = [
     (
         "007_chat_sessions_mode_name",
         include_str!("../sql/migrations/007_chat_sessions_mode_name.sql"),
+    ),
+    (
+        "008_agent_role",
+        include_str!("../sql/migrations/008_agent_role.sql"),
     ),
 ];
 

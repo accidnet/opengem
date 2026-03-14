@@ -49,7 +49,24 @@ export function extractLLMMessageText(message: Message): string | undefined {
   return undefined;
 }
 
-export function buildLLMMessages(messages: Message[]): LLMMessage[] {
+/** AgentColor → 실제 CSS 색상값 매핑 */
+export const AGENT_COLOR_VALUES: Record<string, string> = {
+  indigo: "#a5b4fc",
+  emerald: "#86efac",
+  amber: "#fcd34d",
+  violet: "#c4b5fd",
+  rose: "#fda4af",
+};
+
+/**
+ * LLM에 전송할 메시지 배열을 구성한다.
+ * @param messages 현재 세션의 메시지 목록
+ * @param systemPrompt 메인 에이전트의 프롬프트 (없으면 기본 시스템 프롬프트 사용)
+ */
+export function buildLLMMessages(messages: Message[], systemPrompt?: string): LLMMessage[] {
+  const resolvedSystemPrompt =
+    systemPrompt && systemPrompt.trim().length > 0 ? systemPrompt.trim() : LLM_SYSTEM_PROMPT;
+
   const chatMessages = messages
     .filter((message) => message.side !== "status" && message.type !== "status")
     .map((message) => {
@@ -65,7 +82,7 @@ export function buildLLMMessages(messages: Message[]): LLMMessage[] {
     })
     .filter((entry): entry is LLMMessage => Boolean(entry));
 
-  return [{ role: "system", content: LLM_SYSTEM_PROMPT }, ...chatMessages];
+  return [{ role: "system", content: resolvedSystemPrompt }, ...chatMessages];
 }
 
 export function appendChunkToMessage(messages: Message[], id: string, text: string): Message[] {
@@ -124,14 +141,26 @@ export function formatSessionTime(updatedAt: number): string {
   });
 }
 
-export function buildTypingMessage(text: string): Message {
+/**
+ * 타이핑 중 상태 메시지를 생성한다.
+ * @param text 타이핑 중 표시할 텍스트
+ * @param agentName 에이전트 이름 (없으면 기본값)
+ * @param agentIcon 에이전트 아이콘 (없으면 기본값)
+ * @param agentIconColor 에이전트 아이콘 색상 (없으면 기본값)
+ */
+export function buildTypingMessage(
+  text: string,
+  agentName?: string,
+  agentIcon?: string,
+  agentIconColor?: string
+): Message {
   return {
     id: `typing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     side: "agent",
-    sender: "연구 에이전트",
+    sender: agentName ?? "연구 에이전트",
     byline: nowTime(),
-    icon: "travel_explore",
-    iconColor: "#86efac",
+    icon: agentIcon ?? "travel_explore",
+    iconColor: agentIconColor ?? "#86efac",
     type: "typing",
     text,
   };

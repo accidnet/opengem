@@ -20,6 +20,7 @@ import {
   type Mode,
 } from "./data/appData";
 import {
+  AGENT_COLOR_VALUES,
   appendChunkToMessage,
   buildActivity,
   buildLLMMessages,
@@ -344,7 +345,14 @@ export default function App() {
       text,
     };
 
-    const typingMessage = buildTypingMessage("응답을 생성 중입니다...");
+    // 현재 모드에서 role이 'main'인 에이전트를 찾는다. 없으면 첫 번째 에이전트 사용
+    const mainAgent = agents.find((a) => a.role === "main") ?? agents[0];
+    const typingMessage = buildTypingMessage(
+      "응답을 생성 중입니다...",
+      mainAgent?.name,
+      mainAgent?.icon,
+      mainAgent?.color ? (AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac") : undefined
+    );
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
     setActivity((prev) => [
@@ -364,7 +372,8 @@ export default function App() {
       const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
         sessionId: session.id,
       });
-      const requestMessages = buildLLMMessages(sessionDetail.messages);
+      // main 에이전트의 프롬프트를 system prompt로 주입 (없으면 기본값 사용)
+      const requestMessages = buildLLMMessages(sessionDetail.messages, mainAgent?.prompt ?? undefined);
       const activeSettings = await resolveProviderSettings();
 
       if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
@@ -404,13 +413,15 @@ export default function App() {
       );
 
       let streamedText = "";
+      // main 에이전트에 설정된 모델 우선 사용, 없으면 프로바이더 기본 모델로 폴백
+      const resolvedModel = mainAgent?.model?.trim() || activeSettings.model;
       const response = await sendToLLM({
         providerKind: activeSettings.providerKind,
         apiBaseUrl: activeSettings.baseUrl,
         apiKey: activeSettings.apiKey,
         accessToken: activeSettings.accessToken,
         accountId: activeSettings.accountId,
-        model: activeSettings.model,
+        model: resolvedModel,
         messages: requestMessages,
         stream: true,
         onChunk: (chunk) => {

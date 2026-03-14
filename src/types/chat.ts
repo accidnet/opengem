@@ -32,12 +32,16 @@ export type ActivityItem = {
 
 export type AgentColor = "indigo" | "emerald" | "amber" | "violet" | "rose";
 
+export type AgentRole = "main" | "sub";
+
 export type AgentItem = {
   name: string;
   icon: string;
   status: string;
   color: AgentColor;
   active?: boolean;
+  /** 채팅 수신 에이전트 역할: main은 실제 LLM 호출 대상, sub는 보조 에이전트 */
+  role?: AgentRole;
   model?: string;
   prompt?: string;
   tools?: string[];
