@@ -361,10 +361,6 @@ export default function App() {
     );
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
-    setActivity((prev) => [
-      ...prev,
-      buildActivity(`새 메시지 수신: "${text.slice(0, 32)}"`, "오케스트레이터"),
-    ]);
     setInputValue("");
     setIsLoading(true);
 
@@ -401,7 +397,7 @@ export default function App() {
         await refreshSessions(modes, session.id);
         setActivity((prev) => [
           ...prev,
-          buildActivity("LLM API 키가 없어 샘플 응답으로 대체했습니다.", "기획자"),
+          buildActivity("샘플 응답으로 대체되었습니다 (API 키 없음).", mainAgent?.name ?? "기획자"),
         ]);
         return;
       }
@@ -504,33 +500,22 @@ export default function App() {
 
   const handleApprovePlan = () => {
     appendStatusMessage("사용자가 계획을 승인했습니다");
-    setActivity((prev) => [
-      ...prev,
-      buildActivity("사용자가 계획을 승인했습니다. 연구 에이전트가 실행을 시작합니다.", "기획자"),
-    ]);
   };
 
   const handleModifyPlan = () => {
     setInputValue("실행 전에 계획을 구체적으로 수정해줘.");
     appendStatusMessage("사용자가 계획 수정 요청");
-    setActivity((prev) => [
-      ...prev,
-      buildActivity("사용자가 계획 수정을 요청했습니다.", "Planner"),
-    ]);
   };
 
   const clearContext = () => {
     resetCurrentSession();
-    setActivity([
-      ...INITIAL_ACTIVITY,
-      buildActivity("세션이 초기화되어 기본 상태로 되돌아갑니다.", "시스템"),
-    ]);
+    setActivity([...INITIAL_ACTIVITY]);
     void refreshSessions(modes, null);
   };
 
   const startNewChat = () => {
     resetCurrentSession();
-    setActivity([...INITIAL_ACTIVITY, buildActivity("새 채팅 세션을 시작했습니다.", "시스템")]);
+    setActivity([...INITIAL_ACTIVITY]);
     void refreshSessions(modes, null);
   };
 
@@ -547,15 +532,8 @@ export default function App() {
       }
 
       await loadSession(session.id, modes);
-      setActivity((prev) => [...prev, buildActivity("기존 세션을 불러왔습니다.", "시스템")]);
-    } catch (error) {
-      setActivity((prev) => [
-        ...prev,
-        buildActivity(
-          error instanceof Error ? error.message : "세션을 불러오지 못했습니다.",
-          "시스템"
-        ),
-      ]);
+    } catch {
+      // 세션 불러오기 실패는 activity log에 기록하지 않음
     }
   };
 
@@ -587,10 +565,7 @@ export default function App() {
       return;
     }
 
-    setActivity((prev) => [
-      ...prev,
-      buildActivity("Operation Mode 설정이 저장되었습니다.", "시스템"),
-    ]);
+    // Operation Mode 저장은 activity log에 기록하지 않음
   };
 
   const getModeIcon = (mode: Mode): ModeIcon => {
@@ -633,10 +608,6 @@ export default function App() {
     }
 
     await navigator.clipboard.writeText(text);
-    setActivity((prev) => [
-      ...prev,
-      buildActivity("채팅 기록을 클립보드에 복사했습니다.", "시스템"),
-    ]);
   };
 
   const onEnterSubmit = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
