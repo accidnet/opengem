@@ -61,6 +61,7 @@ const parseConfigList = (value: string) => {
 type LeftPanelProps = {
   modes: readonly Mode[];
   selectedMode: Mode;
+  openSelectedModeSignal: number;
   onModeSelect: (mode: Mode) => void | Promise<void>;
   onSaveModeSettings: (
     nextModes: Mode[],
@@ -79,6 +80,7 @@ type LeftPanelProps = {
 export function LeftPanel({
   modes,
   selectedMode,
+  openSelectedModeSignal,
   onModeSelect,
   onSaveModeSettings,
   onSaveAgents,
@@ -153,6 +155,13 @@ export function LeftPanel({
       return next;
     });
   }, [modes, selectedMode]);
+
+  useEffect(() => {
+    setOpenModes((prev) => ({
+      ...prev,
+      [selectedMode]: true,
+    }));
+  }, [openSelectedModeSignal, selectedMode]);
 
   const openModeSettings = () => {
     setDraftModes(

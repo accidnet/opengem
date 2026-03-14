@@ -89,6 +89,7 @@ export default function App() {
   const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
   const [chatGPTLoginUrl, setChatGPTLoginUrl] = useState("");
   const [providerError, setProviderError] = useState("");
+  const [openSelectedModeSignal, setOpenSelectedModeSignal] = useState(0);
 
   useEffect(() => {
     void loadOperationModes();
@@ -333,6 +334,11 @@ export default function App() {
     const text = inputValue.trim();
     if (!text) {
       return;
+    }
+
+    const isFirstMessageInFreshSession = currentSessionId === null && messages.length === 0;
+    if (isFirstMessageInFreshSession) {
+      setOpenSelectedModeSignal((prev) => prev + 1);
     }
 
     const userMessage: Message = {
@@ -734,6 +740,7 @@ export default function App() {
         <LeftPanel
           modes={modes}
           selectedMode={selectedMode}
+          openSelectedModeSignal={openSelectedModeSignal}
           onModeSelect={selectOperationMode}
           onSaveModeSettings={saveOperationModeSettings}
           onSaveAgents={saveAgentsForSelectedMode}
