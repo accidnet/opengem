@@ -188,6 +188,7 @@ fn main() {
             commands::session::list_chat_sessions,
             commands::session::create_chat_session,
             commands::session::get_chat_session,
+            commands::session::delete_chat_session,
             commands::session::append_chat_message,
             commands::settings::get_llm_settings,
             commands::settings::save_llm_settings,

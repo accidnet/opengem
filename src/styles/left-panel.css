@@ -74,22 +74,34 @@
   border: 0;
   background: transparent;
   color: var(--text-soft);
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 4px;
+  border-left: 2px solid transparent;
+}
+
+.session-row-main {
+  border: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   display: grid;
   gap: 4px;
-  border-radius: 8px;
-  padding: 8px;
-  border-left: 2px solid transparent;
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
   cursor: pointer;
 }
 
-.session-row span {
+.session-row-main span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-row span:last-child {
+.session-row-main span:last-child {
   color: #64748b;
   font-size: 11px;
 }
@@ -99,6 +111,35 @@
   border-color: var(--primary);
   color: #e2e8f0;
   cursor: pointer;
+}
+
+.session-row-delete {
+  width: 28px;
+  min-width: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7c8794;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.session-row:hover .session-row-delete,
+.session-row:focus-within .session-row-delete,
+.session-row-active .session-row-delete {
+  opacity: 1;
+}
+
+.session-row-delete:hover {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.08);
 }
 
 .section-head-with-action {

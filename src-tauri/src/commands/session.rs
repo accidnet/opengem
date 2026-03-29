@@ -127,6 +127,25 @@ pub fn get_chat_session(
 }
 
 #[tauri::command]
+pub fn delete_chat_session(state: State<AppState>, session_id: String) -> Result<(), String> {
+    let connection = state.open_connection()?;
+    let normalized_session_id = normalize_session_id(&session_id)?;
+
+    let deleted_count = connection
+        .execute(
+            "DELETE FROM chat_sessions WHERE id = ?1",
+            params![&normalized_session_id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    if deleted_count == 0 {
+        return Err("梨꾪똿 ?몄뀡??李얠쓣 ???놁뒿?덈떎.".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn append_chat_message(
     state: State<AppState>,
     input: AppendMessageInput,

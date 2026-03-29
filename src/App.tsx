@@ -537,6 +537,40 @@ export default function App() {
     }
   };
 
+  const handleSessionDelete = async (session: SessionItem) => {
+    try {
+      await invoke("delete_chat_session", { sessionId: session.id });
+
+      const nextSessions = await refreshSessions(modes, null);
+
+      if (session.id !== currentSessionId) {
+        return;
+      }
+
+      const sameModeSessions = nextSessions.filter((item) => item.modeName === session.modeName);
+      const fallbackSession = sameModeSessions[0];
+
+      if (!fallbackSession) {
+        resetCurrentSession();
+        if (session.modeName !== selectedMode) {
+          setSelectedMode(session.modeName);
+          await loadAgentsForMode(session.modeName);
+        }
+        return;
+      }
+
+      if (session.modeName !== selectedMode) {
+        setSelectedMode(session.modeName);
+        await invoke("select_operation_mode", { selectedMode: session.modeName });
+        await loadAgentsForMode(session.modeName);
+      }
+
+      await loadSession(fallbackSession.id, modes);
+    } catch {
+      // 세션 삭제 실패는 현재 화면 상태를 유지
+    }
+  };
+
   const saveOperationModeSettings = async (
     nextModes: Mode[],
     nextModeIcons: Record<Mode, ModeIcon>,
@@ -719,6 +753,7 @@ export default function App() {
           agents={agents}
           sessionsByMode={sessionsByMode}
           onSessionSelect={handleSessionSelect}
+          onSessionDelete={handleSessionDelete}
           tools={TOOLS}
         />
 

@@ -28,6 +28,7 @@ type LeftPanelProps = {
   agents: AgentItem[];
   sessionsByMode: Record<Mode, SessionItem[]>;
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
+  onSessionDelete: (session: SessionItem) => void | Promise<void>;
   tools: string[];
 };
 
@@ -42,6 +43,7 @@ export function LeftPanel({
   agents,
   sessionsByMode,
   onSessionSelect,
+  onSessionDelete,
   tools,
 }: LeftPanelProps) {
   const [openModes, setOpenModes] = useState<Record<Mode, boolean>>({});
@@ -444,6 +446,7 @@ export function LeftPanel({
         onModeClick={handleModeClick}
         onOpenSettings={openModeSettings}
         onSessionSelect={onSessionSelect}
+        onSessionDelete={onSessionDelete}
       />
       <AgentsSection agents={agents} onOpenSettings={openAgentSettings} />
       <ToolsSection tools={tools} />

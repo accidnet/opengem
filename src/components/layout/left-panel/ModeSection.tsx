@@ -11,6 +11,7 @@ type ModeSectionProps = {
   onModeClick: (mode: Mode) => void;
   onOpenSettings: () => void;
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
+  onSessionDelete: (session: SessionItem) => void | Promise<void>;
 };
 
 export function ModeSection({
@@ -22,6 +23,7 @@ export function ModeSection({
   onModeClick,
   onOpenSettings,
   onSessionSelect,
+  onSessionDelete,
 }: ModeSectionProps) {
   return (
     <section className="panel-block">
@@ -68,16 +70,35 @@ export function ModeSection({
                 aria-hidden={!isOpen}
               >
                 {modeSessions.map((session) => (
-                  <button
+                  <div
                     key={session.id}
-                    type="button"
                     className={`session-row ${session.active ? "session-row-active" : ""}`}
-                    tabIndex={isOpen ? 0 : -1}
-                    onClick={() => onSessionSelect(session)}
                   >
-                    <span>{session.title}</span>
-                    <span>{formatSessionTime(session.updatedAt)}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="session-row-main"
+                      tabIndex={isOpen ? 0 : -1}
+                      onClick={() => onSessionSelect(session)}
+                    >
+                      <span>{session.title}</span>
+                      <span>{formatSessionTime(session.updatedAt)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="session-row-delete"
+                      tabIndex={isOpen ? 0 : -1}
+                      title="세션 삭제"
+                      aria-label={`${session.title} 세션 삭제`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onSessionDelete(session);
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                        delete
+                      </span>
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
