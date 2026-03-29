@@ -37,6 +37,7 @@ type AgentSettingsModalProps = {
     key: K,
     value: DraftAgentItem[K]
   ) => void;
+  onSetMainAgent: (id: string) => void;
   onMoveDraftAgent: (index: number, direction: "up" | "down") => void;
   onRemoveDraftAgent: (id: string) => void;
   onSave: () => void | Promise<void>;
@@ -70,6 +71,7 @@ export function AgentSettingsModal({
   onCreateAgent,
   onCreateAgentOnEnter,
   onDraftAgentChange,
+  onSetMainAgent,
   onMoveDraftAgent,
   onRemoveDraftAgent,
   onSave,
@@ -335,6 +337,27 @@ export function AgentSettingsModal({
                             ))}
                           </select>
                         </div>
+                        <button
+                          className="small-icon-btn"
+                          type="button"
+                          title={
+                            agent.role === "main"
+                              ? "메인 에이전트"
+                              : "메인 에이전트로 설정"
+                          }
+                          aria-label={
+                            agent.role === "main"
+                              ? `${agent.name || "agent"} 메인 에이전트`
+                              : `${agent.name || "agent"} 메인 에이전트로 설정`
+                          }
+                          disabled={agent.role === "main"}
+                          onClick={() => onSetMainAgent(agent.id)}
+                          style={{ color: agent.role === "main" ? "#fbbf24" : undefined }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            {agent.role === "main" ? "star" : "star_border"}
+                          </span>
+                        </button>
                         <button
                           className="small-icon-btn"
                           type="button"

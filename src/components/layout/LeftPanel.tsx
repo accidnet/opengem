@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import type { Mode, ModeIcon } from "@/data/appData";
-import type { AgentColor, AgentItem, SessionItem } from "@/types/chat";
+import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 
 import { AgentSettingsModal } from "./left-panel/AgentSettingsModal";
 import { AgentsSection } from "./left-panel/AgentsSection";
@@ -331,6 +331,8 @@ export function LeftPanel({
       return;
     }
 
+    const hasMain = draftAgents.some((agent) => agent.role === "main");
+
     draftAgentIdRef.current += 1;
     setDraftAgents((prev) => [
       ...prev,
@@ -339,6 +341,7 @@ export function LeftPanel({
         name: trimmedName,
         icon: newAgentIcon,
         color: newAgentColor,
+        role: (hasMain ? "sub" : "main") as AgentRole,
         model: newAgentModel.trim() || DEFAULT_AGENT_MODEL,
         prompt: newAgentPrompt.trim(),
         tools: parseConfigList(newAgentTools),
@@ -381,7 +384,28 @@ export function LeftPanel({
   };
 
   const handleRemoveDraftAgent = (id: string) => {
-    setDraftAgents((prev) => prev.filter((agent) => agent.id !== id));
+    setDraftAgents((prev) => {
+      const filtered = prev.filter((agent) => agent.id !== id);
+      const hasMain = filtered.some((agent) => agent.role === "main");
+
+      if (hasMain || filtered.length === 0) {
+        return filtered;
+      }
+
+      return filtered.map((agent, index) => ({
+        ...agent,
+        role: (index === 0 ? "main" : "sub") as AgentRole,
+      }));
+    });
+  };
+
+  const handleSetMainAgent = (id: string) => {
+    setDraftAgents((prev) =>
+      prev.map((agent) => ({
+        ...agent,
+        role: (agent.id === id ? "main" : "sub") as AgentRole,
+      }))
+    );
   };
 
   const handleMoveDraftAgent = (index: number, direction: "up" | "down") => {
@@ -407,12 +431,13 @@ export function LeftPanel({
   };
 
   const handleSaveAgentSettings = async () => {
-    const normalizedAgents = draftAgents.map((agent) => ({
+    const normalizedAgents = draftAgents.map((agent, index) => ({
       name: agent.name.trim(),
       icon: agent.icon,
       status: agent.status,
       color: agent.color,
       active: agent.active,
+      role: (agent.role ?? (index === 0 ? "main" : "sub")) as AgentRole,
       model: agent.model?.trim() || DEFAULT_AGENT_MODEL,
       prompt: agent.prompt?.trim() || "",
       tools: agent.tools || [],
@@ -429,6 +454,10 @@ export function LeftPanel({
     if (new Set(normalizedNames).size !== normalizedNames.length) {
       setAgentNameError("이미 같은 이름의 에이전트가 있어.");
       return;
+    }
+
+    if (!normalizedAgents.some((agent) => agent.role === "main") && normalizedAgents.length > 0) {
+      normalizedAgents[0].role = "main";
     }
 
     await onSaveAgents(normalizedAgents);
@@ -510,6 +539,7 @@ export function LeftPanel({
         onCreateAgent={handleCreateAgent}
         onCreateAgentOnEnter={handleCreateAgentOnEnter}
         onDraftAgentChange={handleDraftAgentChange}
+        onSetMainAgent={handleSetMainAgent}
         onMoveDraftAgent={handleMoveDraftAgent}
         onRemoveDraftAgent={handleRemoveDraftAgent}
         onSave={handleSaveAgentSettings}

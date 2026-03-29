@@ -29,7 +29,18 @@ export function AgentsSection({ agents, onOpenSettings }: AgentsSectionProps) {
               />
             </div>
             <div className="agent-copy">
-              <p className="agent-name">{agent.name}</p>
+              <div className="agent-name-row">
+                <p className="agent-name">{agent.name}</p>
+                {agent.role === "main" && (
+                  <span
+                    className="material-symbols-outlined agent-main-badge"
+                    title="메인 에이전트"
+                    aria-label="메인 에이전트"
+                  >
+                    star
+                  </span>
+                )}
+              </div>
               <p className={`agent-state ${agent.active ? "agent-state-active" : ""}`}>
                 {agent.status}
               </p>
