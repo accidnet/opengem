@@ -9,8 +9,15 @@ use rusqlite::Connection;
 use std::{
     env,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 use tauri::Manager;
+use tracing::{error, info};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 const MIGRATIONS: [(&str, &str); 8] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
@@ -43,6 +50,8 @@ const MIGRATIONS: [(&str, &str); 8] = [
         include_str!("../sql/migrations/008_agent_role.sql"),
     ),
 ];
+
+static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 fn run_migrations(connection: &mut Connection) -> Result<(), String> {
     connection
@@ -158,6 +167,42 @@ fn resolve_sqlite_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|error| error.to_string())
 }
 
+fn resolve_log_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        return Ok(project_root_dir()?.join("logs"));
+    }
+
+    Ok(resolve_sqlite_dir(app)?.join("logs"))
+}
+
+fn init_logging(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let log_dir = resolve_log_dir(app)?;
+    std::fs::create_dir_all(&log_dir).map_err(|error| error.to_string())?;
+
+    let file_appender = tracing_appender::rolling::never(&log_dir, "opengem.log");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    let _ = LOG_GUARD.set(guard);
+
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,opengem=debug"));
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(non_blocking);
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(true)
+        .with_writer(std::io::stdout.with_max_level(tracing::Level::TRACE));
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(file_layer)
+        .with(console_layer)
+        .try_init()
+        .map_err(|error| error.to_string())?;
+
+    Ok(log_dir.join("opengem.log"))
+}
+
 fn main() {
     if let Err(error) = load_env_files() {
         eprintln!("환경변수 파일 로드 실패: {error}");
@@ -166,8 +211,11 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let app_handle = app.handle();
+            if let Ok(log_path) = init_logging(&app_handle) {
+                info!("logging initialized: {}", log_path.to_string_lossy());
+            }
             let db_path = init_sqlite(&app_handle).map_err(|error| {
-                eprintln!("SQLite 초기화 실패: {error}");
+                error!("SQLite init failed: {error}");
                 Box::<dyn std::error::Error>::from(error)
             })?;
 
@@ -175,7 +223,7 @@ fn main() {
                 db_path: db_path.clone(),
             });
 
-            println!("SQLite 초기화 완료: {}", db_path.to_string_lossy());
+            info!("SQLite initialized: {}", db_path.to_string_lossy());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

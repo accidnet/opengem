@@ -14,6 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::State;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 const DEFAULT_API_BASE_URL: &str = "https://api.openai.com/v1";
@@ -176,6 +177,7 @@ struct ResponsesApiResponse {
 #[tauri::command]
 pub fn get_llm_settings(state: State<AppState>) -> Result<LlmSettingsPayload, String> {
     let connection = state.open_connection()?;
+    debug!("loading llm settings");
     Ok(to_payload(load_settings(&connection)?))
 }
 
@@ -191,13 +193,14 @@ pub fn save_llm_settings(
         normalize_text(&input.base_url).unwrap_or_else(|| DEFAULT_API_BASE_URL.to_string());
     let model = normalize_text(&input.model).unwrap_or_else(|| DEFAULT_MODEL.to_string());
     let api_key = normalize_optional_secret(input.api_key);
+    let has_api_key = api_key.is_some();
 
     save_settings(
         &connection,
         StoredLlmSettings {
-            provider_kind,
+            provider_kind: provider_kind.clone(),
             base_url,
-            model,
+            model: model.clone(),
             api_key,
             access_token: current.access_token,
             refresh_token: current.refresh_token,
@@ -207,6 +210,13 @@ pub fn save_llm_settings(
         },
     )?;
 
+    info!(
+        provider_kind = %provider_kind,
+        model = %model,
+        has_api_key = has_api_key,
+        "llm settings saved"
+    );
+
     Ok(to_payload(load_settings(&connection)?))
 }
 
@@ -214,6 +224,12 @@ pub fn save_llm_settings(
 pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSettingsPayload, String> {
     let connection = state.open_connection()?;
     let settings = resolve_settings(&connection)?;
+    debug!(
+        provider_kind = %settings.provider_kind,
+        model = %settings.model,
+        has_access_token = settings.access_token.is_some(),
+        "resolved llm settings"
+    );
 
     Ok(ResolvedLlmSettingsPayload {
         provider_kind: settings.provider_kind,
@@ -232,8 +248,14 @@ pub fn send_chatgpt_message(
 ) -> Result<ChatgptResponsePayload, String> {
     let connection = state.open_connection()?;
     let settings = resolve_settings(&connection)?;
+    info!(
+        model = %input.model,
+        message_count = input.messages.len(),
+        "sending chatgpt message"
+    );
 
     if settings.provider_kind != "chatgpt_oauth" {
+        warn!("chatgpt message requested without chatgpt_oauth provider");
         return Err("현재 프로바이더가 ChatGPT OAuth로 설정되어 있지 않습니다.".to_string());
     }
 
@@ -252,19 +274,30 @@ pub fn send_chatgpt_message(
         request = request.header("ChatGPT-Account-Id", account_id);
     }
 
-    let response = request.send().map_err(|error| error.to_string())?;
+    let response = request.send().map_err(|error| {
+        error!("chatgpt request send failed: {error}");
+        error.to_string()
+    })?;
     let status = response.status();
     let body = response.text().map_err(|error| error.to_string())?;
 
     if !status.is_success() {
+        error!(status = %status, body = %body, "chatgpt api returned error");
         return Err(format!("ChatGPT API 오류 ({}): {}", status, body));
     }
 
     let parsed: ResponsesApiResponse = serde_json::from_str(&body)
         .map_err(|error| format!("ChatGPT 응답을 해석하지 못했습니다: {error}"))?;
 
+    let text = get_responses_text(&parsed);
+    info!(
+        output_length = text.len(),
+        has_usage = parsed.usage.is_some(),
+        "chatgpt message completed"
+    );
+
     Ok(ChatgptResponsePayload {
-        text: get_responses_text(&parsed),
+        text,
         usage: parsed.usage.map(|usage| UsagePayload {
             prompt_tokens: usage.input_tokens,
             completion_tokens: usage.output_tokens,
@@ -275,6 +308,7 @@ pub fn send_chatgpt_message(
 
 #[tauri::command]
 pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPayload, String> {
+    info!("starting chatgpt oauth login flow");
     let listener = TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}"))
         .map_err(|error| format!("OAuth 콜백 포트({OAUTH_PORT})를 열지 못했습니다: {error}"))?;
     listener
@@ -296,7 +330,7 @@ pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPa
             &state_code,
             db_path,
         ) {
-            eprintln!("ChatGPT OAuth 처리 실패: {error}");
+            error!("chatgpt oauth flow failed: {error}");
         }
     });
 
@@ -369,6 +403,7 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
             chatgpt_email: None,
         },
     )?;
+    info!("chatgpt oauth logged out");
     Ok(to_payload(load_settings(&connection)?))
 }
 
@@ -379,6 +414,7 @@ fn run_chatgpt_login_flow(
     expected_state: &str,
     db_path: PathBuf,
 ) -> Result<(), String> {
+    info!("waiting for oauth callback");
     let deadline = std::time::Instant::now() + Duration::from_secs(OAUTH_TIMEOUT_SECONDS);
     let tokens = loop {
         if std::time::Instant::now() > deadline {
@@ -407,6 +443,8 @@ fn run_chatgpt_login_flow(
     );
     let account_id = extract_account_id(claims.as_ref());
     let email = claims.and_then(|item| item.email);
+    let has_account_id = account_id.is_some();
+    let has_email = email.is_some();
     let next_model = if current.provider_kind == "chatgpt_oauth" {
         current.model
     } else {
@@ -427,6 +465,12 @@ fn run_chatgpt_login_flow(
             chatgpt_email: email,
         },
     )?;
+
+    info!(
+        has_account_id = has_account_id,
+        has_email = has_email,
+        "chatgpt oauth flow completed"
+    );
 
     Ok(())
 }
@@ -543,6 +587,7 @@ fn resolve_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettin
     let expires_at = settings.expires_at.unwrap_or(0);
 
     if settings.access_token.is_none() || expires_at <= now + 60_000 {
+        info!("refreshing chatgpt access token");
         let tokens = refresh_access_token(&refresh_token)?;
         let claims = extract_claims(
             tokens.id_token.as_deref(),

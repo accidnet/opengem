@@ -63,6 +63,25 @@ const normalizeAgentsForUi = (items: PersistedAgent[]) => {
   }));
 };
 
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return "알 수 없는 오류가 발생했습니다.";
+};
+
 async function openExternalUrl(url: string): Promise<void> {
   await invoke("open_external_url", { url });
 }
@@ -416,7 +435,10 @@ export default function App() {
 
       let streamedText = "";
       // main 에이전트에 설정된 모델 우선 사용, 없으면 프로바이더 기본 모델로 폴백
-      const resolvedModel = mainAgent?.model?.trim() || activeSettings.model;
+      const resolvedModel =
+        activeSettings.providerKind === "chatgpt_oauth"
+          ? activeSettings.model
+          : mainAgent?.model?.trim() || activeSettings.model;
       const response = await sendToLLM({
         providerKind: activeSettings.providerKind,
         apiBaseUrl: activeSettings.baseUrl,
@@ -460,7 +482,7 @@ export default function App() {
         buildActivity(`에이전트 응답 수신 완료${usageText}`.trim(), "기획자"),
       ]);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+      const reason = getErrorMessage(error);
       const errorMessage: Message = {
         ...typingMessage,
         type: "text",

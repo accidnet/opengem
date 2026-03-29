@@ -3,6 +3,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tracing::{debug, info, warn};
 
 const DEFAULT_SESSION_TITLE: &str = "새 채팅";
 
@@ -79,6 +80,8 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
         sessions.push(row.map_err(|error| error.to_string())?);
     }
 
+    debug!(count = sessions.len(), "listed chat sessions");
+
     Ok(sessions)
 }
 
@@ -110,6 +113,13 @@ pub fn create_chat_session(
         )
         .map_err(|error| error.to_string())?;
 
+    info!(
+        session_id = %session.id,
+        mode_name = %session.mode_name,
+        title = %session.title,
+        "chat session created"
+    );
+
     Ok(session)
 }
 
@@ -122,6 +132,12 @@ pub fn get_chat_session(
     let normalized_session_id = normalize_session_id(&session_id)?;
     let session = load_session_summary(&connection, &normalized_session_id)?;
     let messages = load_session_messages(&connection, &normalized_session_id)?;
+
+    debug!(
+        session_id = %normalized_session_id,
+        message_count = messages.len(),
+        "loaded chat session"
+    );
 
     Ok(SessionDetailPayload { session, messages })
 }
@@ -139,9 +155,11 @@ pub fn delete_chat_session(state: State<AppState>, session_id: String) -> Result
         .map_err(|error| error.to_string())?;
 
     if deleted_count == 0 {
+        warn!(session_id = %normalized_session_id, "chat session delete missed");
         return Err("梨꾪똿 ?몄뀡??李얠쓣 ???놁뒿?덈떎.".to_string());
     }
 
+    info!(session_id = %normalized_session_id, "chat session deleted");
     Ok(())
 }
 
@@ -153,6 +171,13 @@ pub fn append_chat_message(
     let mut connection = state.open_connection()?;
     let session_id = normalize_session_id(&input.session_id)?;
     let message = normalize_message(input.message)?;
+    debug!(
+        session_id = %session_id,
+        message_id = %message.id,
+        side = %message.side,
+        message_type = %message.r#type,
+        "appending chat message"
+    );
     let now = now_millis();
     let transaction = connection
         .transaction()
@@ -219,6 +244,11 @@ pub fn append_chat_message(
         .map_err(|error| error.to_string())?;
 
     transaction.commit().map_err(|error| error.to_string())?;
+    info!(
+        session_id = %session_id,
+        message_id = %message.id,
+        "chat message appended"
+    );
     Ok(message)
 }
 
