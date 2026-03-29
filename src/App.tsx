@@ -24,7 +24,6 @@ import {
   appendChunkToMessage,
   buildActivity,
   buildLLMMessages,
-  buildReplyMessage,
   buildSessionTitle,
   buildTypingMessage,
   nowTime,
@@ -410,13 +409,17 @@ export default function App() {
       }
 
       if (activeSettings.providerKind !== "chatgpt_oauth" && !activeSettings.apiKey) {
-        const fallbackReply = buildReplyMessage(text);
-        replaceTypingMessage(typingMessage.id, fallbackReply);
-        await persistMessage(session.id, fallbackReply);
+        const missingApiKeyMessage: Message = {
+          ...typingMessage,
+          type: "text",
+          text: "연결된 AI가 없으므로 우측 상단의 프로필을 눌러, provider를 눌러서 등록해주세요.",
+        };
+        replaceTypingMessage(typingMessage.id, missingApiKeyMessage);
+        await persistMessage(session.id, missingApiKeyMessage);
         await refreshSessions(modes, session.id);
         setActivity((prev) => [
           ...prev,
-          buildActivity("샘플 응답으로 대체되었습니다 (API 키 없음).", mainAgent?.name ?? "기획자"),
+          buildActivity("API 키가 없어 LLM 호출을 시작하지 못했습니다.", mainAgent?.name ?? "Assistant"),
         ]);
         return;
       }

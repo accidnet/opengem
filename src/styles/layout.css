@@ -87,6 +87,8 @@
   display: none;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  max-width: clamp(180px, 24vw, 360px);
 }
 
 .session-label-wrap h2 {
@@ -94,6 +96,10 @@
   color: var(--text-main);
   font-size: 15px;
   font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .running-pill {
