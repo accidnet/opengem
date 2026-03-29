@@ -286,24 +286,14 @@ pub fn send_chatgpt_message(
         return Err(format!("ChatGPT API 오류 ({}): {}", status, body));
     }
 
-    let parsed: ResponsesApiResponse = serde_json::from_str(&body)
-        .map_err(|error| format!("ChatGPT 응답을 해석하지 못했습니다: {error}"))?;
-
-    let text = get_responses_text(&parsed);
+    let payload = parse_chatgpt_response_body(&body)?;
     info!(
-        output_length = text.len(),
-        has_usage = parsed.usage.is_some(),
+        output_length = payload.text.len(),
+        has_usage = payload.usage.is_some(),
         "chatgpt message completed"
     );
 
-    Ok(ChatgptResponsePayload {
-        text,
-        usage: parsed.usage.map(|usage| UsagePayload {
-            prompt_tokens: usage.input_tokens,
-            completion_tokens: usage.output_tokens,
-            total_tokens: usage.total_tokens,
-        }),
-    })
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -618,7 +608,11 @@ fn build_chatgpt_request_body(input: &ChatgptRequestInput) -> serde_json::Value 
                 "user".to_string()
             },
             content: vec![ResponsesInputTextItem {
-                r#type: "input_text".to_string(),
+                r#type: if message.role == "assistant" {
+                    "output_text".to_string()
+                } else {
+                    "input_text".to_string()
+                },
                 text: message.content.clone(),
             }],
         })
@@ -637,7 +631,81 @@ fn build_chatgpt_request_body(input: &ChatgptRequestInput) -> serde_json::Value 
         "instructions": instructions,
         "input": rest,
         "store": false,
-        "stream": false,
+        "stream": true,
+    })
+}
+
+fn parse_chatgpt_response_body(body: &str) -> Result<ChatgptResponsePayload, String> {
+    if body.lines().any(|line| line.starts_with("data:")) {
+        return parse_chatgpt_sse_response(body);
+    }
+
+    let parsed: ResponsesApiResponse = serde_json::from_str(body)
+        .map_err(|error| format!("ChatGPT 응답을 해석하지 못했습니다: {error}"))?;
+
+    Ok(ChatgptResponsePayload {
+        text: get_responses_text(&parsed),
+        usage: parsed.usage.map(|usage| UsagePayload {
+            prompt_tokens: usage.input_tokens,
+            completion_tokens: usage.output_tokens,
+            total_tokens: usage.total_tokens,
+        }),
+    })
+}
+
+fn parse_chatgpt_sse_response(body: &str) -> Result<ChatgptResponsePayload, String> {
+    let mut text = String::new();
+    let mut usage: Option<UsagePayload> = None;
+
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("data:") {
+            continue;
+        }
+
+        let raw = trimmed.trim_start_matches("data:").trim();
+        if raw.is_empty() || raw == "[DONE]" {
+            continue;
+        }
+
+        let parsed: serde_json::Value = serde_json::from_str(raw)
+            .map_err(|error| format!("ChatGPT SSE 응답을 해석하지 못했습니다: {error}"))?;
+
+        if let Some(delta) = parsed.get("delta").and_then(|value| value.as_str()) {
+            text.push_str(delta);
+        }
+
+        if usage.is_none() {
+            usage = extract_usage_from_value(&parsed);
+        }
+
+        if text.is_empty() {
+            if let Some(output_text) = parsed
+                .get("response")
+                .and_then(|value| value.get("output_text"))
+                .and_then(|value| value.as_str())
+            {
+                text = output_text.to_string();
+            } else if let Some(output_text) =
+                parsed.get("output_text").and_then(|value| value.as_str())
+            {
+                text = output_text.to_string();
+            }
+        }
+    }
+
+    Ok(ChatgptResponsePayload { text, usage })
+}
+
+fn extract_usage_from_value(value: &serde_json::Value) -> Option<UsagePayload> {
+    let usage = value
+        .get("usage")
+        .or_else(|| value.get("response").and_then(|item| item.get("usage")))?;
+
+    Some(UsagePayload {
+        prompt_tokens: usage.get("input_tokens").and_then(|item| item.as_i64()),
+        completion_tokens: usage.get("output_tokens").and_then(|item| item.as_i64()),
+        total_tokens: usage.get("total_tokens").and_then(|item| item.as_i64()),
     })
 }
 

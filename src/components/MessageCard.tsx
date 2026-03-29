@@ -104,11 +104,16 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
         ) : null}
         {message.type === "text" && bubbleText ? <p className="bubble-text">{bubbleText}</p> : null}
         {message.type === "typing" ? (
-          <div className="typing-inline">
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-            {bubbleText ? <span className="bubble-text">{bubbleText}</span> : null}
+          <div className="typing-card" aria-live="polite">
+            <div className="typing-inline">
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-label">{bubbleText || "응답을 준비하고 있어요"}</span>
+            </div>
+            <div className="typing-progress" aria-hidden="true">
+              <span className="typing-progress-bar" />
+            </div>
           </div>
         ) : null}
       </div>

@@ -421,18 +421,6 @@ export default function App() {
         return;
       }
 
-      setMessages((prev) =>
-        prev.map((entry) =>
-          entry.id === typingMessage.id
-            ? {
-                ...entry,
-                type: "text",
-                text: "",
-              }
-            : entry
-        )
-      );
-
       let streamedText = "";
       // main 에이전트에 설정된 모델 우선 사용, 없으면 프로바이더 기본 모델로 폴백
       const resolvedModel =

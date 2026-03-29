@@ -214,10 +214,22 @@
   white-space: pre-wrap;
 }
 
+.typing-card {
+  display: grid;
+  gap: 10px;
+  min-width: min(320px, 60vw);
+}
+
 .typing-inline {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.typing-label {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .typing-dot {
@@ -234,6 +246,23 @@
 
 .typing-dot:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+.typing-progress {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.typing-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 -35%;
+  width: 35%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.12), rgba(52, 211, 153, 0.92));
+  animation: typingSlide 1.2s ease-in-out infinite;
 }
 
 .composer-wrap {
@@ -325,4 +354,14 @@
   text-align: center;
   color: #4b5563;
   font-size: 10px;
+}
+
+@keyframes typingSlide {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
 }
