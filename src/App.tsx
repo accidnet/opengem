@@ -51,8 +51,29 @@ type OperationModeInput = {
 
 type PersistedAgent = Omit<AgentItem, "status">;
 
+type DelegationTask = {
+  agentName: string;
+  goal: string;
+  deliverable: string;
+  priority?: "high" | "medium" | "low";
+};
+
+type DelegationDecision = {
+  shouldDelegate: boolean;
+  reasoning?: string;
+  tasks: DelegationTask[];
+};
+
+type SubagentExecutionResult = {
+  agentName: string;
+  status: "completed" | "failed";
+  summary: string;
+  deliverable: string;
+  priority: "high" | "medium" | "low";
+};
+
 const toAgentStatus = (active?: boolean) => {
-  return active ? "대기 중" : "오프라인";
+  return active ? "Active" : "Offline";
 };
 
 const normalizeAgentsForUi = (items: PersistedAgent[]) => {
@@ -78,7 +99,32 @@ const getErrorMessage = (error: unknown) => {
     }
   }
 
-  return "알 수 없는 오류가 발생했습니다.";
+  return "?????녿뒗 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.";
+};
+
+const parseJsonObject = <T,>(value: string): T | null => {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    const match = value.match(/\{[\s\S]*\}/);
+    if (!match) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(match[0]) as T;
+    } catch {
+      return null;
+    }
+  }
+};
+
+const normalizePriority = (value?: string): "high" | "medium" | "low" => {
+  if (value === "high" || value === "low") {
+    return value;
+  }
+
+  return "medium";
 };
 
 async function openExternalUrl(url: string): Promise<void> {
@@ -89,7 +135,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
   const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
+  const [currentSessionTitle, setCurrentSessionTitle] = useState("??梨꾪똿");
   const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -171,7 +217,7 @@ export default function App() {
   const resetCurrentSession = () => {
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
-    setCurrentSessionTitle("새 채팅");
+    setCurrentSessionTitle("??梨꾪똿");
     setInputValue("");
   };
 
@@ -344,6 +390,312 @@ export default function App() {
     );
   };
 
+  const updateStreamingStatusMessage = (
+    messageId: string,
+    nextText: string,
+    messageType: Message["type"] = "typing"
+  ) => {
+    setMessages((prev) =>
+      prev.map((entry) =>
+        entry.id === messageId
+          ? {
+              ...entry,
+              type: messageType,
+              text: nextText,
+            }
+          : entry
+      )
+    );
+  };
+
+  const buildAgentCapabilitySummary = (agent: AgentItem) => {
+    const parts = [
+      `name: ${agent.name}`,
+      `role: ${agent.role ?? "sub"}`,
+      `model: ${agent.model || "default"}`,
+      `prompt: ${agent.prompt?.trim() || "none"}`,
+      `tools: ${agent.tools?.join(", ") || "none"}`,
+      `mcp: ${agent.mcpServers?.join(", ") || "none"}`,
+      `skills: ${agent.skills?.join(", ") || "none"}`,
+    ];
+
+    return parts.join("\n");
+  };
+
+  const decideDelegation = async (
+    text: string,
+    requestMessages: ReturnType<typeof buildLLMMessages>,
+    mainAgent: AgentItem,
+    availableSubagents: AgentItem[],
+    activeSettings: ResolvedLLMSettings
+  ): Promise<DelegationDecision> => {
+    if (availableSubagents.length === 0) {
+      return {
+        shouldDelegate: false,
+        tasks: [],
+      };
+    }
+
+    const routingPrompt = [
+      "You are the main orchestration agent.",
+      "Decide whether the latest user request should be delegated to one or more registered subagents.",
+      "Delegate only when specialist parallel work would materially improve quality, speed, or coverage.",
+      "Prefer no delegation for simple requests that can be answered directly.",
+      "Return strict JSON only.",
+      'Schema: {"shouldDelegate": boolean, "reasoning": string, "tasks": [{"agentName": string, "goal": string, "deliverable": string, "priority": "high"|"medium"|"low"}]}',
+      "Do not use markdown fences.",
+      "",
+      "Available subagents:",
+      availableSubagents.map(buildAgentCapabilitySummary).join("\n\n"),
+      "",
+      `Latest user request:\n${text}`,
+    ].join("\n");
+
+    const routingMessages = [
+      {
+        role: "system" as const,
+        content:
+          `${mainAgent.prompt?.trim() || ""}\n\n` +
+          "You are currently acting as a task router for specialist subagents.",
+      },
+      ...requestMessages.slice(1),
+      {
+        role: "user" as const,
+        content: routingPrompt,
+      },
+    ];
+
+    const routingResponse = await sendToLLM({
+      providerKind: activeSettings.providerKind,
+      apiBaseUrl: activeSettings.baseUrl,
+      apiKey: activeSettings.apiKey,
+      accessToken: activeSettings.accessToken,
+      accountId: activeSettings.accountId,
+      model: mainAgent.model?.trim() || activeSettings.model,
+      messages: routingMessages,
+      stream: false,
+    });
+
+    const parsed = parseJsonObject<DelegationDecision>(routingResponse.text);
+    if (!parsed) {
+      return {
+        shouldDelegate: false,
+        tasks: [],
+      };
+    }
+
+    const allowedNames = new Set(availableSubagents.map((agent) => agent.name));
+    const tasks = Array.isArray(parsed.tasks)
+      ? parsed.tasks
+          .filter((task) => task && allowedNames.has(task.agentName))
+          .map((task) => ({
+            agentName: task.agentName,
+            goal: task.goal?.trim() || text,
+            deliverable: task.deliverable?.trim() || "Provide specialist findings.",
+            priority: normalizePriority(task.priority),
+          }))
+      : [];
+
+    return {
+      shouldDelegate: Boolean(parsed.shouldDelegate) && tasks.length > 0,
+      reasoning: parsed.reasoning,
+      tasks,
+    };
+  };
+
+  const runDelegatedSubagents = async (
+    text: string,
+    selectedTasks: DelegationTask[],
+    availableSubagents: AgentItem[],
+    requestMessages: ReturnType<typeof buildLLMMessages>,
+    activeSettings: ResolvedLLMSettings,
+    onStatus?: (statusText: string) => void
+  ): Promise<SubagentExecutionResult[]> => {
+    const subagentsByName = new Map(availableSubagents.map((agent) => [agent.name, agent]));
+
+    return Promise.all(
+      selectedTasks.map(async (task) => {
+        const agent = subagentsByName.get(task.agentName);
+        if (!agent) {
+          return {
+            agentName: task.agentName,
+            status: "failed" as const,
+            summary: "Agent is unavailable.",
+            deliverable: task.deliverable,
+            priority: normalizePriority(task.priority),
+          };
+        }
+
+        setActivity((prev) => [...prev, buildActivity(`${agent.name} assigned: ${task.goal}`, agent.name)]);
+        onStatus?.(`Delegating to ${agent.name}: ${task.goal}`);
+
+        const subagentPrompt = [
+          "You are a specialist subagent working for the main orchestration agent.",
+          "Complete only your assigned portion of the work.",
+          "Do not address the end user directly.",
+          "Return concise, high-signal findings for the main agent to synthesize.",
+          `Assigned goal: ${task.goal}`,
+          `Required deliverable: ${task.deliverable}`,
+          "",
+          "Recent conversation context:",
+          requestMessages
+            .slice(1)
+            .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
+            .join("\n\n"),
+          "",
+          `Original latest user request:\n${text}`,
+        ].join("\n");
+
+        try {
+          const response = await sendToLLM({
+            providerKind: activeSettings.providerKind,
+            apiBaseUrl: activeSettings.baseUrl,
+            apiKey: activeSettings.apiKey,
+            accessToken: activeSettings.accessToken,
+            accountId: activeSettings.accountId,
+            model: agent.model?.trim() || activeSettings.model,
+            messages: [
+              {
+                role: "system",
+                content:
+                  `${agent.prompt?.trim() || ""}\n\n` +
+                  "You are a delegated specialist subagent. Return only your work product.",
+              },
+              {
+                role: "user",
+                content: subagentPrompt,
+              },
+            ],
+            stream: false,
+          });
+
+          setActivity((prev) => [...prev, buildActivity(`${agent.name} completed delegated work.`, agent.name)]);
+          onStatus?.(`${agent.name} finished. Synthesizing specialist results...`);
+
+          return {
+            agentName: agent.name,
+            status: "completed" as const,
+            summary: response.text.trim() || "Completed with no textual output.",
+            deliverable: task.deliverable,
+            priority: normalizePriority(task.priority),
+          };
+        } catch (error) {
+          const reason = getErrorMessage(error);
+          setActivity((prev) => [
+            ...prev,
+            buildActivity(`${agent.name} failed delegated work: ${reason}`, agent.name),
+          ]);
+          onStatus?.(`${agent.name} failed: ${reason}`);
+
+          return {
+            agentName: agent.name,
+            status: "failed" as const,
+            summary: reason,
+            deliverable: task.deliverable,
+            priority: normalizePriority(task.priority),
+          };
+        }
+      })
+    );
+  };
+
+  const synthesizeDelegatedResponse = async (
+    text: string,
+    typingMessageId: string,
+    mainAgent: AgentItem,
+    requestMessages: ReturnType<typeof buildLLMMessages>,
+    delegationDecision: DelegationDecision,
+    subagentResults: SubagentExecutionResult[],
+    activeSettings: ResolvedLLMSettings
+  ) => {
+    let streamedText = "";
+    const synthesisInput = [
+      "You are the main agent responding to the user.",
+      "The following subagent outputs are internal notes.",
+      "Synthesize them into one coherent final answer.",
+      "",
+      `Latest user request:\n${text}`,
+      "",
+      `Routing reasoning:\n${delegationDecision.reasoning || "No reasoning provided."}`,
+      "",
+      "Subagent results:",
+      subagentResults
+        .map((result) =>
+          [
+            `Agent: ${result.agentName}`,
+            `Status: ${result.status}`,
+            `Priority: ${result.priority}`,
+            `Deliverable: ${result.deliverable}`,
+            `Output:\n${result.summary}`,
+          ].join("\n")
+        )
+        .join("\n\n"),
+    ].join("\n");
+
+    const response = await sendToLLM({
+      providerKind: activeSettings.providerKind,
+      apiBaseUrl: activeSettings.baseUrl,
+      apiKey: activeSettings.apiKey,
+      accessToken: activeSettings.accessToken,
+      accountId: activeSettings.accountId,
+      model: mainAgent.model?.trim() || activeSettings.model,
+      messages: [
+        {
+          role: "system",
+          content:
+            `${mainAgent.prompt?.trim() || ""}\n\n` +
+            "You are synthesizing delegated specialist work into a final user-facing answer.",
+        },
+        ...requestMessages.slice(1),
+        {
+          role: "user",
+          content: synthesisInput,
+        },
+      ],
+      stream: true,
+      onChunk: (chunk) => {
+        streamedText += chunk;
+        setMessages((prev) => appendChunkToMessage(prev, typingMessageId, streamedText));
+      },
+    });
+
+    return {
+      text: response.text || streamedText || "(???臾먮뼗)",
+      usage: response.usage,
+    };
+  };
+
+  const generateMainAgentResponse = async (
+    typingMessageId: string,
+    requestMessages: ReturnType<typeof buildLLMMessages>,
+    mainAgent: AgentItem,
+    activeSettings: ResolvedLLMSettings
+  ) => {
+    let streamedText = "";
+    const response = await sendToLLM({
+      providerKind: activeSettings.providerKind,
+      apiBaseUrl: activeSettings.baseUrl,
+      apiKey: activeSettings.apiKey,
+      accessToken: activeSettings.accessToken,
+      accountId: activeSettings.accountId,
+      model:
+        activeSettings.providerKind === "chatgpt_oauth"
+          ? activeSettings.model
+          : mainAgent.model?.trim() || activeSettings.model,
+      messages: requestMessages,
+      stream: true,
+      onChunk: (chunk) => {
+        streamedText += chunk;
+        setMessages((prev) => appendChunkToMessage(prev, typingMessageId, streamedText));
+      },
+    });
+
+    return {
+      text: response.text || streamedText || "(???臾먮뼗)",
+      usage: response.usage,
+    };
+  };
+
   const sendMessage = async (): Promise<void> => {
     if (!canSend) {
       return;
@@ -362,17 +714,16 @@ export default function App() {
     const userMessage: Message = {
       id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       side: "user",
-      sender: "사용자",
+      sender: "User",
       byline: nowTime(),
       avatarText: "JD",
       type: "text",
       text,
     };
 
-    // 현재 모드에서 role이 'main'인 에이전트를 찾는다. 없으면 첫 번째 에이전트 사용
     const mainAgent = agents.find((a) => a.role === "main") ?? agents[0];
     const typingMessage = buildTypingMessage(
-      "응답을 생성 중입니다...",
+      "Thinking...",
       mainAgent?.name,
       mainAgent?.icon,
       mainAgent?.color ? (AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac") : undefined
@@ -392,15 +743,19 @@ export default function App() {
       const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
         sessionId: session.id,
       });
-      // main 에이전트의 프롬프트를 system prompt로 주입 (없으면 기본값 사용)
+      updateStreamingStatusMessage(typingMessage.id, "Analyzing request...");
       const requestMessages = buildLLMMessages(sessionDetail.messages, mainAgent?.prompt ?? undefined);
       const activeSettings = await resolveProviderSettings();
+      const activeAgents = agents.filter((agent) => agent.active);
+      const availableSubagents = activeAgents.filter(
+        (agent) => agent.role !== "main" && agent.name !== mainAgent?.name
+      );
 
       if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
         const loginMessage: Message = {
           ...typingMessage,
           type: "text",
-          text: "ChatGPT 로그인이 필요합니다. 프로바이더 메뉴에서 다시 로그인해줘.",
+          text: "ChatGPT login is required. Please sign in from the provider menu and try again.",
         };
         replaceTypingMessage(typingMessage.id, loginMessage);
         await persistMessage(session.id, loginMessage);
@@ -412,43 +767,73 @@ export default function App() {
         const missingApiKeyMessage: Message = {
           ...typingMessage,
           type: "text",
-          text: "연결된 AI가 없으므로 우측 상단의 프로필을 눌러, provider를 눌러서 등록해주세요.",
+          text: "No API key is configured. Open the provider settings and add one to continue.",
         };
         replaceTypingMessage(typingMessage.id, missingApiKeyMessage);
         await persistMessage(session.id, missingApiKeyMessage);
         await refreshSessions(modes, session.id);
         setActivity((prev) => [
           ...prev,
-          buildActivity("API 키가 없어 LLM 호출을 시작하지 못했습니다.", mainAgent?.name ?? "Assistant"),
+          buildActivity("LLM request could not start because no API key is configured.", mainAgent?.name ?? "Assistant"),
         ]);
         return;
       }
 
-      let streamedText = "";
-      // main 에이전트에 설정된 모델 우선 사용, 없으면 프로바이더 기본 모델로 폴백
-      const resolvedModel =
-        activeSettings.providerKind === "chatgpt_oauth"
-          ? activeSettings.model
-          : mainAgent?.model?.trim() || activeSettings.model;
-      const response = await sendToLLM({
-        providerKind: activeSettings.providerKind,
-        apiBaseUrl: activeSettings.baseUrl,
-        apiKey: activeSettings.apiKey,
-        accessToken: activeSettings.accessToken,
-        accountId: activeSettings.accountId,
-        model: resolvedModel,
-        messages: requestMessages,
-        stream: true,
-        onChunk: (chunk) => {
-          streamedText += chunk;
-          setMessages((prev) => appendChunkToMessage(prev, typingMessage.id, streamedText));
-        },
-      });
+      let response: { text: string; usage?: { totalTokens?: number } };
+      const delegationDecision = await decideDelegation(
+        text,
+        requestMessages,
+        mainAgent,
+        availableSubagents,
+        activeSettings
+      );
+
+      if (delegationDecision.shouldDelegate) {
+        updateStreamingStatusMessage(
+          typingMessage.id,
+          `Planning parallel work for ${delegationDecision.tasks.length} specialist agent(s)...`
+        );
+        setActivity((prev) => [
+          ...prev,
+          buildActivity(
+            `${mainAgent?.name ?? "Main agent"} delegated ${delegationDecision.tasks.length} task(s).`,
+            mainAgent?.name ?? "Main agent"
+          ),
+        ]);
+
+        const subagentResults = await runDelegatedSubagents(
+          text,
+          delegationDecision.tasks,
+          availableSubagents,
+          requestMessages,
+          activeSettings,
+          (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText)
+        );
+
+        updateStreamingStatusMessage(typingMessage.id, "Synthesizing delegated results...");
+        response = await synthesizeDelegatedResponse(
+          text,
+          typingMessage.id,
+          mainAgent,
+          requestMessages,
+          delegationDecision,
+          subagentResults,
+          activeSettings
+        );
+      } else {
+        updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
+        response = await generateMainAgentResponse(
+          typingMessage.id,
+          requestMessages,
+          mainAgent,
+          activeSettings
+        );
+      }
 
       const assistantMessage: Message = {
         ...typingMessage,
         type: "text",
-        text: response.text || streamedText || "(빈 응답)",
+        text: response.text,
       };
 
       replaceTypingMessage(typingMessage.id, assistantMessage);
@@ -466,18 +851,18 @@ export default function App() {
       }
 
       const usageText = response.usage?.totalTokens
-        ? ` 토큰 ${response.usage.totalTokens}개 사용`
+        ? ` Tokens used: ${response.usage.totalTokens}`
         : "";
       setActivity((prev) => [
         ...prev,
-        buildActivity(`에이전트 응답 수신 완료${usageText}`.trim(), "기획자"),
+        buildActivity(`Agent response completed.${usageText}`.trim(), mainAgent?.name ?? "Assistant"),
       ]);
     } catch (error) {
       const reason = getErrorMessage(error);
       const errorMessage: Message = {
         ...typingMessage,
         type: "text",
-        text: `요청 처리 실패: ${reason}`,
+        text: `Request failed: ${reason}`,
       };
       replaceTypingMessage(typingMessage.id, errorMessage);
 
@@ -486,19 +871,17 @@ export default function App() {
           await persistMessage(activeSessionId, errorMessage);
           await refreshSessions(modes, activeSessionId);
         } catch {
-          // 저장 실패는 화면 응답을 막지 않음
         }
       }
 
       setActivity((prev) => [
         ...prev,
-        buildActivity("LLM 응답 수신 중 오류가 발생했습니다.", "시스템"),
+        buildActivity("An error occurred while receiving the LLM response.", "System"),
       ]);
     } finally {
       setIsLoading(false);
     }
   };
-
   const appendStatusMessage = (text: string): void => {
     setMessages((prev) => [
       ...prev,
@@ -512,12 +895,12 @@ export default function App() {
   };
 
   const handleApprovePlan = () => {
-    appendStatusMessage("사용자가 계획을 승인했습니다");
+    appendStatusMessage("?ъ슜?먭? 怨꾪쉷???뱀씤?덉뒿?덈떎");
   };
 
   const handleModifyPlan = () => {
-    setInputValue("실행 전에 계획을 구체적으로 수정해줘.");
-    appendStatusMessage("사용자가 계획 수정 요청");
+    setInputValue("?ㅽ뻾 ?꾩뿉 怨꾪쉷??援ъ껜?곸쑝濡??섏젙?댁쨾.");
+    appendStatusMessage("?ъ슜?먭? 怨꾪쉷 ?섏젙 ?붿껌");
   };
 
   const clearContext = () => {
@@ -546,7 +929,7 @@ export default function App() {
 
       await loadSession(session.id, modes);
     } catch {
-      // 세션 불러오기 실패는 activity log에 기록하지 않음
+      // ?몄뀡 遺덈윭?ㅺ린 ?ㅽ뙣??activity log??湲곕줉?섏? ?딆쓬
     }
   };
 
@@ -580,7 +963,7 @@ export default function App() {
 
       await loadSession(fallbackSession.id, modes);
     } catch {
-      // 세션 삭제 실패는 현재 화면 상태를 유지
+      // ?몄뀡 ??젣 ?ㅽ뙣???꾩옱 ?붾㈃ ?곹깭瑜??좎?
     }
   };
 
@@ -612,7 +995,7 @@ export default function App() {
       return;
     }
 
-    // Operation Mode 저장은 activity log에 기록하지 않음
+    // Operation Mode ??μ? activity log??湲곕줉?섏? ?딆쓬
   };
 
   const getModeIcon = (mode: Mode): ModeIcon => {
@@ -636,7 +1019,7 @@ export default function App() {
       });
     } catch {
       setAgents(previousAgents);
-      throw new Error("에이전트 설정 저장에 실패했습니다.");
+      throw new Error("?먯씠?꾪듃 ?ㅼ젙 ??μ뿉 ?ㅽ뙣?덉뒿?덈떎.");
     }
   };
 
@@ -681,7 +1064,7 @@ export default function App() {
       setIsProviderDialogOpen(false);
     } catch (error) {
       setProviderError(
-        error instanceof Error ? error.message : "프로바이더 설정을 저장하지 못했습니다."
+        error instanceof Error ? error.message : "?꾨줈諛붿씠???ㅼ젙????ν븯吏 紐삵뻽?듬땲??"
       );
     } finally {
       setIsSavingProvider(false);
@@ -716,10 +1099,10 @@ export default function App() {
         }
       }
 
-      setProviderError("로그인 완료를 확인하지 못했습니다. 링크를 다시 열어 인증 상태를 확인해줘.");
+      setProviderError("濡쒓렇???꾨즺瑜??뺤씤?섏? 紐삵뻽?듬땲?? 留곹겕瑜??ㅼ떆 ?댁뼱 ?몄쬆 ?곹깭瑜??뺤씤?댁쨾.");
     } catch (error) {
       setProviderError(
-        error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
+        error instanceof Error ? error.message : `ChatGPT 濡쒓렇?몄뿉 ?ㅽ뙣?덉뒿?덈떎: ${String(error)}`
       );
     } finally {
       setIsChatGPTLoginBusy(false);
@@ -734,7 +1117,7 @@ export default function App() {
       setChatGPTLoginUrl("");
       setProviderError("");
     } catch (error) {
-      setProviderError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
+      setProviderError(error instanceof Error ? error.message : "ChatGPT 濡쒓렇?꾩썐???ㅽ뙣?덉뒿?덈떎.");
     } finally {
       setIsChatGPTLoginBusy(false);
     }
@@ -811,3 +1194,5 @@ export default function App() {
     </div>
   );
 }
+
+

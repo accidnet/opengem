@@ -11,7 +11,7 @@ export const LLM_CONFIG: LLMSettings = {
 };
 
 export const LLM_SYSTEM_PROMPT =
-  "당신은 멀티 에이전트 오케스트레이션 환경의 AI 오케스트레이터입니다. 사용자의 요청에 대해 구체적이고 실행 가능한 답변을 한국어로 제공합니다. 답변은 간결한 도입부, 핵심 요약, 권장 액션 순서로 작성합니다.";
+  "?뱀떊? 硫???먯씠?꾪듃 ?ㅼ??ㅽ듃?덉씠???섍꼍??AI ?ㅼ??ㅽ듃?덉씠?곗엯?덈떎. ?ъ슜?먯쓽 ?붿껌?????援ъ껜?곸씠怨??ㅽ뻾 媛?ν븳 ?듬????쒓뎅?대줈 ?쒓났?⑸땲?? ?듬?? 媛꾧껐???꾩엯遺, ?듭떖 ?붿빟, 沅뚯옣 ?≪뀡 ?쒖꽌濡??묒꽦?⑸땲??";
 
 export const SESSION_MESSAGES: Message[] = [];
 
@@ -73,48 +73,51 @@ export const DEFAULT_MODE_ICONS: Record<Mode, ModeIcon> = {
 
 export const AGENTS: AgentItem[] = [
   {
-    name: "오케스트레이터",
+    name: "Orchestrator",
     icon: "account_tree",
-    status: "대기 중",
+    status: "Active",
     color: "indigo",
     active: true,
+    role: "main",
     model: "gpt-5.4",
-    prompt: "전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.",
-    tools: ["웹 브라우저", "파일 시스템"],
+    prompt: "Coordinate the overall task, decide when specialist help is needed, and produce the final answer.",
+    tools: ["Web Search", "File System"],
     mcpServers: ["linear"],
     skills: ["task-routing"],
   },
   {
-    name: "프론트엔드 개발자",
+    name: "Frontend Developer",
     icon: "travel_explore",
-    status: "수집 중...",
+    status: "Active",
     color: "emerald",
     active: true,
+    role: "sub",
     model: "gpt-5.4",
-    prompt: "프론트엔드 UI와 상호작용을 구현하고 시각 완성도를 높여.",
-    tools: ["웹 브라우저", "파일 시스템"],
+    prompt: "Focus on UI, interaction, and frontend implementation details.",
+    tools: ["Web Search", "File System"],
     mcpServers: ["figma"],
     skills: ["design-review"],
   },
   {
-    name: "백엔드 개발자",
+    name: "Backend Developer",
     icon: "code",
-    status: "대기 중",
+    status: "Active",
     color: "amber",
     active: true,
+    role: "sub",
     model: "gpt-5.4-mini",
-    prompt: "서버 로직, API, 데이터 흐름을 설계하고 구현해.",
-    tools: ["파일 시스템"],
+    prompt: "Focus on server logic, APIs, data flow, and backend implementation details.",
+    tools: ["File System"],
     mcpServers: ["postgres"],
     skills: ["api-design"],
   },
 ];
 
-export const TOOLS: string[] = ["웹 브라우저", "Python Repl", "파일 시스템"];
-
+export const TOOLS: string[] = ["Web Search", "Python Repl", "File System"];
 export const LLM_ALLOWED_MESSAGE_TYPES: MessageType[] = [
   "text",
   "plan",
   "search",
   "typing",
 ] as const;
+
