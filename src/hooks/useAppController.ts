@@ -639,7 +639,7 @@ export function useAppController() {
       side: "user",
       sender: "User",
       byline: nowTime(),
-      avatarText: "JD",
+      avatarText: "U",
       type: "text",
       text,
     };

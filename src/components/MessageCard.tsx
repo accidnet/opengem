@@ -1,4 +1,5 @@
 import type { Message } from "@/types/chat";
+import { MarkdownText } from "@/components/MarkdownText";
 
 type MessageCardProps = {
   message: Message;
@@ -36,7 +37,7 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
               {message.sender}
             </span>
           </div>
-          <p className="bubble-text">{bubbleText}</p>
+          <MarkdownText className="bubble-text" text={bubbleText} />
         </div>
         <div className="message-avatar avatar-user">{message.avatarText}</div>
       </div>
@@ -85,7 +86,7 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
         ) : null}
         {message.type === "search" ? (
           <>
-            {bubbleText ? <p className="bubble-text">{bubbleText}</p> : null}
+            {bubbleText ? <MarkdownText className="bubble-text" text={bubbleText} /> : null}
             <div className="tool-log-box">
               <div className="tool-log-title">
                 <span
@@ -102,7 +103,9 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
             </div>
           </>
         ) : null}
-        {message.type === "text" && bubbleText ? <p className="bubble-text">{bubbleText}</p> : null}
+        {message.type === "text" && bubbleText ? (
+          <MarkdownText className="bubble-text" text={bubbleText} />
+        ) : null}
         {message.type === "typing" ? (
           <div className="typing-card" aria-live="polite">
             <div className="typing-inline">
