@@ -1,4 +1,9 @@
 import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
+import PROMPT_ANTHROPIC from "./prompts/anthropic.txt?raw";
+import PROMPT_CODEX from "./prompts/codex.txt?raw";
+import PROMPT_DEFAULT from "./prompts/default.txt?raw";
+import PROMPT_GEMINI from "./prompts/gemini.txt?raw";
+import PROMPT_GPT from "./prompts/gpt.txt?raw";
 
 const env = import.meta.env;
 
@@ -10,8 +15,63 @@ export const LLM_CONFIG: LLMSettings = {
   chatgptLoggedIn: false,
 };
 
-export const LLM_SYSTEM_PROMPT =
-  "?뱀떊? 硫???먯씠?꾪듃 ?ㅼ??ㅽ듃?덉씠???섍꼍??AI ?ㅼ??ㅽ듃?덉씠?곗엯?덈떎. ?ъ슜?먯쓽 ?붿껌?????援ъ껜?곸씠怨??ㅽ뻾 媛?ν븳 ?듬????쒓뎅?대줈 ?쒓났?⑸땲?? ?듬?? 媛꾧껐???꾩엯遺, ?듭떖 ?붿빟, 沅뚯옣 ?≪뀡 ?쒖꽌濡??묒꽦?⑸땲??";
+export const getModelSystemPrompt = (model?: string) => {
+  const normalizedModel = model?.toLowerCase() ?? "";
+
+  if (normalizedModel.includes("codex")) {
+    return PROMPT_CODEX.trim();
+  }
+
+  if (
+    normalizedModel.includes("gpt") ||
+    normalizedModel.includes("o1") ||
+    normalizedModel.includes("o3") ||
+    normalizedModel.includes("o4")
+  ) {
+    return PROMPT_GPT.trim();
+  }
+
+  if (normalizedModel.includes("gemini")) {
+    return PROMPT_GEMINI.trim();
+  }
+
+  if (normalizedModel.includes("claude") || normalizedModel.includes("anthropic")) {
+    return PROMPT_ANTHROPIC.trim();
+  }
+
+  return PROMPT_DEFAULT.trim();
+};
+
+export const LLM_SYSTEM_PROMPT = getModelSystemPrompt(LLM_CONFIG.model);
+
+const ORCHESTRATOR_PROMPT_SECTIONS = [
+  "You are the primary orchestration agent.",
+  "Own the overall conversation, decide when specialist help is needed, and produce the final user-facing answer.",
+  "Break complex work into clear tasks, keep track of progress, and avoid delegating simple requests unnecessarily.",
+];
+
+const FRONTEND_PROMPT_SECTIONS = [
+  "You are a frontend specialist subagent.",
+  "Focus on UI structure, interaction flow, accessibility, visual polish, and frontend implementation details.",
+  "Return concise implementation guidance or findings for the main agent to synthesize.",
+];
+
+const BACKEND_PROMPT_SECTIONS = [
+  "You are a backend specialist subagent.",
+  "Focus on server behavior, APIs, data flow, persistence, validation, and reliability concerns.",
+  "Return concise implementation guidance or findings for the main agent to synthesize.",
+];
+
+export const composeSystemPrompt = (...sections: Array<string | undefined>) => {
+  return sections
+    .map((section) => section?.trim())
+    .filter((section): section is string => Boolean(section))
+    .join("\n\n");
+};
+
+export const composeAgentSystemPrompt = (model: string | undefined, ...sections: Array<string | undefined>) => {
+  return composeSystemPrompt(getModelSystemPrompt(model), ...sections);
+};
 
 export const SESSION_MESSAGES: Message[] = [];
 
@@ -80,7 +140,7 @@ export const AGENTS: AgentItem[] = [
     active: true,
     role: "main",
     model: "gpt-5.4",
-    prompt: "Coordinate the overall task, decide when specialist help is needed, and produce the final answer.",
+    prompt: composeSystemPrompt(...ORCHESTRATOR_PROMPT_SECTIONS),
     tools: ["Web Search", "File System"],
     mcpServers: ["linear"],
     skills: ["task-routing"],
@@ -93,7 +153,7 @@ export const AGENTS: AgentItem[] = [
     active: true,
     role: "sub",
     model: "gpt-5.4",
-    prompt: "Focus on UI, interaction, and frontend implementation details.",
+    prompt: composeSystemPrompt(...FRONTEND_PROMPT_SECTIONS),
     tools: ["Web Search", "File System"],
     mcpServers: ["figma"],
     skills: ["design-review"],
@@ -106,7 +166,7 @@ export const AGENTS: AgentItem[] = [
     active: true,
     role: "sub",
     model: "gpt-5.4-mini",
-    prompt: "Focus on server logic, APIs, data flow, and backend implementation details.",
+    prompt: composeSystemPrompt(...BACKEND_PROMPT_SECTIONS),
     tools: ["File System"],
     mcpServers: ["postgres"],
     skills: ["api-design"],
@@ -120,4 +180,3 @@ export const LLM_ALLOWED_MESSAGE_TYPES: MessageType[] = [
   "search",
   "typing",
 ] as const;
-

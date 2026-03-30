@@ -1,6 +1,6 @@
 import type { LLMMessage } from "@/lib/llm";
 
-import { LLM_SYSTEM_PROMPT } from "@/data/appData";
+import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/data/appData";
 import type { ActivityItem, Message } from "@/types/chat";
 
 const SESSION_TITLE_MAX_LENGTH = 40;
@@ -63,9 +63,13 @@ export const AGENT_COLOR_VALUES: Record<string, string> = {
  * @param messages 현재 세션의 메시지 목록
  * @param systemPrompt 메인 에이전트의 프롬프트 (없으면 기본 시스템 프롬프트 사용)
  */
-export function buildLLMMessages(messages: Message[], systemPrompt?: string): LLMMessage[] {
+export function buildLLMMessages(
+  messages: Message[],
+  systemPrompt?: string,
+  model?: string
+): LLMMessage[] {
   const resolvedSystemPrompt =
-    systemPrompt && systemPrompt.trim().length > 0 ? systemPrompt.trim() : LLM_SYSTEM_PROMPT;
+    model || systemPrompt ? composeAgentSystemPrompt(model, systemPrompt) : LLM_SYSTEM_PROMPT;
 
   const chatMessages = messages
     .filter((message) => message.side !== "status" && message.type !== "status")

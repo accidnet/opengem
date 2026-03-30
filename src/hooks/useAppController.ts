@@ -10,6 +10,7 @@ import {
   MODE_ICON_OPTIONS,
   MODES,
   SESSION_MESSAGES,
+  composeAgentSystemPrompt,
   type Mode,
   type ModeIcon,
 } from "../data/appData";
@@ -377,9 +378,11 @@ export function useAppController() {
     const routingMessages = [
       {
         role: "system" as const,
-        content:
-          `${mainAgent.prompt?.trim() || ""}\n\n` +
-          "You are currently acting as a task router for specialist subagents.",
+        content: composeAgentSystemPrompt(
+          mainAgent.model?.trim() || activeSettings.model,
+          mainAgent.prompt,
+          "You are currently acting as a task router for specialist subagents."
+        ),
       },
       ...requestMessages.slice(1),
       {
@@ -478,11 +481,13 @@ export function useAppController() {
             accountId: activeSettings.accountId,
             model: agent.model?.trim() || activeSettings.model,
             messages: [
-              {
-                role: "system",
-                content:
-                  `${agent.prompt?.trim() || ""}\n\n` +
-                  "You are a delegated specialist subagent. Return only your work product.",
+                {
+                  role: "system",
+                content: composeAgentSystemPrompt(
+                  agent.model?.trim() || activeSettings.model,
+                  agent.prompt,
+                  "You are a delegated specialist subagent. Return only your work product."
+                ),
               },
               {
                 role: "user",
@@ -565,9 +570,11 @@ export function useAppController() {
       messages: [
         {
           role: "system",
-          content:
-            `${mainAgent.prompt?.trim() || ""}\n\n` +
-            "You are synthesizing delegated specialist work into a final user-facing answer.",
+          content: composeAgentSystemPrompt(
+            mainAgent.model?.trim() || activeSettings.model,
+            mainAgent.prompt,
+            "You are synthesizing delegated specialist work into a final user-facing answer."
+          ),
         },
         ...requestMessages.slice(1),
         {
@@ -667,8 +674,16 @@ export function useAppController() {
         sessionId: session.id,
       });
       updateStreamingStatusMessage(typingMessage.id, "Analyzing request...");
-      const requestMessages = buildLLMMessages(sessionDetail.messages, mainAgent?.prompt ?? undefined);
       const activeSettings = await resolveProviderSettings();
+      const resolvedMainModel =
+        activeSettings.providerKind === "chatgpt_oauth"
+          ? activeSettings.model
+          : mainAgent?.model?.trim() || activeSettings.model;
+      const requestMessages = buildLLMMessages(
+        sessionDetail.messages,
+        mainAgent?.prompt ?? undefined,
+        resolvedMainModel
+      );
       const activeAgents = agents.filter((agent) => agent.active);
       const availableSubagents = activeAgents.filter(
         (agent) => agent.role !== "main" && agent.name !== mainAgent?.name
