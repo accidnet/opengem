@@ -27,6 +27,7 @@ export default function App() {
     clearContext,
     costPercent,
     currentSessionId,
+    currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,
     getModeIcon,
@@ -48,6 +49,7 @@ export default function App() {
     providerError,
     resourceCost,
     resourceToken,
+    openProjectFolder,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
     saveProviderSettings,
@@ -64,6 +66,7 @@ export default function App() {
     theme,
     toggleTheme,
     tokenPercent,
+    updateCurrentSessionProjectPaths,
   } = useAppController();
 
   useEffect(() => {
@@ -189,8 +192,13 @@ export default function App() {
 
         <ChatPanel
           messages={messages}
+          currentSessionId={currentSessionId}
+          currentSessionProjectPaths={currentSessionProjectPaths}
+          defaultProjectPaths={getModeProjectPaths(selectedMode)}
           inputValue={inputValue}
           canSend={canSend}
+          onOpenProjectFolder={openProjectFolder}
+          onUpdateSessionProjectPaths={updateCurrentSessionProjectPaths}
           onInputChange={setInputValue}
           onSubmit={sendMessage}
           onEnterSubmit={onEnterSubmit}

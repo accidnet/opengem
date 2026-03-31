@@ -2,6 +2,8 @@ use crate::app_state::AppState;
 use rand::{distributions::Alphanumeric, Rng};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::path::Path;
 use tauri::State;
 use tracing::{debug, info, warn};
 
@@ -14,6 +16,7 @@ pub struct SessionSummaryPayload {
     title: String,
     updated_at: i64,
     mode_name: String,
+    project_paths: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -55,12 +58,23 @@ pub struct AppendMessageInput {
     message: ChatMessagePayload,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionProjectPathsInput {
+    session_id: String,
+    project_paths: Vec<String>,
+}
+
 #[tauri::command]
 pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPayload>, String> {
     let connection = state.open_connection()?;
     let mut statement = connection
         .prepare(
-            "SELECT id, title, updated_at, mode_name FROM chat_sessions ORDER BY mode_name ASC, updated_at DESC, id DESC",
+            "
+            SELECT id, title, updated_at, mode_name, project_paths
+            FROM chat_sessions
+            ORDER BY mode_name ASC, updated_at DESC, id DESC
+            ",
         )
         .map_err(|error| error.to_string())?;
 
@@ -71,6 +85,7 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
                 title: row.get(1)?,
                 updated_at: row.get(2)?,
                 mode_name: row.get(3)?,
+                project_paths: deserialize_json(row.get(4)?)?.unwrap_or_default(),
             })
         })
         .map_err(|error| error.to_string())?;
@@ -98,18 +113,30 @@ pub fn create_chat_session(
             .map(|value| value.mode_name.as_str())
             .unwrap_or_default(),
     )?;
+    let project_paths = load_mode_project_paths(&connection, &mode_name)?;
     let now = now_millis();
     let session = SessionSummaryPayload {
         id: generate_id("session"),
         title,
         updated_at: now,
         mode_name,
+        project_paths,
     };
 
     connection
         .execute(
-            "INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![&session.id, &session.title, now, session.updated_at, &session.mode_name],
+            "
+            INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name, project_paths)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ",
+            params![
+                &session.id,
+                &session.title,
+                now,
+                session.updated_at,
+                &session.mode_name,
+                serialize_json_vec(&session.project_paths)?
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -156,7 +183,7 @@ pub fn delete_chat_session(state: State<AppState>, session_id: String) -> Result
 
     if deleted_count == 0 {
         warn!(session_id = %normalized_session_id, "chat session delete missed");
-        return Err("梨꾪똿 ?몄뀡??李얠쓣 ???놁뒿?덈떎.".to_string());
+        return Err("채팅 세션을 찾을 수 없습니다.".to_string());
     }
 
     info!(session_id = %normalized_session_id, "chat session deleted");
@@ -179,9 +206,7 @@ pub fn append_chat_message(
         "appending chat message"
     );
     let now = now_millis();
-    let transaction = connection
-        .transaction()
-        .map_err(|error| error.to_string())?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
 
     let exists: Option<String> = transaction
         .query_row(
@@ -252,13 +277,60 @@ pub fn append_chat_message(
     Ok(message)
 }
 
+#[tauri::command]
+pub fn update_chat_session_project_paths(
+    state: State<AppState>,
+    input: UpdateSessionProjectPathsInput,
+) -> Result<SessionSummaryPayload, String> {
+    let connection = state.open_connection()?;
+    let session_id = normalize_session_id(&input.session_id)?;
+    let project_paths = normalize_string_list(input.project_paths);
+    let now = now_millis();
+
+    let updated = connection
+        .execute(
+            "
+            UPDATE chat_sessions
+            SET project_paths = ?2, updated_at = ?3
+            WHERE id = ?1
+            ",
+            params![&session_id, serialize_json_vec(&project_paths)?, now],
+        )
+        .map_err(|error| error.to_string())?;
+
+    if updated == 0 {
+        return Err("채팅 세션을 찾을 수 없습니다.".to_string());
+    }
+
+    load_session_summary(&connection, &session_id)
+}
+
+#[tauri::command]
+pub fn open_folder_in_explorer(path: String) -> Result<(), String> {
+    let normalized_path = normalize_path(&path);
+    if normalized_path.is_empty() {
+        return Err("폴더 경로가 비어 있습니다.".to_string());
+    }
+
+    let path_ref = Path::new(&normalized_path);
+    if !path_ref.exists() {
+        return Err("폴더 경로를 찾을 수 없습니다.".to_string());
+    }
+
+    open::that(path_ref).map_err(|error| error.to_string())
+}
+
 fn load_session_summary(
     connection: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<SessionSummaryPayload, String> {
     connection
         .query_row(
-            "SELECT id, title, updated_at, mode_name FROM chat_sessions WHERE id = ?1",
+            "
+            SELECT id, title, updated_at, mode_name, project_paths
+            FROM chat_sessions
+            WHERE id = ?1
+            ",
             params![session_id],
             |row| {
                 Ok(SessionSummaryPayload {
@@ -266,6 +338,7 @@ fn load_session_summary(
                     title: row.get(1)?,
                     updated_at: row.get(2)?,
                     mode_name: row.get(3)?,
+                    project_paths: deserialize_json(row.get(4)?)?.unwrap_or_default(),
                 })
             },
         )
@@ -318,6 +391,25 @@ fn load_session_messages(
     Ok(messages)
 }
 
+fn load_mode_project_paths(
+    connection: &rusqlite::Connection,
+    mode_name: &str,
+) -> Result<Vec<String>, String> {
+    let raw_paths = connection
+        .query_row(
+            "SELECT project_paths FROM operation_modes WHERE mode_name = ?1",
+            params![mode_name],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .flatten();
+
+    deserialize_json(raw_paths)
+        .map(|paths| normalize_string_list(paths.unwrap_or_default()))
+        .map_err(|error| error.to_string())
+}
+
 fn normalize_session_id(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -341,6 +433,32 @@ fn normalize_mode_name(value: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+fn normalize_path(value: &str) -> String {
+    value.trim().trim_end_matches(['\\', '/']).to_string()
+}
+
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::<String>::new();
+    let mut seen = HashSet::<String>::new();
+
+    for value in values {
+        let normalized_value = normalize_path(&value);
+        if normalized_value.is_empty() {
+            continue;
+        }
+
+        let key = normalized_value.to_lowercase();
+        if seen.contains(&key) {
+            continue;
+        }
+
+        seen.insert(key);
+        normalized.push(normalized_value);
+    }
+
+    normalized
+}
+
 fn normalize_message(message: ChatMessagePayload) -> Result<ChatMessagePayload, String> {
     if message.id.trim().is_empty() {
         return Err("메시지 ID가 비어 있습니다.".to_string());
@@ -362,6 +480,16 @@ fn serialize_json(value: &Option<Vec<String>>) -> Result<Option<String>, String>
         .as_ref()
         .map(|item| serde_json::to_string(item).map_err(|error| error.to_string()))
         .transpose()
+}
+
+fn serialize_json_vec(value: &Vec<String>) -> Result<Option<String>, String> {
+    if value.is_empty() {
+        Ok(None)
+    } else {
+        serde_json::to_string(value)
+            .map(Some)
+            .map_err(|error| error.to_string())
+    }
 }
 
 fn deserialize_json(value: Option<String>) -> Result<Option<Vec<String>>, rusqlite::Error> {

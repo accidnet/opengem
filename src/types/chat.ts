@@ -54,6 +54,7 @@ export type SessionItem = {
   title: string;
   updatedAt: number;
   modeName: string;
+  projectPaths: string[];
   active?: boolean;
 };
 

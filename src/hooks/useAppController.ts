@@ -60,6 +60,7 @@ export function useAppController() {
   const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
+  const [currentSessionProjectPaths, setCurrentSessionProjectPaths] = useState<string[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -162,6 +163,7 @@ export function useAppController() {
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
     setCurrentSessionTitle("새 채팅");
+    setCurrentSessionProjectPaths([]);
     setInputValue("");
   };
 
@@ -171,6 +173,7 @@ export function useAppController() {
       const detail = await invoke<SessionDetail>("get_chat_session", { sessionId });
       setCurrentSessionId(detail.session.id);
       setCurrentSessionTitle(detail.session.title);
+      setCurrentSessionProjectPaths(detail.session.projectPaths || []);
       setMessages(detail.messages);
       await refreshSessions(nextModes, detail.session.id);
     } finally {
@@ -303,6 +306,7 @@ export function useAppController() {
       return {
         id: currentSessionId,
         title: currentSessionTitle,
+        projectPaths: currentSessionProjectPaths,
       };
     }
 
@@ -315,6 +319,7 @@ export function useAppController() {
 
     setCurrentSessionId(created.id);
     setCurrentSessionTitle(created.title);
+    setCurrentSessionProjectPaths(created.projectPaths || []);
     await refreshSessions(modes, created.id);
 
     return created;
@@ -696,7 +701,7 @@ export function useAppController() {
         mainAgent?.prompt ?? undefined,
         resolvedMainModel
       );
-      const projectPaths = modeProjectPaths[selectedMode] || [];
+      const projectPaths = sessionDetail.session.projectPaths || [];
       const activeAgents = agents.filter((agent) => agent.active);
       const availableSubagents = activeAgents.filter(
         (agent) => agent.role !== "main" && agent.name !== mainAgent?.name
@@ -1041,6 +1046,26 @@ export function useAppController() {
     return modeProjectPaths[mode] || [];
   };
 
+  const updateCurrentSessionProjectPaths = async (projectPaths: string[]) => {
+    if (!currentSessionId) {
+      return;
+    }
+
+    const next = await invoke<SessionItem>("update_chat_session_project_paths", {
+      input: {
+        sessionId: currentSessionId,
+        projectPaths,
+      },
+    });
+
+    setCurrentSessionProjectPaths(next.projectPaths || []);
+    await refreshSessions(modes, currentSessionId);
+  };
+
+  const openProjectFolder = async (path: string) => {
+    await invoke("open_folder_in_explorer", { path });
+  };
+
   const saveAgentsForSelectedMode = async (nextAgents: AgentItem[]) => {
     const previousAgents = agents;
     const normalizedAgents = normalizeAgentsForUi(
@@ -1169,6 +1194,7 @@ export function useAppController() {
     clearContext,
     costPercent,
     currentSessionId,
+    currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,
     getModeIcon,
@@ -1190,6 +1216,7 @@ export function useAppController() {
     providerError,
     resourceCost,
     resourceToken,
+    openProjectFolder,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
     saveProviderSettings,
@@ -1206,5 +1233,6 @@ export function useAppController() {
     theme,
     toggleTheme,
     tokenPercent,
+    updateCurrentSessionProjectPaths,
   };
 }

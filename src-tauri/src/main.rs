@@ -21,7 +21,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-const MIGRATIONS: [(&str, &str); 10] = [
+const MIGRATIONS: [(&str, &str); 11] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -58,6 +58,10 @@ const MIGRATIONS: [(&str, &str); 10] = [
     (
         "010_operation_mode_project_paths",
         include_str!("../sql/migrations/010_operation_mode_project_paths.sql"),
+    ),
+    (
+        "011_chat_session_project_paths",
+        include_str!("../sql/migrations/011_chat_session_project_paths.sql"),
     ),
 ];
 
@@ -469,6 +473,8 @@ fn main() {
             commands::session::get_chat_session,
             commands::session::delete_chat_session,
             commands::session::append_chat_message,
+            commands::session::update_chat_session_project_paths,
+            commands::session::open_folder_in_explorer,
             commands::settings::get_llm_settings,
             commands::settings::save_llm_settings,
             commands::settings::resolve_llm_settings,

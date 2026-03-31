@@ -227,6 +227,14 @@
     padding: 6px 10px;
   }
 
+  .project-path-popover {
+    width: min(100vw - 20px, 520px);
+  }
+
+  .project-path-row {
+    grid-template-columns: 1fr;
+  }
+
   .message-bubble {
     max-width: 86%;
   }
