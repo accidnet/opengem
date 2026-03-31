@@ -175,17 +175,6 @@
   color: #fda4af;
 }
 
-.mode-settings-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: rgba(2, 6, 23, 0.64);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
 .mode-settings-modal {
   width: min(860px, 100%);
   border-radius: 14px;
@@ -323,6 +312,48 @@
   gap: 8px;
 }
 
+.mode-provider-modal {
+  width: min(980px, 100%);
+}
+
+.mode-provider-modal .provider-body {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.mode-provider-sidebar {
+  padding: 28px 20px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.mode-provider-main {
+  gap: 18px;
+  padding-inline: 24px 32px;
+}
+
+.mode-provider-main > * {
+  width: min(100%, 720px);
+  margin-inline: auto;
+}
+
+.mode-create-card,
+.mode-list-card {
+  gap: 16px;
+}
+
+.mode-settings-footer-shell {
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.mode-settings-footer-actions {
+  display: inline-flex;
+  gap: 10px;
+}
+
 .agent-settings-modal {
   width: min(1120px, 100%);
 }
@@ -389,10 +420,6 @@
 }
 
 @media (max-width: 840px) {
-  .mode-settings-modal {
-    padding: 14px;
-  }
-
   .mode-settings-create,
   .agent-settings-create,
   .agent-create-card,
@@ -405,6 +432,16 @@
     grid-template-columns: auto 1fr;
   }
 
+  .mode-provider-main {
+    padding-inline: 20px;
+  }
+
+  .mode-provider-main > * {
+    width: 100%;
+  }
+
+  .mode-settings-footer-shell,
+  .mode-settings-footer-actions,
   .agent-settings-footer-actions {
     width: 100%;
     display: grid;

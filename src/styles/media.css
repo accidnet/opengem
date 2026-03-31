@@ -32,7 +32,7 @@
 
 @media (max-width: 1400px) {
   .body-grid {
-    grid-template-columns: 220px minmax(0, 1fr) 250px;
+    grid-template-columns: var(--left-panel-width, 220px) 0px minmax(0, 1fr) 250px;
   }
 }
 
@@ -66,6 +66,10 @@
   .body-grid {
     grid-template-columns: 1fr;
   }
+
+  .panel-resizer {
+    display: none;
+  }
 }
 
 @media (max-width: 1280px) {
@@ -74,7 +78,7 @@
   }
 
   .body-grid {
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: var(--left-panel-width, 230px) 0px minmax(0, 1fr);
   }
 }
 
@@ -90,6 +94,10 @@
 
   .body-grid {
     grid-template-columns: 1fr;
+  }
+
+  .panel-resizer {
+    display: none;
   }
 
   .left-panel {

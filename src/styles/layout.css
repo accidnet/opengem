@@ -609,14 +609,13 @@ select.settings-input option {
 .body-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 270px;
+  grid-template-columns: var(--left-panel-width, 232px) 0px minmax(0, 1fr) 270px;
   min-height: 0;
 }
 
 .left-panel,
 .right-panel {
   background: var(--panel);
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -624,14 +623,65 @@ select.settings-input option {
 
 .left-panel {
   border-left: 1px solid var(--border);
+  min-width: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.right-panel {
+  border-right: 1px solid var(--border);
 }
 
 @supports not (scrollbar-gutter: stable) {
   .left-panel {
     overflow-y: scroll;
   }
+}
+
+.panel-resizer {
+  position: relative;
+  width: 0;
+  min-width: 0;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+.panel-resizer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--border) 88%, var(--primary) 12%);
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+}
+
+.panel-resizer:hover::before,
+.body-grid.is-resizing .panel-resizer::before {
+  background: color-mix(in srgb, var(--primary) 58%, var(--border) 42%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent 82%);
+}
+
+.body-grid.is-left-panel-collapsed .left-panel {
+  overflow: hidden;
+  border-left-color: transparent;
 }
 
 /* 토스트 알림 */

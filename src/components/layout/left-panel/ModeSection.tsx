@@ -29,7 +29,7 @@ export function ModeSection({
     <section className="panel-block">
       <div className="section-head-with-action">
         <h3 className="section-title">Operation Mode</h3>
-        <button className="small-icon-btn" type="button" title="모드 설정" onClick={onOpenSettings}>
+        <button className="small-icon-btn" type="button" title="운영 설정" onClick={onOpenSettings}>
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
           </span>

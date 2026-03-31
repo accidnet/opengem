@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ChatPanel } from "./components/layout/ChatPanel";
 import { LeftPanel } from "./components/layout/LeftPanel";
@@ -7,6 +8,10 @@ import { TOOLS } from "./data/appData";
 import { useAppController } from "./hooks/useAppController";
 
 export default function App() {
+  const bodyGridRef = useRef<HTMLElement | null>(null);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(232);
+  const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
+
   const {
     activity,
     agents,
@@ -53,6 +58,54 @@ export default function App() {
     tokenPercent,
   } = useAppController();
 
+  useEffect(() => {
+    if (!isResizingLeftPanel) {
+      return undefined;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!bodyGridRef.current || window.innerWidth <= 980) {
+        return;
+      }
+
+      const gridBounds = bodyGridRef.current.getBoundingClientRect();
+      const nextWidth = event.clientX - gridBounds.left;
+      const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
+      setLeftPanelWidth(clampedWidth);
+    };
+
+    const stopResizing = () => {
+      setIsResizingLeftPanel(false);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, [isResizingLeftPanel]);
+
+  useEffect(() => {
+    if (!isResizingLeftPanel) {
+      return undefined;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isResizingLeftPanel]);
+
   return (
     <div className="app-shell">
       <AppHeader
@@ -67,7 +120,17 @@ export default function App() {
         onOpenProviderDialog={() => setIsProviderDialogOpen(true)}
       />
 
-      <main className="body-grid">
+      <main
+        ref={bodyGridRef}
+        className={`body-grid${isResizingLeftPanel ? " is-resizing" : ""}${
+          leftPanelWidth === 0 ? " is-left-panel-collapsed" : ""
+        }`}
+        style={
+          {
+            "--left-panel-width": `${leftPanelWidth}px`,
+          } as CSSProperties
+        }
+      >
         <LeftPanel
           modes={modes}
           selectedMode={selectedMode}
@@ -81,6 +144,21 @@ export default function App() {
           onSessionSelect={handleSessionSelect}
           onSessionDelete={handleSessionDelete}
           tools={TOOLS}
+        />
+
+        <div
+          className="panel-resizer"
+          role="separator"
+          aria-label="왼쪽 패널 너비 조절"
+          aria-orientation="vertical"
+          onPointerDown={(event) => {
+            if (window.innerWidth <= 980) {
+              return;
+            }
+
+            event.preventDefault();
+            setIsResizingLeftPanel(true);
+          }}
         />
 
         <ChatPanel
