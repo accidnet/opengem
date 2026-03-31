@@ -10,7 +10,9 @@ import { useAppController } from "./hooks/useAppController";
 export default function App() {
   const bodyGridRef = useRef<HTMLElement | null>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(232);
+  const [rightPanelWidth, setRightPanelWidth] = useState(270);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
+  const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
 
   const {
     activity,
@@ -59,23 +61,33 @@ export default function App() {
   } = useAppController();
 
   useEffect(() => {
-    if (!isResizingLeftPanel) {
+    if (!isResizingLeftPanel && !isResizingRightPanel) {
       return undefined;
     }
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (!bodyGridRef.current || window.innerWidth <= 980) {
+      if (!bodyGridRef.current) {
         return;
       }
 
       const gridBounds = bodyGridRef.current.getBoundingClientRect();
-      const nextWidth = event.clientX - gridBounds.left;
-      const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
-      setLeftPanelWidth(clampedWidth);
+
+      if (isResizingLeftPanel && window.innerWidth > 980) {
+        const nextWidth = event.clientX - gridBounds.left;
+        const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
+        setLeftPanelWidth(clampedWidth);
+      }
+
+      if (isResizingRightPanel && window.innerWidth > 1280) {
+        const nextWidth = gridBounds.right - event.clientX;
+        const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
+        setRightPanelWidth(clampedWidth);
+      }
     };
 
     const stopResizing = () => {
       setIsResizingLeftPanel(false);
+      setIsResizingRightPanel(false);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -87,10 +99,10 @@ export default function App() {
       window.removeEventListener("pointerup", stopResizing);
       window.removeEventListener("pointercancel", stopResizing);
     };
-  }, [isResizingLeftPanel]);
+  }, [isResizingLeftPanel, isResizingRightPanel]);
 
   useEffect(() => {
-    if (!isResizingLeftPanel) {
+    if (!isResizingLeftPanel && !isResizingRightPanel) {
       return undefined;
     }
 
@@ -104,7 +116,7 @@ export default function App() {
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
     };
-  }, [isResizingLeftPanel]);
+  }, [isResizingLeftPanel, isResizingRightPanel]);
 
   return (
     <div className="app-shell">
@@ -122,12 +134,15 @@ export default function App() {
 
       <main
         ref={bodyGridRef}
-        className={`body-grid${isResizingLeftPanel ? " is-resizing" : ""}${
-          leftPanelWidth === 0 ? " is-left-panel-collapsed" : ""
+        className={`body-grid${
+          isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""
+        }${leftPanelWidth === 0 ? " is-left-panel-collapsed" : ""}${
+          rightPanelWidth === 0 ? " is-right-panel-collapsed" : ""
         }`}
         style={
           {
             "--left-panel-width": `${leftPanelWidth}px`,
+            "--right-panel-width": `${rightPanelWidth}px`,
           } as CSSProperties
         }
       >
@@ -147,7 +162,7 @@ export default function App() {
         />
 
         <div
-          className="panel-resizer"
+          className="panel-resizer panel-resizer-left"
           role="separator"
           aria-label="왼쪽 패널 너비 조절"
           aria-orientation="vertical"
@@ -170,6 +185,21 @@ export default function App() {
           onEnterSubmit={onEnterSubmit}
           onApprovePlan={handleApprovePlan}
           onModifyPlan={handleModifyPlan}
+        />
+
+        <div
+          className="panel-resizer panel-resizer-right"
+          role="separator"
+          aria-label="오른쪽 패널 너비 조절"
+          aria-orientation="vertical"
+          onPointerDown={(event) => {
+            if (window.innerWidth <= 1280) {
+              return;
+            }
+
+            event.preventDefault();
+            setIsResizingRightPanel(true);
+          }}
         />
 
         <RightPanel

@@ -32,7 +32,12 @@
 
 @media (max-width: 1400px) {
   .body-grid {
-    grid-template-columns: var(--left-panel-width, 220px) 0px minmax(0, 1fr) 250px;
+    grid-template-columns:
+      var(--left-panel-width, 220px)
+      0px
+      minmax(0, 1fr)
+      0px
+      var(--right-panel-width, 250px);
   }
 }
 
@@ -74,6 +79,10 @@
 
 @media (max-width: 1280px) {
   .right-panel {
+    display: none;
+  }
+
+  .panel-resizer-right {
     display: none;
   }
 
