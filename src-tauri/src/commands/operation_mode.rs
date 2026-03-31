@@ -1,4 +1,5 @@
 use crate::app_state::AppState;
+use rfd::FileDialog;
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashSet;
 use tauri::State;
@@ -40,6 +41,14 @@ pub struct AgentPayload {
 pub struct OperationModeInput {
     name: String,
     original_name: Option<String>,
+    project_paths: Option<Vec<String>>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationModeItem {
+    name: String,
+    project_paths: Vec<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -47,6 +56,7 @@ pub struct OperationModeInput {
 pub struct OperationModeState {
     modes: Vec<String>,
     selected_mode: String,
+    items: Vec<OperationModeItem>,
 }
 
 fn default_orchestration_agents() -> Vec<AgentPayload> {
@@ -58,7 +68,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             active: true,
             role: "main".to_string(),
             model: Some("gpt-5.4".to_string()),
-            prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.".to_string()),
+            prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 작업을 분배해.".to_string()),
             tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
             mcp_servers: Some(vec!["linear".to_string()]),
             skills: Some(vec!["task-routing".to_string()]),
@@ -98,7 +108,7 @@ fn default_mode_agents() -> Vec<AgentPayload> {
         active: true,
         role: "main".to_string(),
         model: Some("gpt-5.4".to_string()),
-        prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 역할을 분배해.".to_string()),
+        prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 작업을 분배해.".to_string()),
         tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
         mcp_servers: Some(vec!["linear".to_string()]),
         skills: Some(vec!["task-routing".to_string()]),
@@ -120,7 +130,7 @@ fn normalize_optional_list(value: Option<Vec<String>>) -> Option<Vec<String>> {
     let normalized: Vec<String> = value
         .unwrap_or_default()
         .into_iter()
-        .map(|item| item.trim().to_string())
+        .map(|item| item.trim().trim_end_matches(['\\', '/']).to_string())
         .filter(|item| !item.is_empty())
         .collect();
 
@@ -227,7 +237,7 @@ fn ensure_default_operation_mode(
     connection
         .execute(
             SQL_INSERT_OPERATION_MODE,
-            params![&default_mode, 0_i64, 1_i64],
+            params![&default_mode, 0_i64, 1_i64, Option::<String>::None],
         )
         .map_err(|error| error.to_string())?;
 
@@ -246,7 +256,11 @@ fn ensure_default_operation_mode(
 
     Ok(OperationModeState {
         modes: vec![default_mode.clone()],
-        selected_mode: default_mode,
+        selected_mode: default_mode.clone(),
+        items: vec![OperationModeItem {
+            name: default_mode,
+            project_paths: Vec::new(),
+        }],
     })
 }
 
@@ -261,18 +275,25 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
         .query_map([], |row| {
             let mode_name: String = row.get(0)?;
             let is_selected: i64 = row.get(1)?;
-            Ok((mode_name, is_selected))
+            let project_paths = deserialize_json(row.get(2)?)?.unwrap_or_default();
+            Ok((mode_name, is_selected, project_paths))
         })
         .map_err(|error| error.to_string())?;
 
     let mut modes = Vec::new();
+    let mut items = Vec::new();
     let mut selected_mode: Option<String> = None;
 
     for row in rows {
-        let (mode_name, is_selected) = row.map_err(|error| error.to_string())?;
+        let (mode_name, is_selected, project_paths) = row.map_err(|error| error.to_string())?;
         if is_selected == 1 {
             selected_mode = Some(mode_name.clone());
         }
+
+        items.push(OperationModeItem {
+            name: mode_name.clone(),
+            project_paths,
+        });
         modes.push(mode_name);
     }
 
@@ -297,6 +318,7 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
     Ok(OperationModeState {
         modes,
         selected_mode: resolved_selected_mode,
+        items,
     })
 }
 
@@ -324,37 +346,31 @@ pub fn save_operation_mode(
         normalized_modes.push(OperationModeInput {
             name: trimmed.to_string(),
             original_name: normalize_optional_text(mode.original_name),
+            project_paths: normalize_optional_list(mode.project_paths),
         });
     }
 
     if normalized_modes.is_empty() {
-        return Err("저장할 operation mode가 비어있습니다.".to_string());
+        return Err("저장할 operation mode가 비어 있습니다.".to_string());
     }
 
     let selected_mode = selected_mode.trim().to_string();
     if selected_mode.is_empty() {
-        return Err("선택된 operation mode가 비어있습니다.".to_string());
+        return Err("선택된 operation mode가 비어 있습니다.".to_string());
     }
 
-    if !normalized_modes
-        .iter()
-        .any(|mode| mode.name == selected_mode)
-    {
+    if !normalized_modes.iter().any(|mode| mode.name == selected_mode) {
         return Err("선택된 operation mode가 목록에 없습니다.".to_string());
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection
-        .transaction()
-        .map_err(|error| error.to_string())?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
 
     let mut existing_statement = transaction
         .prepare("SELECT id, mode_name FROM operation_modes ORDER BY id ASC")
         .map_err(|error| error.to_string())?;
     let existing_rows = existing_statement
-        .query_map([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-        })
+        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
         .map_err(|error| error.to_string())?;
 
     let mut existing_modes = Vec::<(i64, String)>::new();
@@ -373,6 +389,8 @@ pub fn save_operation_mode(
                 .map(|(id, _)| *id)
         });
 
+        let serialized_project_paths = serialize_json(&mode.project_paths)?;
+
         if let Some(mode_id) = existing_match {
             let original_name = mode.original_name.as_deref().unwrap_or(&mode.name);
 
@@ -382,17 +400,15 @@ pub fn save_operation_mode(
                     UPDATE operation_modes
                     SET mode_name = ?1,
                         display_order = ?2,
-                        is_selected = ?3
-                    WHERE id = ?4
+                        is_selected = ?3,
+                        project_paths = ?4
+                    WHERE id = ?5
                     ",
                     params![
                         mode.name,
                         index as i64,
-                        if mode.name == selected_mode {
-                            1_i64
-                        } else {
-                            0_i64
-                        },
+                        if mode.name == selected_mode { 1_i64 } else { 0_i64 },
+                        serialized_project_paths,
                         mode_id
                     ],
                 )
@@ -413,11 +429,8 @@ pub fn save_operation_mode(
                 params![
                     mode.name,
                     index as i64,
-                    if mode.name == selected_mode {
-                        1_i64
-                    } else {
-                        0_i64
-                    }
+                    if mode.name == selected_mode { 1_i64 } else { 0_i64 },
+                    serialized_project_paths
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -433,16 +446,10 @@ pub fn save_operation_mode(
         }
 
         transaction
-            .execute(
-                "DELETE FROM operation_modes WHERE id = ?1",
-                params![mode_id],
-            )
+            .execute("DELETE FROM operation_modes WHERE id = ?1", params![mode_id])
             .map_err(|error| error.to_string())?;
         transaction
-            .execute(
-                "DELETE FROM chat_sessions WHERE mode_name = ?1",
-                params![saved_name],
-            )
+            .execute("DELETE FROM chat_sessions WHERE mode_name = ?1", params![saved_name])
             .map_err(|error| error.to_string())?;
     }
 
@@ -454,20 +461,18 @@ pub fn save_operation_mode(
 pub fn select_operation_mode(state: State<AppState>, selected_mode: String) -> Result<(), String> {
     let selected_mode = selected_mode.trim().to_string();
     if selected_mode.is_empty() {
-        return Err("선택된 operation mode가 비어있습니다.".to_string());
+        return Err("선택된 operation mode가 비어 있습니다.".to_string());
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection
-        .transaction()
-        .map_err(|error| error.to_string())?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
 
     let affected_rows = transaction
         .execute(SQL_UPDATE_SELECTED_OPERATION_MODE, params![selected_mode])
         .map_err(|error| error.to_string())?;
 
     if affected_rows == 0 {
-        return Err("선택할 operation mode를 찾을 수 없습니다.".to_string());
+        return Err("선택된 operation mode를 찾을 수 없습니다.".to_string());
     }
 
     transaction.commit().map_err(|error| error.to_string())?;
@@ -478,13 +483,11 @@ pub fn select_operation_mode(state: State<AppState>, selected_mode: String) -> R
 pub fn delete_operation_mode(state: State<AppState>, mode_name: String) -> Result<(), String> {
     let mode_name = mode_name.trim().to_string();
     if mode_name.is_empty() {
-        return Err("삭제할 operation mode가 비어있습니다.".to_string());
+        return Err("삭제할 operation mode가 비어 있습니다.".to_string());
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection
-        .transaction()
-        .map_err(|error| error.to_string())?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
 
     let deleted_mode_is_selected: Option<i64> = transaction
         .query_row(
@@ -511,10 +514,7 @@ pub fn delete_operation_mode(state: State<AppState>, mode_name: String) -> Resul
         .execute(SQL_DELETE_OPERATION_MODE, params![&mode_name])
         .map_err(|error| error.to_string())?;
     transaction
-        .execute(
-            "DELETE FROM chat_sessions WHERE mode_name = ?1",
-            params![&mode_name],
-        )
+        .execute("DELETE FROM chat_sessions WHERE mode_name = ?1", params![&mode_name])
         .map_err(|error| error.to_string())?;
 
     if is_selected == 1 {
@@ -529,6 +529,15 @@ pub fn delete_operation_mode(state: State<AppState>, mode_name: String) -> Resul
 
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn pick_project_folder() -> Result<Option<String>, String> {
+    let selected = FileDialog::new()
+        .set_title("프로젝트 폴더 선택")
+        .pick_folder();
+
+    Ok(selected.map(|path| path.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
@@ -596,7 +605,7 @@ pub fn save_mode_agents(
 ) -> Result<(), String> {
     let mode_name = mode_name.trim().to_string();
     if mode_name.is_empty() {
-        return Err("저장할 operation mode가 비어있습니다.".to_string());
+        return Err("저장할 operation mode가 비어 있습니다.".to_string());
     }
 
     let mut normalized_agents = Vec::<AgentPayload>::new();
@@ -631,8 +640,7 @@ pub fn save_mode_agents(
         });
     }
 
-    // role 정규화: main이 없으면 첫 번째를 main으로, 두 개 이상이면 첫 번째만 유지
-    let has_main = normalized_agents.iter().any(|a| a.role == "main");
+    let has_main = normalized_agents.iter().any(|agent| agent.role == "main");
     if !has_main {
         if let Some(first) = normalized_agents.first_mut() {
             first.role = "main".to_string();
@@ -651,16 +659,11 @@ pub fn save_mode_agents(
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection
-        .transaction()
-        .map_err(|error| error.to_string())?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
     let mode_id = resolve_mode_id(&transaction, &mode_name)?;
 
     transaction
-        .execute(
-            "DELETE FROM operation_mode_agents WHERE mode_id = ?1",
-            params![mode_id],
-        )
+        .execute("DELETE FROM operation_mode_agents WHERE mode_id = ?1", params![mode_id])
         .map_err(|error| error.to_string())?;
 
     for (index, agent) in normalized_agents.iter().enumerate() {

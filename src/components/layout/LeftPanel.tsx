@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import type { Mode, ModeIcon } from "@/data/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
@@ -21,10 +22,11 @@ type LeftPanelProps = {
     nextModes: Mode[],
     nextModeIcons: Record<Mode, ModeIcon>,
     nextSelectedMode: Mode,
-    modeItems: Array<{ name: Mode; originalName?: Mode }>
+    modeItems: Array<{ name: Mode; originalName?: Mode; projectPaths?: string[] }>
   ) => void | Promise<void>;
   onSaveAgents: (nextAgents: AgentItem[]) => void | Promise<void>;
   getModeIcon: (mode: Mode) => ModeIcon;
+  getModeProjectPaths: (mode: Mode) => string[];
   agents: AgentItem[];
   sessionsByMode: Record<Mode, SessionItem[]>;
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
@@ -40,6 +42,7 @@ export function LeftPanel({
   onSaveModeSettings,
   onSaveAgents,
   getModeIcon,
+  getModeProjectPaths,
   agents,
   sessionsByMode,
   onSessionSelect,
@@ -52,6 +55,8 @@ export function LeftPanel({
   const [agentSettingsTab, setAgentSettingsTab] = useState<AgentSettingsTab>("create");
   const [newModeName, setNewModeName] = useState("");
   const [newModeIcon, setNewModeIcon] = useState<ModeIcon>("tune");
+  const [newModeProjectPath, setNewModeProjectPath] = useState("");
+  const [newModeProjectPaths, setNewModeProjectPaths] = useState<string[]>([]);
   const [modeNameError, setModeNameError] = useState("");
   const [draftModes, setDraftModes] = useState<DraftModeItem[]>([]);
   const [draftAgents, setDraftAgents] = useState<DraftAgentItem[]>([]);
@@ -137,10 +142,13 @@ export function LeftPanel({
         name: mode,
         icon: getModeIcon(mode),
         originalName: mode,
+        projectPaths: [...getModeProjectPaths(mode)],
       }))
     );
     setNewModeName("");
     setNewModeIcon("tune");
+    setNewModeProjectPath("");
+    setNewModeProjectPaths([]);
     setModeNameError("");
     setIsModeSettingsOpen(true);
   };
@@ -213,11 +221,14 @@ export function LeftPanel({
         id: `draft-${draftModeIdRef.current}`,
         name: trimmedName,
         icon: newModeIcon,
+        projectPaths: [...newModeProjectPaths],
       },
     ]);
     setModeNameError("");
     setNewModeName("");
     setNewModeIcon("tune");
+    setNewModeProjectPath("");
+    setNewModeProjectPaths([]);
   };
 
   const handleCreateModeOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -236,6 +247,117 @@ export function LeftPanel({
 
   const handleDraftModeIconChange = (id: string, icon: ModeIcon) => {
     setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, icon } : mode)));
+  };
+
+  const normalizeProjectPath = (value: string) => {
+    return value.trim().replace(/[\\/]+$/, "");
+  };
+
+  const addProjectPathToMode = (modeId: string, rawValue: string) => {
+    const normalizedPath = normalizeProjectPath(rawValue);
+    if (!normalizedPath) {
+      return false;
+    }
+
+    let didAdd = false;
+    setDraftModes((prev) =>
+      prev.map((mode) => {
+        if (mode.id !== modeId) {
+          return mode;
+        }
+
+        const exists = mode.projectPaths.some(
+          (projectPath) => projectPath.toLowerCase() === normalizedPath.toLowerCase()
+        );
+        if (exists) {
+          return mode;
+        }
+
+        didAdd = true;
+        return {
+          ...mode,
+          projectPaths: [...mode.projectPaths, normalizedPath],
+        };
+      })
+    );
+
+    return didAdd;
+  };
+
+  const handleAddNewModeProjectPath = () => {
+    const normalizedPath = normalizeProjectPath(newModeProjectPath);
+    if (!normalizedPath) {
+      return;
+    }
+
+    setNewModeProjectPaths((prev) => {
+      const exists = prev.some((projectPath) => projectPath.toLowerCase() === normalizedPath.toLowerCase());
+      if (exists) {
+        return prev;
+      }
+
+      return [...prev, normalizedPath];
+    });
+    setNewModeProjectPath("");
+  };
+
+  const handleAddNewModeProjectPathOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleAddNewModeProjectPath();
+    }
+  };
+
+  const handleAddDraftModeProjectPath = (id: string, value: string) => {
+    addProjectPathToMode(id, value);
+  };
+
+  const handleRemoveDraftModeProjectPath = (id: string, projectPath: string) => {
+    setDraftModes((prev) =>
+      prev.map((mode) =>
+        mode.id === id
+          ? {
+              ...mode,
+              projectPaths: mode.projectPaths.filter((item) => item !== projectPath),
+            }
+          : mode
+      )
+    );
+  };
+
+  const pickProjectFolder = async () => {
+    const selected = await invoke<string | null>("pick_project_folder");
+    return selected ? normalizeProjectPath(selected) : "";
+  };
+
+  const handlePickNewModeProjectPath = async () => {
+    const selectedPath = await pickProjectFolder();
+    if (!selectedPath) {
+      return;
+    }
+
+    setNewModeProjectPaths((prev) => {
+      const exists = prev.some((projectPath) => projectPath.toLowerCase() === selectedPath.toLowerCase());
+      if (exists) {
+        return prev;
+      }
+
+      return [...prev, selectedPath];
+    });
+    setNewModeProjectPath("");
+  };
+
+  const handleRemoveNewModeProjectPath = (projectPath: string) => {
+    setNewModeProjectPaths((prev) => prev.filter((item) => item !== projectPath));
+  };
+
+  const handlePickDraftModeProjectPath = async (id: string) => {
+    const selectedPath = await pickProjectFolder();
+    if (!selectedPath) {
+      return;
+    }
+
+    handleAddDraftModeProjectPath(id, selectedPath);
   };
 
   const handleMoveDraftMode = (index: number, direction: "up" | "down") => {
@@ -262,10 +384,13 @@ export function LeftPanel({
         name: "Orchestration",
         icon: "smart_toy",
         originalName: modes[0] || "Orchestration",
+        projectPaths: [],
       },
     ]);
     setNewModeName("");
     setNewModeIcon("tune");
+    setNewModeProjectPath("");
+    setNewModeProjectPaths([]);
     setModeNameError("");
   };
 
@@ -282,6 +407,15 @@ export function LeftPanel({
     const normalizedModes = draftModes.map((mode) => ({
       ...mode,
       name: mode.name.trim(),
+      projectPaths: mode.projectPaths
+        .map((projectPath) => normalizeProjectPath(projectPath))
+        .filter((projectPath, index, items) => {
+          if (!projectPath) {
+            return false;
+          }
+
+          return items.findIndex((item) => item.toLowerCase() === projectPath.toLowerCase()) === index;
+        }),
     }));
 
     if (normalizedModes.length === 0) {
@@ -304,6 +438,7 @@ export function LeftPanel({
     const modeItems = normalizedModes.map((mode) => ({
       name: mode.name,
       originalName: mode.originalName,
+      projectPaths: mode.projectPaths,
     }));
     const nextModeIcons = normalizedModes.reduce<Record<Mode, ModeIcon>>((acc, mode, index) => {
       acc[mode.name] = mode.icon || (index === 0 ? "smart_toy" : "tune");
@@ -486,6 +621,8 @@ export function LeftPanel({
         newModeIcon={newModeIcon}
         modeNameError={modeNameError}
         draftModes={draftModes}
+        newModeProjectPath={newModeProjectPath}
+        newModeProjectPaths={newModeProjectPaths}
         suppressOverlayCloseRef={suppressOverlayCloseRef}
         onClose={closeModeSettings}
         onOverlayClick={handleModeSettingsOverlayClick}
@@ -498,8 +635,16 @@ export function LeftPanel({
         onNewModeIconChange={setNewModeIcon}
         onCreateMode={handleCreateMode}
         onCreateModeOnEnter={handleCreateModeOnEnter}
+        onNewModeProjectPathChange={setNewModeProjectPath}
+        onAddNewModeProjectPath={handleAddNewModeProjectPath}
+        onAddNewModeProjectPathOnEnter={handleAddNewModeProjectPathOnEnter}
+        onPickNewModeProjectPath={handlePickNewModeProjectPath}
+        onRemoveNewModeProjectPath={handleRemoveNewModeProjectPath}
         onDraftModeNameChange={handleDraftModeNameChange}
         onDraftModeIconChange={handleDraftModeIconChange}
+        onAddDraftModeProjectPath={handleAddDraftModeProjectPath}
+        onPickDraftModeProjectPath={handlePickDraftModeProjectPath}
+        onRemoveDraftModeProjectPath={handleRemoveDraftModeProjectPath}
         onMoveDraftMode={handleMoveDraftMode}
         onRemoveDraftMode={handleRemoveDraftMode}
         onResetDraftModes={handleResetDraftModes}

@@ -21,7 +21,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-const MIGRATIONS: [(&str, &str); 9] = [
+const MIGRATIONS: [(&str, &str); 10] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -54,6 +54,10 @@ const MIGRATIONS: [(&str, &str); 9] = [
     (
         "009_app_window_state",
         include_str!("../sql/migrations/009_app_window_state.sql"),
+    ),
+    (
+        "010_operation_mode_project_paths",
+        include_str!("../sql/migrations/010_operation_mode_project_paths.sql"),
     ),
 ];
 
@@ -457,6 +461,7 @@ fn main() {
             commands::operation_mode::save_operation_mode,
             commands::operation_mode::select_operation_mode,
             commands::operation_mode::delete_operation_mode,
+            commands::operation_mode::pick_project_folder,
             commands::operation_mode::load_mode_agents,
             commands::operation_mode::save_mode_agents,
             commands::session::list_chat_sessions,
@@ -470,7 +475,15 @@ fn main() {
             commands::settings::begin_chatgpt_login,
             commands::settings::open_external_url,
             commands::settings::send_chatgpt_message,
-            commands::settings::logout_chatgpt
+            commands::settings::logout_chatgpt,
+            commands::workspace::list_workspace_files,
+            commands::workspace::search_workspace_text,
+            commands::workspace::read_workspace_file,
+            commands::workspace::list_workspace_skills,
+            commands::workspace::load_workspace_skill,
+            commands::workspace::list_workspace_commands,
+            commands::workspace::load_workspace_command,
+            commands::workspace::run_command_line
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

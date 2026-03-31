@@ -87,7 +87,13 @@ export type ResolvedLLMSettings = LLMConfig & {
   accountId?: string;
 };
 
+export type OperationModeItem = {
+  name: string;
+  projectPaths: string[];
+};
+
 export type OperationModeState = {
   modes: string[];
   selectedMode: string;
+  items: OperationModeItem[];
 };

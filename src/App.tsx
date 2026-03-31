@@ -7,6 +7,11 @@ import { RightPanel } from "./components/layout/RightPanel";
 import { TOOLS } from "./data/appData";
 import { useAppController } from "./hooks/useAppController";
 
+const MIN_LEFT_PANEL_WIDTH = 180;
+const MAX_LEFT_PANEL_WIDTH = 420;
+const MIN_RIGHT_PANEL_WIDTH = 220;
+const MAX_RIGHT_PANEL_WIDTH = 420;
+
 export default function App() {
   const bodyGridRef = useRef<HTMLElement | null>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(232);
@@ -25,6 +30,7 @@ export default function App() {
     currentSessionTitle,
     exportChat,
     getModeIcon,
+    getModeProjectPaths,
     handleApprovePlan,
     handleModifyPlan,
     handleSessionDelete,
@@ -74,13 +80,19 @@ export default function App() {
 
       if (isResizingLeftPanel && window.innerWidth > 980) {
         const nextWidth = event.clientX - gridBounds.left;
-        const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
+        const clampedWidth = Math.min(
+          Math.max(nextWidth, MIN_LEFT_PANEL_WIDTH),
+          MAX_LEFT_PANEL_WIDTH,
+        );
         setLeftPanelWidth(clampedWidth);
       }
 
       if (isResizingRightPanel && window.innerWidth > 1280) {
         const nextWidth = gridBounds.right - event.clientX;
-        const clampedWidth = Math.min(Math.max(nextWidth, 0), 420);
+        const clampedWidth = Math.min(
+          Math.max(nextWidth, MIN_RIGHT_PANEL_WIDTH),
+          MAX_RIGHT_PANEL_WIDTH,
+        );
         setRightPanelWidth(clampedWidth);
       }
     };
@@ -136,8 +148,6 @@ export default function App() {
         ref={bodyGridRef}
         className={`body-grid${
           isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""
-        }${leftPanelWidth === 0 ? " is-left-panel-collapsed" : ""}${
-          rightPanelWidth === 0 ? " is-right-panel-collapsed" : ""
         }`}
         style={
           {
@@ -154,6 +164,7 @@ export default function App() {
           onSaveModeSettings={saveOperationModeSettings}
           onSaveAgents={saveAgentsForSelectedMode}
           getModeIcon={getModeIcon}
+          getModeProjectPaths={getModeProjectPaths}
           agents={agents}
           sessionsByMode={sessionsByMode}
           onSessionSelect={handleSessionSelect}

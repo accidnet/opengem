@@ -278,13 +278,25 @@
 
 .mode-settings-item {
   display: grid;
-  grid-template-columns: auto 1.2fr 1fr auto auto auto;
   gap: 8px;
-  align-items: center;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px;
   background: var(--panel-soft);
+}
+
+.mode-settings-item-main {
+  display: grid;
+  grid-template-columns: auto 1.2fr 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.mode-settings-item-folders {
+  display: grid;
+  gap: 10px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .mode-settings-mode-btn {
@@ -326,6 +338,39 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  gap: 14px;
+}
+
+.mode-provider-tabs {
+  display: grid;
+  gap: 8px;
+}
+
+.mode-provider-tab {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--text-soft);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.mode-provider-tab:hover {
+  color: var(--text-main);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.mode-provider-tab.is-active {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.14);
+  color: #e0f2fe;
 }
 
 .mode-provider-main {
@@ -419,6 +464,60 @@
   color: var(--text-soft);
 }
 
+.mode-project-path-section {
+  display: grid;
+  gap: 12px;
+}
+
+.mode-project-path-copy h5 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.mode-project-path-copy p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.mode-project-path-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.mode-project-paths-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mode-project-path-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.22);
+  color: var(--text-soft);
+}
+
+.mode-project-path-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-project-paths-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
 @media (max-width: 840px) {
   .mode-settings-create,
   .agent-settings-create,
@@ -427,9 +526,13 @@
     grid-template-columns: 1fr;
   }
 
-  .mode-settings-item,
+  .mode-settings-item-main,
   .agent-settings-item {
     grid-template-columns: auto 1fr;
+  }
+
+  .mode-project-path-input-row {
+    grid-template-columns: 1fr;
   }
 
   .mode-provider-main {

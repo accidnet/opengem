@@ -46,6 +46,10 @@ import {
   type StartChatgptLoginPayload,
   type SubagentExecutionResult,
 } from "../features/app/appHelpers";
+import {
+  executeRuntimePlan,
+  synthesizeRuntimeResponse,
+} from "../features/runtime/runtimeOrchestrator";
 
 async function openExternalUrl(url: string): Promise<void> {
   await invoke("open_external_url", { url });
@@ -63,6 +67,7 @@ export function useAppController() {
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
   const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
+  const [modeProjectPaths, setModeProjectPaths] = useState<Record<Mode, string[]>>({});
   const [resourceToken, setResourceToken] = useState(2405);
   const [resourceCost, setResourceCost] = useState(0.04);
   const [theme, setTheme] = useState<ThemeMode>("dark");
@@ -207,6 +212,12 @@ export function useAppController() {
 
       setModes(next.modes);
       setSelectedMode(next.selectedMode);
+      setModeProjectPaths(
+        next.items.reduce<Record<Mode, string[]>>((acc, item) => {
+          acc[item.name] = item.projectPaths || [];
+          return acc;
+        }, {})
+      );
 
       try {
         const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
@@ -231,6 +242,7 @@ export function useAppController() {
     } catch {
       setModes([...MODES]);
       setSelectedMode(MODES[0]);
+      setModeProjectPaths({});
       setAgents(normalizeAgentsForUi([...AGENTS]));
       setSessionsByMode({});
     }
@@ -684,6 +696,7 @@ export function useAppController() {
         mainAgent?.prompt ?? undefined,
         resolvedMainModel
       );
+      const projectPaths = modeProjectPaths[selectedMode] || [];
       const activeAgents = agents.filter((agent) => agent.active);
       const availableSubagents = activeAgents.filter(
         (agent) => agent.role !== "main" && agent.name !== mainAgent?.name
@@ -721,54 +734,106 @@ export function useAppController() {
       }
 
       let response: { text: string; usage?: { totalTokens?: number } };
-      const delegationDecision = await decideDelegation(
+      const runtimeResult = await executeRuntimePlan({
         text,
-        requestMessages,
         mainAgent,
-        availableSubagents,
-        activeSettings
-      );
+        requestMessages,
+        activeSettings,
+        projectPaths,
+        onStatus: (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText),
+      });
 
-      if (delegationDecision.shouldDelegate) {
-        updateStreamingStatusMessage(
-          typingMessage.id,
-          `Planning parallel work for ${delegationDecision.tasks.length} specialist agent(s)...`
+      if (runtimeResult) {
+        const runtimeMessageId = `runtime-${Date.now().toString(36)}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`;
+        const runtimeMessage: Message = {
+          id: runtimeMessageId,
+          side: "agent",
+          sender: `${mainAgent?.name ?? "Assistant"} Runtime`,
+          byline: nowTime(),
+          icon: "integration_instructions",
+          iconColor: "#7dd3fc",
+          type: "search",
+          text: "Runtime actions executed.",
+          logs: runtimeResult.logs,
+        };
+
+        appendRuntimeLogMessage(
+          runtimeMessageId,
+          runtimeMessage.sender ?? "Assistant Runtime",
+          runtimeMessage.text ?? "Runtime actions executed.",
+          runtimeResult.logs,
+          runtimeMessage.icon,
+          runtimeMessage.iconColor
         );
-        setActivity((prev) => [
-          ...prev,
-          buildActivity(
-            `${mainAgent?.name ?? "Main agent"} delegated ${delegationDecision.tasks.length} task(s).`,
-            mainAgent?.name ?? "Main agent"
-          ),
-        ]);
+        await persistMessage(session.id, runtimeMessage);
 
-        const subagentResults = await runDelegatedSubagents(
+        updateStreamingStatusMessage(typingMessage.id, "Synthesizing runtime results...");
+        response = await synthesizeRuntimeResponse({
           text,
-          delegationDecision.tasks,
-          availableSubagents,
+          mainAgent,
           requestMessages,
           activeSettings,
-          (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText)
+          runtimeResult,
+          onChunk: (chunk) => {
+            setMessages((prev) => {
+              const current =
+                prev.find((entry) => entry.id === typingMessage.id)?.text ?? "";
+              return appendChunkToMessage(prev, typingMessage.id, `${current}${chunk}`);
+            });
+          },
+        });
+      } else {
+        const delegationDecision = await decideDelegation(
+          text,
+          requestMessages,
+          mainAgent,
+          availableSubagents,
+          activeSettings
         );
 
-        updateStreamingStatusMessage(typingMessage.id, "Synthesizing delegated results...");
-        response = await synthesizeDelegatedResponse(
-          text,
-          typingMessage.id,
-          mainAgent,
-          requestMessages,
-          delegationDecision,
-          subagentResults,
-          activeSettings
-        );
-      } else {
-        updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
-        response = await generateMainAgentResponse(
-          typingMessage.id,
-          requestMessages,
-          mainAgent,
-          activeSettings
-        );
+        if (delegationDecision.shouldDelegate) {
+          updateStreamingStatusMessage(
+            typingMessage.id,
+            `Planning parallel work for ${delegationDecision.tasks.length} specialist agent(s)...`
+          );
+          setActivity((prev) => [
+            ...prev,
+            buildActivity(
+              `${mainAgent?.name ?? "Main agent"} delegated ${delegationDecision.tasks.length} task(s).`,
+              mainAgent?.name ?? "Main agent"
+            ),
+          ]);
+
+          const subagentResults = await runDelegatedSubagents(
+            text,
+            delegationDecision.tasks,
+            availableSubagents,
+            requestMessages,
+            activeSettings,
+            (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText)
+          );
+
+          updateStreamingStatusMessage(typingMessage.id, "Synthesizing delegated results...");
+          response = await synthesizeDelegatedResponse(
+            text,
+            typingMessage.id,
+            mainAgent,
+            requestMessages,
+            delegationDecision,
+            subagentResults,
+            activeSettings
+          );
+        } else {
+          updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
+          response = await generateMainAgentResponse(
+            typingMessage.id,
+            requestMessages,
+            mainAgent,
+            activeSettings
+          );
+        }
       }
 
       const assistantMessage: Message = {
@@ -833,6 +898,30 @@ export function useAppController() {
         side: "status",
         type: "status",
         statusText: text,
+      },
+    ]);
+  };
+
+  const appendRuntimeLogMessage = (
+    id: string,
+    sender: string,
+    text: string,
+    logs: string[],
+    icon = "integration_instructions",
+    iconColor = "#7dd3fc"
+  ) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id,
+        side: "agent",
+        sender,
+        byline: nowTime(),
+        icon,
+        iconColor,
+        type: "search",
+        text,
+        logs,
       },
     ]);
   };
@@ -917,11 +1006,17 @@ export function useAppController() {
   ) => {
     const previousModes = modes;
     const previousModeIcons = modeIcons;
+    const previousModeProjectPaths = modeProjectPaths;
     const previousSelectedMode = selectedMode;
     const previousAgents = agents;
+    const nextModeProjectPaths = modeItems.reduce<Record<Mode, string[]>>((acc, mode) => {
+      acc[mode.name] = mode.projectPaths || [];
+      return acc;
+    }, {});
 
     setModes(nextModes);
     setModeIcons(nextModeIcons);
+    setModeProjectPaths(nextModeProjectPaths);
     setSelectedMode(nextSelectedMode);
 
     try {
@@ -931,6 +1026,7 @@ export function useAppController() {
     } catch {
       setModes(previousModes);
       setModeIcons(previousModeIcons);
+      setModeProjectPaths(previousModeProjectPaths);
       setSelectedMode(previousSelectedMode);
       setAgents(previousAgents);
       void loadOperationModes();
@@ -939,6 +1035,10 @@ export function useAppController() {
 
   const getModeIcon = (mode: Mode): ModeIcon => {
     return modeIcons[mode] || MODE_ICON_OPTIONS[2];
+  };
+
+  const getModeProjectPaths = (mode: Mode) => {
+    return modeProjectPaths[mode] || [];
   };
 
   const saveAgentsForSelectedMode = async (nextAgents: AgentItem[]) => {
@@ -1072,6 +1172,7 @@ export function useAppController() {
     currentSessionTitle,
     exportChat,
     getModeIcon,
+    getModeProjectPaths,
     handleApprovePlan,
     handleModifyPlan,
     handleSessionDelete,

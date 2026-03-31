@@ -7,6 +7,7 @@ export type StartChatgptLoginPayload = {
 export type OperationModeInput = {
   name: string;
   originalName?: string;
+  projectPaths?: string[];
 };
 
 export type PersistedAgent = Omit<AgentItem, "status">;

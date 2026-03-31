@@ -1,3 +1,3 @@
-SELECT mode_name, is_selected
+SELECT mode_name, is_selected, project_paths
 FROM operation_modes
 ORDER BY display_order ASC, id ASC;
