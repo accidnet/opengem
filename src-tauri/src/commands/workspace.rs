@@ -10,6 +10,9 @@ const DEFAULT_FILE_LIMIT: usize = 200;
 const DEFAULT_MATCH_LIMIT: usize = 50;
 const MAX_FILE_SIZE_BYTES: usize = 256 * 1024;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileMatchPayload {
@@ -49,6 +52,7 @@ pub struct WorkspaceDocumentPayload {
 pub struct CommandLineResultPayload {
     command: String,
     cwd: String,
+    shell: String,
     exit_code: Option<i32>,
     stdout: String,
     stderr: String,
@@ -261,19 +265,17 @@ pub fn run_command_line(input: RunCommandLineInput) -> Result<CommandLineResultP
         None => std::env::current_dir().map_err(|error| error.to_string())?,
     };
 
-    let output = if cfg!(target_os = "windows") {
-        Command::new("powershell")
-            .args(["-NoProfile", "-Command", &command])
-            .current_dir(&cwd)
-            .output()
-            .map_err(|error| error.to_string())?
-    } else {
-        Command::new("sh")
-            .args(["-lc", &command])
-            .current_dir(&cwd)
-            .output()
-            .map_err(|error| error.to_string())?
-    };
+    let (shell, args) = resolve_shell_command(&command);
+    let mut process = Command::new(&shell);
+    process.args(args).current_dir(&cwd);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        process.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = process.output().map_err(|error| error.to_string())?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -287,12 +289,91 @@ pub fn run_command_line(input: RunCommandLineInput) -> Result<CommandLineResultP
     Ok(CommandLineResultPayload {
         command,
         cwd: cwd.to_string_lossy().to_string(),
+        shell,
         exit_code: output.status.code(),
         stdout,
         stderr,
         combined_output,
         success: output.status.success(),
     })
+}
+
+fn resolve_shell_command(command: &str) -> (String, Vec<String>) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(shell) = find_windows_shell() {
+            let lower = shell.to_ascii_lowercase();
+            if lower.ends_with("pwsh.exe") || lower == "pwsh" || lower.ends_with("powershell.exe") {
+                return (
+                    shell,
+                    vec![
+                        "-NoProfile".to_string(),
+                        "-NonInteractive".to_string(),
+                        "-Command".to_string(),
+                        command.to_string(),
+                    ],
+                );
+            }
+
+            return (
+                shell,
+                vec!["/d".to_string(), "/c".to_string(), command.to_string()],
+            );
+        }
+
+        return (
+            "cmd.exe".to_string(),
+            vec!["/d".to_string(), "/c".to_string(), command.to_string()],
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        (
+            "sh".to_string(),
+            vec!["-lc".to_string(), command.to_string()],
+        )
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn find_windows_shell() -> Option<String> {
+    let candidates = [
+        "pwsh.exe",
+        "pwsh",
+        "powershell.exe",
+        "powershell",
+        &std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string()),
+    ];
+
+    for candidate in candidates {
+        let path = PathBuf::from(candidate);
+        if path.components().count() > 1 {
+            if path.exists() {
+                return Some(path.to_string_lossy().to_string());
+            }
+            continue;
+        }
+
+        if let Some(resolved) = find_in_path(candidate) {
+            return Some(resolved);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn find_in_path(executable: &str) -> Option<String> {
+    let path_var = std::env::var_os("PATH")?;
+    for directory in std::env::split_paths(&path_var) {
+        let candidate = directory.join(executable);
+        if candidate.exists() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+
+    None
 }
 
 struct ParsedWorkspaceDocument {

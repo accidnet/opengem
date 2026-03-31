@@ -34,6 +34,7 @@ type WorkspaceCommandSummary = {
 type CommandLineResult = {
   command: string;
   cwd: string;
+  shell: string;
   exitCode: number | null;
   stdout: string;
   stderr: string;
@@ -586,7 +587,7 @@ async function executeShellAction(action: Extract<RuntimeAction, { type: "shell"
     logs: [
       {
         title: `shell: ${action.command}`,
-        detail: `exit=${result.exitCode ?? "unknown"} cwd=${result.cwd}`,
+        detail: `shell=${result.shell} exit=${result.exitCode ?? "unknown"} cwd=${result.cwd}`,
       },
     ],
     artifacts: [
