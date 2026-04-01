@@ -222,8 +222,10 @@ export function useAppController() {
   };
 
   const loadOperationModes = async () => {
+    let next: OperationModeState | null = null;
+
     try {
-      const next = await invoke<OperationModeState>("load_operation_mode");
+      next = await invoke<OperationModeState>("load_operation_mode");
       if (next.modes.length === 0) {
         return;
       }
@@ -243,15 +245,6 @@ export function useAppController() {
         }, {})
       );
 
-      try {
-        const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
-          modeName: next.selectedMode,
-        });
-        setAgents(normalizeAgentsForUi(nextAgents));
-      } catch {
-        setAgents(normalizeAgentsForUi([...AGENTS]));
-      }
-
       setModeIcons((prev) => {
         const nextIcons = { ...prev };
         next.modes.forEach((mode, index) => {
@@ -261,8 +254,6 @@ export function useAppController() {
         });
         return nextIcons;
       });
-
-      await syncModeSessions(next.selectedMode, next.modes, null);
     } catch {
       setModes([...MODES]);
       setSelectedMode(MODES[0]);
@@ -270,6 +261,23 @@ export function useAppController() {
       setModeDefaultModels({});
       setAgents(normalizeAgentsForUi([...AGENTS]));
       setSessionsByMode({});
+      return;
+    }
+
+    try {
+      const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
+        modeName: next.selectedMode,
+      });
+      setAgents(normalizeAgentsForUi(nextAgents));
+    } catch {
+      setAgents(normalizeAgentsForUi([...AGENTS]));
+    }
+
+    try {
+      await syncModeSessions(next.selectedMode, next.modes, null);
+    } catch {
+      resetCurrentSession();
+      void refreshSessions(next.modes, null);
     }
   };
 
