@@ -229,6 +229,10 @@ export function useAppController() {
     );
   };
 
+  const moveMessageToBottom = (messageId: string, nextMessage: Message) => {
+    setMessages((prev) => [...prev.filter((entry) => entry.id !== messageId), nextMessage]);
+  };
+
   const updateStreamingStatusMessage = (
     messageId: string,
     nextText: string,
@@ -710,6 +714,7 @@ export function useAppController() {
       mainAgent?.icon,
       mainAgent?.color ? (AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac") : undefined
     );
+    let activeAssistantMessage = typingMessage;
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
     setInputValue("");
@@ -908,9 +913,16 @@ export function useAppController() {
         }
 
         updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
+        activeAssistantMessage = {
+          ...typingMessage,
+          id: `assistant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          type: "text",
+          text: "",
+        };
+        moveMessageToBottom(typingMessage.id, activeAssistantMessage);
         response = await synthesizeMainAgentResponse(
           text,
-          typingMessage.id,
+          activeAssistantMessage.id,
           requestMessages,
           mainAgent,
           activeSettings,
@@ -920,14 +932,14 @@ export function useAppController() {
         break;
       }
 
-      const assistantMessage: Message = {
-        ...typingMessage,
-        type: "text",
-        text: response.text,
-      };
+        const assistantMessage: Message = {
+          ...activeAssistantMessage,
+          type: "text",
+          text: response.text,
+        };
 
-      replaceTypingMessage(typingMessage.id, assistantMessage);
-      await persistMessage(session.id, assistantMessage);
+        replaceTypingMessage(activeAssistantMessage.id, assistantMessage);
+        await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
 
       const totalTokens = response.usage?.totalTokens;
@@ -947,14 +959,14 @@ export function useAppController() {
         ...prev,
         buildActivity(`Agent response completed.${usageText}`.trim(), mainAgent?.name ?? "Assistant"),
       ]);
-    } catch (error) {
-      const reason = getErrorMessage(error);
-      const errorMessage: Message = {
-        ...typingMessage,
-        type: "text",
-        text: `Request failed: ${reason}`,
-      };
-      replaceTypingMessage(typingMessage.id, errorMessage);
+      } catch (error) {
+        const reason = getErrorMessage(error);
+        const errorMessage: Message = {
+          ...activeAssistantMessage,
+          type: "text",
+          text: `Request failed: ${reason}`,
+        };
+        replaceTypingMessage(activeAssistantMessage.id, errorMessage);
 
       if (activeSessionId) {
         try {

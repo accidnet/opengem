@@ -36,7 +36,10 @@ export function ChatPanel({
   onModifyPlan,
 }: ChatPanelProps) {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatContentRef = useRef<HTMLDivElement | null>(null);
   const projectPanelRef = useRef<HTMLDivElement | null>(null);
+  const shouldFollowStreamRef = useRef(true);
+  const lastTypingMessageIdRef = useRef<string | null>(null);
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
   const [projectPathInput, setProjectPathInput] = useState("");
   const [editingPath, setEditingPath] = useState<string | null>(null);
@@ -45,9 +48,29 @@ export function ChatPanel({
   const projectPaths = currentSessionId ? currentSessionProjectPaths : defaultProjectPaths;
   const hasConnectedProjects = projectPaths.length > 0;
 
-  useEffect(() => {
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+      chatEndRef.current.scrollIntoView({ behavior });
+    }
+  };
+
+  useEffect(() => {
+    const latestTypingMessage = [...messages].reverse().find((message) => message.type === "typing");
+    const latestTypingMessageId = latestTypingMessage?.id ?? null;
+
+    if (latestTypingMessageId && latestTypingMessageId !== lastTypingMessageIdRef.current) {
+      lastTypingMessageIdRef.current = latestTypingMessageId;
+      shouldFollowStreamRef.current = true;
+      scrollToBottom("smooth");
+      return;
+    }
+
+    if (!latestTypingMessageId) {
+      lastTypingMessageIdRef.current = null;
+    }
+
+    if (shouldFollowStreamRef.current) {
+      scrollToBottom();
     }
   }, [messages]);
 
@@ -134,10 +157,20 @@ export function ChatPanel({
     setProjectError("");
   };
 
+  const handleChatViewportInteraction = () => {
+    shouldFollowStreamRef.current = false;
+  };
+
   return (
     <section className="chat-panel">
       <div className="chat-scroll">
-        <div className="chat-content">
+        <div
+          ref={chatContentRef}
+          className="chat-content"
+          onMouseDown={handleChatViewportInteraction}
+          onWheel={handleChatViewportInteraction}
+          onTouchStart={handleChatViewportInteraction}
+        >
           {messages.length === 0 && (
             <div className="chat-empty-state" aria-live="polite">
               <span className="material-symbols-outlined" aria-hidden="true">

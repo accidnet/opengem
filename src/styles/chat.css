@@ -112,6 +112,11 @@
   background: var(--message-bubble-bg);
 }
 
+.runtime-bubble {
+  padding: 0;
+  overflow: hidden;
+}
+
 .user-bubble {
   max-width: min(85%, 640px);
   border-color: rgba(255, 255, 255, 0.08);
@@ -256,11 +261,66 @@
 }
 
 .tool-log-box {
-  margin-top: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--tool-log-bg);
   overflow: hidden;
+}
+
+.runtime-summary {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.runtime-summary::-webkit-details-marker {
+  display: none;
+}
+
+.runtime-summary-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.runtime-meta {
+  margin-bottom: 8px;
+}
+
+.runtime-summary-text {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.runtime-summary-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.runtime-log-count {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.runtime-caret {
+  font-size: 18px;
+  transition: transform 180ms ease;
+}
+
+.runtime-bubble[open] .runtime-caret {
+  transform: rotate(180deg);
+}
+
+.runtime-disclosure-body {
+  padding: 0 14px 14px;
 }
 
 .tool-log-title {

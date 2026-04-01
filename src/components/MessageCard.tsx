@@ -10,6 +10,7 @@ type MessageCardProps = {
 export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCardProps) {
   const text = typeof message.text === "string" ? message.text : "";
   const bubbleText = text.trim();
+  const logs = Array.isArray(message.logs) ? message.logs : [];
 
   if (message.type === "status") {
     if (!message.statusText || !String(message.statusText).trim()) {
@@ -47,7 +48,56 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
   const classes = ["message-row", "agent", message.type === "typing" ? "typing" : ""].filter(
     Boolean
   );
-  const logs = Array.isArray(message.logs) ? message.logs : [];
+
+  if (message.type === "search") {
+    return (
+      <div className={classes.join(" ")} key={message.id}>
+        <div
+          className="message-avatar avatar-agent"
+          style={{ color: message.iconColor || "#94a3b8" }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+            {message.icon}
+          </span>
+        </div>
+        <details className="message-bubble runtime-bubble">
+          <summary className="runtime-summary">
+            <div className="runtime-summary-main">
+              <div className="bubble-meta runtime-meta">
+                <span className="bubble-name" style={{ color: message.iconColor || "#a5b4fc" }}>
+                  {message.sender}
+                </span>
+                {message.byline ? <span className="bubble-time">{message.byline}</span> : null}
+              </div>
+              <p className="runtime-summary-text">{bubbleText || "Runtime actions executed."}</p>
+            </div>
+            <div className="runtime-summary-side">
+              <span className="runtime-log-count">{logs.length} log lines</span>
+              <span className="material-symbols-outlined runtime-caret" aria-hidden="true">
+                expand_more
+              </span>
+            </div>
+          </summary>
+          <div className="runtime-disclosure-body">
+            <div className="tool-log-box">
+              <div className="tool-log-title">
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "14px", color: "#94a3b8" }}
+                >
+                  terminal
+                </span>
+                <span>tool_execution.log</span>
+              </div>
+              <div className="tool-log-body">
+                <pre>{logs.map((line) => `${line}\n`).join("")}</pre>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <div className={classes.join(" ")} key={message.id}>
