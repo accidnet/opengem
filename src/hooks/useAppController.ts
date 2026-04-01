@@ -40,7 +40,6 @@ import {
   normalizeAgentsForUi,
   normalizePriority,
   parseJsonObject,
-  type DelegationDecision,
   type DelegationTask,
   type OperationModeInput,
   type PersistedAgent,
@@ -49,12 +48,26 @@ import {
 } from "../features/app/appHelpers";
 import {
   executeRuntimePlan,
-  synthesizeRuntimeResponse,
 } from "../features/runtime/runtimeOrchestrator";
 
 async function openExternalUrl(url: string): Promise<void> {
   await invoke("open_external_url", { url });
 }
+
+type OrchestrationAction = "runtime" | "delegate" | "final";
+
+type OrchestrationDecision = {
+  action: OrchestrationAction;
+  reasoning?: string;
+  finalInstruction?: string;
+  tasks?: DelegationTask[];
+};
+
+type OrchestrationNote = {
+  kind: "runtime" | "delegation";
+  title: string;
+  content: string;
+};
 
 export function useAppController() {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
@@ -369,50 +382,74 @@ export function useAppController() {
     return parts.join("\n");
   };
 
-  const decideDelegation = async (
+  const buildOrchestrationNotesText = (notes: OrchestrationNote[]) => {
+    if (notes.length === 0) {
+      return "No internal notes yet.";
+    }
+
+    return notes
+      .map((note, index) => [`[${index + 1}] ${note.kind}: ${note.title}`, note.content].join("\n"))
+      .join("\n\n");
+  };
+
+  const buildWorkingRequestText = (text: string, notes: OrchestrationNote[]) => {
+    if (notes.length === 0) {
+      return text;
+    }
+
+    return [
+      text,
+      "",
+      "Internal working notes gathered so far:",
+      buildOrchestrationNotesText(notes),
+    ].join("\n");
+  };
+
+  const decideMainAgentNextStep = async (
     text: string,
     requestMessages: ReturnType<typeof buildLLMMessages>,
     mainAgent: AgentItem,
     availableSubagents: AgentItem[],
-    activeSettings: ResolvedLLMSettings
-  ): Promise<DelegationDecision> => {
-    if (availableSubagents.length === 0) {
-      return {
-        shouldDelegate: false,
-        tasks: [],
-      };
-    }
+    activeSettings: ResolvedLLMSettings,
+    projectPaths: string[],
+    notes: OrchestrationNote[],
+    iteration: number,
+    maxIterations: number
+  ): Promise<OrchestrationDecision> => {
+    const subagentText =
+      availableSubagents.length > 0
+        ? availableSubagents.map(buildAgentCapabilitySummary).join("\n\n")
+        : "- none";
+    const projectPathText = projectPaths.length > 0 ? projectPaths.join("\n") : "- none";
 
     const routingPrompt = [
       "You are the main orchestration agent.",
-      "Decide whether the latest user request should be delegated to one or more registered subagents.",
-      "Delegate only when specialist parallel work would materially improve quality, speed, or coverage.",
-      "Prefer no delegation for simple requests that can be answered directly.",
-      "Return strict JSON only.",
-      'Schema: {"shouldDelegate": boolean, "reasoning": string, "tasks": [{"agentName": string, "goal": string, "deliverable": string, "priority": "high"|"medium"|"low"}]}',
-      "Do not use markdown fences.",
+      "Choose exactly one next action for this iteration.",
+      "Available actions:",
+      '- "runtime": inspect the workspace or execute local runtime actions',
+      '- "delegate": assign specialist work to one or more subagents',
+      '- "final": stop iterating and prepare the final user-facing answer',
+      "",
+      "Rules:",
+      "- Prefer runtime when codebase inspection, file reads, search, or shell execution is needed.",
+      "- Prefer delegate when specialist parallel work is useful.",
+      "- Prefer final when enough evidence has been gathered.",
+      "- Return strict JSON only.",
+      "",
+      "Schema:",
+      '{"action":"runtime|delegate|final","reasoning":"string","finalInstruction":"string optional","tasks":[{"agentName":"string","goal":"string","deliverable":"string","priority":"high|medium|low"}]}',
+      "",
+      `Iteration: ${iteration + 1}/${maxIterations}`,
+      `Project paths:\n${projectPathText}`,
       "",
       "Available subagents:",
-      availableSubagents.map(buildAgentCapabilitySummary).join("\n\n"),
+      subagentText,
+      "",
+      "Internal notes gathered so far:",
+      buildOrchestrationNotesText(notes),
       "",
       `Latest user request:\n${text}`,
     ].join("\n");
-
-    const routingMessages = [
-      {
-        role: "system" as const,
-        content: composeAgentSystemPrompt(
-          mainAgent.model?.trim() || activeSettings.model,
-          mainAgent.prompt,
-          "You are currently acting as a task router for specialist subagents."
-        ),
-      },
-      ...requestMessages.slice(1),
-      {
-        role: "user" as const,
-        content: routingPrompt,
-      },
-    ];
 
     const routingResponse = await sendToLLM({
       providerId: activeSettings.providerId,
@@ -422,20 +459,34 @@ export function useAppController() {
       accessToken: activeSettings.accessToken,
       accountId: activeSettings.accountId,
       model: mainAgent.model?.trim() || activeSettings.model,
-      messages: routingMessages,
+      messages: [
+        {
+          role: "system",
+          content: composeAgentSystemPrompt(
+            mainAgent.model?.trim() || activeSettings.model,
+            mainAgent.prompt,
+            "You are deciding the next orchestration action. Return JSON only."
+          ),
+        },
+        ...requestMessages.slice(1),
+        {
+          role: "user",
+          content: routingPrompt,
+        },
+      ],
       stream: false,
     });
 
-    const parsed = parseJsonObject<DelegationDecision>(routingResponse.text);
+    const parsed = parseJsonObject<OrchestrationDecision>(routingResponse.text);
     if (!parsed) {
       return {
-        shouldDelegate: false,
-        tasks: [],
+        action: "final",
+        reasoning: "Failed to parse orchestration decision JSON.",
       };
     }
 
     const allowedNames = new Set(availableSubagents.map((agent) => agent.name));
-    const tasks = Array.isArray(parsed.tasks)
+    const normalizedTasks = Array.isArray(parsed.tasks)
       ? parsed.tasks
           .filter((task) => task && allowedNames.has(task.agentName))
           .map((task) => ({
@@ -446,10 +497,32 @@ export function useAppController() {
           }))
       : [];
 
+    const action: OrchestrationAction =
+      parsed.action === "runtime" || parsed.action === "delegate" || parsed.action === "final"
+        ? parsed.action
+        : "final";
+
+    if (action === "delegate" && normalizedTasks.length === 0) {
+      return {
+        action: "final",
+        reasoning: parsed.reasoning || "No valid subagent tasks were provided.",
+        finalInstruction: parsed.finalInstruction,
+      };
+    }
+
+    if (action === "runtime" && projectPaths.length === 0) {
+      return {
+        action: "final",
+        reasoning: parsed.reasoning || "Runtime was requested without a project path.",
+        finalInstruction: parsed.finalInstruction,
+      };
+    }
+
     return {
-      shouldDelegate: Boolean(parsed.shouldDelegate) && tasks.length > 0,
+      action,
       reasoning: parsed.reasoning,
-      tasks,
+      finalInstruction: parsed.finalInstruction,
+      tasks: normalizedTasks,
     };
   };
 
@@ -459,6 +532,7 @@ export function useAppController() {
     availableSubagents: AgentItem[],
     requestMessages: ReturnType<typeof buildLLMMessages>,
     activeSettings: ResolvedLLMSettings,
+    notes: OrchestrationNote[],
     onStatus?: (statusText: string) => void
   ): Promise<SubagentExecutionResult[]> => {
     const subagentsByName = new Map(availableSubagents.map((agent) => [agent.name, agent]));
@@ -486,6 +560,9 @@ export function useAppController() {
           "Return concise, high-signal findings for the main agent to synthesize.",
           `Assigned goal: ${task.goal}`,
           `Required deliverable: ${task.deliverable}`,
+          "",
+          "Existing internal notes from prior iterations:",
+          buildOrchestrationNotesText(notes),
           "",
           "Recent conversation context:",
           requestMessages
@@ -557,7 +634,7 @@ export function useAppController() {
     typingMessageId: string,
     mainAgent: AgentItem,
     requestMessages: ReturnType<typeof buildLLMMessages>,
-    delegationDecision: DelegationDecision,
+    delegationReasoning: string | undefined,
     subagentResults: SubagentExecutionResult[],
     activeSettings: ResolvedLLMSettings
   ) => {
@@ -569,7 +646,7 @@ export function useAppController() {
       "",
       `Latest user request:\n${text}`,
       "",
-      `Routing reasoning:\n${delegationDecision.reasoning || "No reasoning provided."}`,
+      `Routing reasoning:\n${delegationReasoning || "No reasoning provided."}`,
       "",
       "Subagent results:",
       subagentResults
@@ -621,6 +698,8 @@ export function useAppController() {
     };
   };
 
+  void synthesizeDelegatedResponse;
+
   const generateMainAgentResponse = async (
     typingMessageId: string,
     requestMessages: ReturnType<typeof buildLLMMessages>,
@@ -640,6 +719,73 @@ export function useAppController() {
           ? activeSettings.model
           : mainAgent.model?.trim() || activeSettings.model,
       messages: requestMessages,
+      stream: true,
+      onChunk: (chunk) => {
+        streamedText += chunk;
+        setMessages((prev) => appendChunkToMessage(prev, typingMessageId, streamedText));
+      },
+    });
+
+    return {
+      text: response.text || streamedText || "(응답이 비어 있습니다.)",
+      usage: response.usage,
+    };
+  };
+
+  const synthesizeMainAgentResponse = async (
+    text: string,
+    typingMessageId: string,
+    requestMessages: ReturnType<typeof buildLLMMessages>,
+    mainAgent: AgentItem,
+    activeSettings: ResolvedLLMSettings,
+    notes: OrchestrationNote[],
+    finalInstruction?: string
+  ) => {
+    if (notes.length === 0 && !finalInstruction?.trim()) {
+      return generateMainAgentResponse(typingMessageId, requestMessages, mainAgent, activeSettings);
+    }
+
+    let streamedText = "";
+    const synthesisInput = [
+      "You are the main agent responding to the user.",
+      "The following internal orchestration notes are not user-facing.",
+      "Use them as working context and produce the final answer.",
+      finalInstruction?.trim() ? `Final instruction:\n${finalInstruction.trim()}` : null,
+      "",
+      `Latest user request:\n${text}`,
+      "",
+      "Internal notes:",
+      buildOrchestrationNotesText(notes),
+    ]
+      .filter((value) => value !== null)
+      .join("\n");
+
+    const response = await sendToLLM({
+      providerId: activeSettings.providerId,
+      providerKind: activeSettings.providerKind,
+      apiBaseUrl: activeSettings.baseUrl,
+      apiKey: activeSettings.apiKey,
+      accessToken: activeSettings.accessToken,
+      accountId: activeSettings.accountId,
+      model:
+        activeSettings.providerKind === "chatgpt_oauth"
+          ? activeSettings.model
+          : mainAgent.model?.trim() || activeSettings.model,
+      messages: [
+        {
+          role: "system",
+          content: composeAgentSystemPrompt(
+            mainAgent.model?.trim() || activeSettings.model,
+            mainAgent.prompt,
+            "You are synthesizing internal orchestration notes into a final user-facing answer."
+          ),
+        },
+        ...requestMessages.slice(1),
+        {
+          role: "user",
+          content: synthesisInput,
+        },
+      ],
       stream: true,
       onChunk: (chunk) => {
         streamedText += chunk;
@@ -749,106 +895,150 @@ export function useAppController() {
       }
 
       let response: { text: string; usage?: { totalTokens?: number } };
-      const runtimeResult = await executeRuntimePlan({
-        text,
-        mainAgent,
-        requestMessages,
-        activeSettings,
-        projectPaths,
-        onStatus: (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText),
-      });
+      const orchestrationNotes: OrchestrationNote[] = [];
+      const maxOrchestrationIterations = 4;
 
-      if (runtimeResult) {
-        const runtimeMessageId = `runtime-${Date.now().toString(36)}-${Math.random()
-          .toString(36)
-          .slice(2, 6)}`;
-        const runtimeMessage: Message = {
-          id: runtimeMessageId,
-          side: "agent",
-          sender: `${mainAgent?.name ?? "Assistant"} Runtime`,
-          byline: nowTime(),
-          icon: "integration_instructions",
-          iconColor: "#7dd3fc",
-          type: "search",
-          text: "Runtime actions executed.",
-          logs: runtimeResult.logs,
-        };
-
-        appendRuntimeLogMessage(
-          runtimeMessageId,
-          runtimeMessage.sender ?? "Assistant Runtime",
-          runtimeMessage.text ?? "Runtime actions executed.",
-          runtimeResult.logs,
-          runtimeMessage.icon,
-          runtimeMessage.iconColor
-        );
-        await persistMessage(session.id, runtimeMessage);
-
-        updateStreamingStatusMessage(typingMessage.id, "Synthesizing runtime results...");
-        response = await synthesizeRuntimeResponse({
-          text,
-          mainAgent,
-          requestMessages,
-          activeSettings,
-          runtimeResult,
-          onChunk: (chunk) => {
-            setMessages((prev) => {
-              const current =
-                prev.find((entry) => entry.id === typingMessage.id)?.text ?? "";
-              return appendChunkToMessage(prev, typingMessage.id, `${current}${chunk}`);
-            });
-          },
-        });
-      } else {
-        const delegationDecision = await decideDelegation(
+      while (true) {
+        const orchestrationDecision = await decideMainAgentNextStep(
           text,
           requestMessages,
           mainAgent,
           availableSubagents,
-          activeSettings
+          activeSettings,
+          projectPaths,
+          orchestrationNotes,
+          orchestrationNotes.length,
+          maxOrchestrationIterations
         );
 
-        if (delegationDecision.shouldDelegate) {
+        const shouldContinue =
+          orchestrationDecision.action !== "final" &&
+          orchestrationNotes.length < maxOrchestrationIterations - 1;
+
+        if (orchestrationDecision.action === "runtime" && shouldContinue) {
+          updateStreamingStatusMessage(typingMessage.id, "Running runtime investigation...");
+          const runtimeResult = await executeRuntimePlan({
+            text: buildWorkingRequestText(text, orchestrationNotes),
+            mainAgent,
+            requestMessages,
+            activeSettings,
+            projectPaths,
+            onStatus: (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText),
+          });
+
+          if (!runtimeResult) {
+            orchestrationNotes.push({
+              kind: "runtime",
+              title: "Runtime planner skipped execution",
+              content: orchestrationDecision.reasoning || "Runtime produced no executable plan.",
+            });
+          } else {
+            const runtimeMessageId = `runtime-${Date.now().toString(36)}-${Math.random()
+              .toString(36)
+              .slice(2, 6)}`;
+            const runtimeMessage: Message = {
+              id: runtimeMessageId,
+              side: "agent",
+              sender: `${mainAgent?.name ?? "Assistant"} Runtime`,
+              byline: nowTime(),
+              icon: "integration_instructions",
+              iconColor: "#7dd3fc",
+              type: "search",
+              text: "Runtime actions executed.",
+              logs: runtimeResult.logs,
+            };
+
+            appendRuntimeLogMessage(
+              runtimeMessageId,
+              runtimeMessage.sender ?? "Assistant Runtime",
+              runtimeMessage.text ?? "Runtime actions executed.",
+              runtimeResult.logs,
+              runtimeMessage.icon,
+              runtimeMessage.iconColor
+            );
+            await persistMessage(session.id, runtimeMessage);
+
+            orchestrationNotes.push({
+              kind: "runtime",
+              title: runtimeResult.plan.summary?.trim() || "Runtime execution",
+              content: [
+                orchestrationDecision.reasoning
+                  ? `Decision reasoning: ${orchestrationDecision.reasoning}`
+                  : null,
+                "Logs:",
+                runtimeResult.logs.join("\n") || "No logs.",
+                "",
+                "Artifacts:",
+                runtimeResult.artifacts
+                  .map((artifact) => `[${artifact.kind}] ${artifact.title}\n${artifact.content}`)
+                  .join("\n\n") || "No artifacts.",
+              ]
+                .filter((value) => value !== null)
+                .join("\n"),
+            });
+          }
+
+          continue;
+        }
+
+        if (
+          orchestrationDecision.action === "delegate" &&
+          shouldContinue &&
+          Array.isArray(orchestrationDecision.tasks) &&
+          orchestrationDecision.tasks.length > 0
+        ) {
           updateStreamingStatusMessage(
             typingMessage.id,
-            `Planning parallel work for ${delegationDecision.tasks.length} specialist agent(s)...`
+            `Planning parallel work for ${orchestrationDecision.tasks.length} specialist agent(s)...`
           );
           setActivity((prev) => [
             ...prev,
             buildActivity(
-              `${mainAgent?.name ?? "Main agent"} delegated ${delegationDecision.tasks.length} task(s).`,
+              `${mainAgent?.name ?? "Main agent"} delegated ${orchestrationDecision.tasks.length} task(s).`,
               mainAgent?.name ?? "Main agent"
             ),
           ]);
 
           const subagentResults = await runDelegatedSubagents(
             text,
-            delegationDecision.tasks,
+            orchestrationDecision.tasks,
             availableSubagents,
             requestMessages,
             activeSettings,
+            orchestrationNotes,
             (statusText) => updateStreamingStatusMessage(typingMessage.id, statusText)
           );
 
-          updateStreamingStatusMessage(typingMessage.id, "Synthesizing delegated results...");
-          response = await synthesizeDelegatedResponse(
-            text,
-            typingMessage.id,
-            mainAgent,
-            requestMessages,
-            delegationDecision,
-            subagentResults,
-            activeSettings
-          );
-        } else {
-          updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
-          response = await generateMainAgentResponse(
-            typingMessage.id,
-            requestMessages,
-            mainAgent,
-            activeSettings
-          );
+          orchestrationNotes.push({
+            kind: "delegation",
+            title: orchestrationDecision.reasoning?.trim() || "Delegated specialist work",
+            content: subagentResults
+              .map((result) =>
+                [
+                  `Agent: ${result.agentName}`,
+                  `Status: ${result.status}`,
+                  `Priority: ${result.priority}`,
+                  `Deliverable: ${result.deliverable}`,
+                  `Output:\n${result.summary}`,
+                ].join("\n")
+              )
+              .join("\n\n"),
+          });
+
+          continue;
         }
+
+        updateStreamingStatusMessage(typingMessage.id, "Streaming response...");
+        response = await synthesizeMainAgentResponse(
+          text,
+          typingMessage.id,
+          requestMessages,
+          mainAgent,
+          activeSettings,
+          orchestrationNotes,
+          orchestrationDecision.finalInstruction
+        );
+        break;
       }
 
       const assistantMessage: Message = {
@@ -1079,9 +1269,12 @@ export function useAppController() {
   const saveAgentsForSelectedMode = async (nextAgents: AgentItem[]) => {
     const previousAgents = agents;
     const normalizedAgents = normalizeAgentsForUi(
-      nextAgents.map(({ status: _status, ...agent }) => ({
-        ...agent,
-      }))
+      nextAgents.map(({ status: _status, ...agent }) => {
+        void _status;
+        return {
+          ...agent,
+        };
+      })
     );
 
     setAgents(normalizedAgents);
@@ -1089,7 +1282,10 @@ export function useAppController() {
     try {
       await invoke("save_mode_agents", {
         modeName: selectedMode,
-        agents: normalizedAgents.map(({ status: _status, ...agent }) => agent),
+        agents: normalizedAgents.map(({ status: _status, ...agent }) => {
+          void _status;
+          return agent;
+        }),
       });
     } catch {
       setAgents(previousAgents);
