@@ -7,7 +7,6 @@ import {
   DEFAULT_MODE_ICONS,
   INITIAL_ACTIVITY,
   LLM_CONFIG,
-  MODE_ICON_OPTIONS,
   MODES,
   SESSION_MESSAGES,
   composeAgentSystemPrompt,
@@ -29,9 +28,7 @@ import type {
   AgentItem,
   LLMSettings,
   Message,
-  OperationModeState,
   ResolvedLLMSettings,
-  SessionDetail,
   SessionItem,
   ThemeMode,
 } from "../types/chat";
@@ -41,18 +38,13 @@ import {
   normalizePriority,
   parseJsonObject,
   type DelegationTask,
-  type OperationModeInput,
-  type PersistedAgent,
-  type StartChatgptLoginPayload,
   type SubagentExecutionResult,
 } from "../features/app/appHelpers";
+import { createProviderSettingsController } from "./useAppController/providerSettingsController";
+import { createSessionModeController } from "./useAppController/sessionModeController";
 import {
   executeRuntimePlan,
 } from "../features/runtime/runtimeOrchestrator";
-
-async function openExternalUrl(url: string): Promise<void> {
-  await invoke("open_external_url", { url });
-}
 
 type OrchestrationAction = "runtime" | "delegate" | "final";
 
@@ -124,56 +116,6 @@ export function useAppController() {
     return Math.max(10, Math.min(65, Math.round((resourceCost / 0.35) * 100)));
   }, [resourceCost]);
 
-  const loadProviderSettings = async () => {
-    try {
-      const next = await invoke<LLMSettings>("get_llm_settings");
-      setSettings(normalizeLlmSettings(next));
-      setPanelModalError("");
-    } catch {
-      setSettings(normalizeLlmSettings(LLM_CONFIG));
-    }
-  };
-
-  const applySessionList = (
-    nextSessions: SessionItem[],
-    nextModes: ReadonlyArray<Mode>,
-    activeSessionId?: string | null
-  ) => {
-    const resolvedActiveSessionId =
-      activeSessionId === undefined ? currentSessionId : activeSessionId;
-    const grouped = nextModes.reduce<Record<Mode, SessionItem[]>>(
-      (acc, mode) => {
-        acc[mode] = [];
-        return acc;
-      },
-      {} as Record<Mode, SessionItem[]>
-    );
-
-    nextSessions.forEach((session) => {
-      const normalizedSession = {
-        ...session,
-        active: session.id === resolvedActiveSessionId,
-      };
-
-      if (!grouped[session.modeName]) {
-        grouped[session.modeName] = [];
-      }
-
-      grouped[session.modeName].push(normalizedSession);
-    });
-
-    setSessionsByMode(grouped);
-  };
-
-  const refreshSessions = async (
-    nextModes: ReadonlyArray<Mode>,
-    activeSessionId?: string | null
-  ) => {
-    const nextSessions = await invoke<SessionItem[]>("list_chat_sessions");
-    applySessionList(nextSessions, nextModes, activeSessionId);
-    return nextSessions;
-  };
-
   const resetCurrentSession = () => {
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
@@ -182,137 +124,58 @@ export function useAppController() {
     setInputValue("");
   };
 
-  const loadSession = async (sessionId: string, nextModes: ReadonlyArray<Mode> = modes) => {
-    setIsSessionLoading(true);
-    try {
-      const detail = await invoke<SessionDetail>("get_chat_session", { sessionId });
-      setCurrentSessionId(detail.session.id);
-      setCurrentSessionTitle(detail.session.title);
-      setCurrentSessionProjectPaths(detail.session.projectPaths || []);
-      setMessages(detail.messages);
-      await refreshSessions(nextModes, detail.session.id);
-    } finally {
-      setIsSessionLoading(false);
-    }
-  };
+  const {
+    getModeDefaultModel,
+    getModeIcon,
+    getModeProjectPaths,
+    handleSessionDelete,
+    handleSessionSelect,
+    loadOperationModes,
+    refreshSessions,
+    saveAgentsForSelectedMode,
+    saveOperationModeSettings,
+    selectOperationMode,
+    updateCurrentSessionProjectPaths,
+    openProjectFolder,
+  } = createSessionModeController({
+    agents,
+    currentSessionId,
+    modeDefaultModels,
+    modeIcons,
+    modeProjectPaths,
+    modes,
+    selectedMode,
+    settings,
+    setAgents,
+    setCurrentSessionId,
+    setCurrentSessionProjectPaths,
+    setCurrentSessionTitle,
+    setIsSessionLoading,
+    setMessages,
+    setModeDefaultModels,
+    setModeIcons,
+    setModeProjectPaths,
+    setModes,
+    setSelectedMode,
+    setSessionsByMode,
+    resetCurrentSession,
+  });
 
-  const syncModeSessions = async (
-    mode: Mode,
-    nextModes: ReadonlyArray<Mode>,
-    preferredSessionId?: string | null
-  ) => {
-    const nextSessions = await refreshSessions(nextModes, preferredSessionId);
-    const modeSessions = nextSessions.filter((session) => session.modeName === mode);
-    const candidateSessionId =
-      preferredSessionId && modeSessions.some((session) => session.id === preferredSessionId)
-        ? preferredSessionId
-        : modeSessions[0]?.id;
-
-    if (!candidateSessionId) {
-      resetCurrentSession();
-      return;
-    }
-
-    if (candidateSessionId === currentSessionId) {
-      await refreshSessions(nextModes, candidateSessionId);
-      return;
-    }
-
-    await loadSession(candidateSessionId, nextModes);
-  };
-
-  const loadOperationModes = async () => {
-    let next: OperationModeState | null = null;
-
-    try {
-      next = await invoke<OperationModeState>("load_operation_mode");
-      if (next.modes.length === 0) {
-        return;
-      }
-
-      setModes(next.modes);
-      setSelectedMode(next.selectedMode);
-      setModeProjectPaths(
-        next.items.reduce<Record<Mode, string[]>>((acc, item) => {
-          acc[item.name] = item.projectPaths || [];
-          return acc;
-        }, {})
-      );
-      setModeDefaultModels(
-        next.items.reduce<Record<Mode, string>>((acc, item) => {
-          acc[item.name] = item.defaultModel?.trim() || LLM_CONFIG.model;
-          return acc;
-        }, {})
-      );
-
-      setModeIcons((prev) => {
-        const nextIcons = { ...prev };
-        next.modes.forEach((mode, index) => {
-          if (!nextIcons[mode]) {
-            nextIcons[mode] = index === 0 ? "smart_toy" : "tune";
-          }
-        });
-        return nextIcons;
-      });
-    } catch {
-      setModes([...MODES]);
-      setSelectedMode(MODES[0]);
-      setModeProjectPaths({});
-      setModeDefaultModels({});
-      setAgents(normalizeAgentsForUi([...AGENTS]));
-      setSessionsByMode({});
-      return;
-    }
-
-    try {
-      const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
-        modeName: next.selectedMode,
-      });
-      setAgents(normalizeAgentsForUi(nextAgents));
-    } catch {
-      setAgents(normalizeAgentsForUi([...AGENTS]));
-    }
-
-    try {
-      await syncModeSessions(next.selectedMode, next.modes, null);
-    } catch {
-      resetCurrentSession();
-      void refreshSessions(next.modes, null);
-    }
-  };
-
-  const persistOperationModes = async (nextModes: OperationModeInput[], nextSelectedMode: Mode) => {
-    await invoke("save_operation_mode", {
-      modes: nextModes,
-      selectedMode: nextSelectedMode,
-    });
-  };
-
-  const loadAgentsForMode = async (mode: Mode) => {
-    try {
-      const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
-        modeName: mode,
-      });
-      setAgents(normalizeAgentsForUi(nextAgents));
-    } catch {
-      setAgents(normalizeAgentsForUi([...AGENTS]));
-    }
-  };
-
-  const selectOperationMode = async (mode: Mode) => {
-    const previousMode = selectedMode;
-    const previousAgents = agents;
-    setSelectedMode(mode);
-
-    try {
-      await invoke("select_operation_mode", { selectedMode: mode });
-      await loadAgentsForMode(mode);
-      await syncModeSessions(mode, modes, null);
-    } catch {
-      setSelectedMode(previousMode);
-      setAgents(previousAgents);
-    }
-  };
+  const {
+    loadProviderSettings,
+    loginChatGPT,
+    logoutChatGPT,
+    savePanelModalSettings,
+  } = createProviderSettingsController({
+    chatGPTLoginUrl,
+    settings,
+    setChatGPTLoginUrl,
+    setIsChatGPTLoginBusy,
+    setIsPanelModalOpen,
+    setIsSavingProvider,
+    setPanelModalError,
+    setSettings,
+  });
 
   const resolveProviderSettings = async (): Promise<ResolvedLLMSettings> => {
     try {
@@ -1168,158 +1031,6 @@ export function useAppController() {
     void refreshSessions(modes, null);
   };
 
-  const handleSessionSelect = async (session: SessionItem) => {
-    if (session.id === currentSessionId) {
-      return;
-    }
-
-    try {
-      if (session.modeName !== selectedMode) {
-        setSelectedMode(session.modeName);
-        await invoke("select_operation_mode", { selectedMode: session.modeName });
-        await loadAgentsForMode(session.modeName);
-      }
-
-      await loadSession(session.id, modes);
-    } catch {
-      // 세션 선택 실패는 현재 화면을 유지한다.
-    }
-  };
-
-  const handleSessionDelete = async (session: SessionItem) => {
-    try {
-      await invoke("delete_chat_session", { sessionId: session.id });
-
-      const nextSessions = await refreshSessions(modes, null);
-      if (session.id !== currentSessionId) {
-        return;
-      }
-
-      const sameModeSessions = nextSessions.filter((item) => item.modeName === session.modeName);
-      const fallbackSession = sameModeSessions[0];
-
-      if (!fallbackSession) {
-        resetCurrentSession();
-        if (session.modeName !== selectedMode) {
-          setSelectedMode(session.modeName);
-          await loadAgentsForMode(session.modeName);
-        }
-        return;
-      }
-
-      if (session.modeName !== selectedMode) {
-        setSelectedMode(session.modeName);
-        await invoke("select_operation_mode", { selectedMode: session.modeName });
-        await loadAgentsForMode(session.modeName);
-      }
-
-      await loadSession(fallbackSession.id, modes);
-    } catch {
-      // 세션 삭제 실패 시 현재 상태를 유지한다.
-    }
-  };
-
-  const saveOperationModeSettings = async (
-    nextModes: Mode[],
-    nextModeIcons: Record<Mode, ModeIcon>,
-    nextSelectedMode: Mode,
-    modeItems: OperationModeInput[]
-  ) => {
-    const previousModes = modes;
-    const previousModeIcons = modeIcons;
-    const previousModeProjectPaths = modeProjectPaths;
-    const previousModeDefaultModels = modeDefaultModels;
-    const previousSelectedMode = selectedMode;
-    const previousAgents = agents;
-    const nextModeProjectPaths = modeItems.reduce<Record<Mode, string[]>>((acc, mode) => {
-      acc[mode.name] = mode.projectPaths || [];
-      return acc;
-    }, {});
-    const nextModeDefaultModels = modeItems.reduce<Record<Mode, string>>((acc, mode) => {
-      acc[mode.name] = mode.defaultModel?.trim() || LLM_CONFIG.model;
-      return acc;
-    }, {});
-
-    setModes(nextModes);
-    setModeIcons(nextModeIcons);
-    setModeProjectPaths(nextModeProjectPaths);
-    setModeDefaultModels(nextModeDefaultModels);
-    setSelectedMode(nextSelectedMode);
-
-    try {
-      await persistOperationModes(modeItems, nextSelectedMode);
-      await loadAgentsForMode(nextSelectedMode);
-      await syncModeSessions(nextSelectedMode, nextModes, null);
-    } catch {
-      setModes(previousModes);
-      setModeIcons(previousModeIcons);
-      setModeProjectPaths(previousModeProjectPaths);
-      setModeDefaultModels(previousModeDefaultModels);
-      setSelectedMode(previousSelectedMode);
-      setAgents(previousAgents);
-      void loadOperationModes();
-    }
-  };
-
-  const getModeIcon = (mode: Mode): ModeIcon => {
-    return modeIcons[mode] || MODE_ICON_OPTIONS[2];
-  };
-
-  const getModeProjectPaths = (mode: Mode) => {
-    return modeProjectPaths[mode] || [];
-  };
-
-  const getModeDefaultModel = (mode: Mode) => {
-    return modeDefaultModels[mode] || settings.model || LLM_CONFIG.model;
-  };
-
-  const updateCurrentSessionProjectPaths = async (projectPaths: string[]) => {
-    if (!currentSessionId) {
-      return;
-    }
-
-    const next = await invoke<SessionItem>("update_chat_session_project_paths", {
-      input: {
-        sessionId: currentSessionId,
-        projectPaths,
-      },
-    });
-
-    setCurrentSessionProjectPaths(next.projectPaths || []);
-    await refreshSessions(modes, currentSessionId);
-  };
-
-  const openProjectFolder = async (path: string) => {
-    await invoke("open_folder_in_explorer", { path });
-  };
-
-  const saveAgentsForSelectedMode = async (nextAgents: AgentItem[]) => {
-    const previousAgents = agents;
-    const normalizedAgents = normalizeAgentsForUi(
-      nextAgents.map(({ status: _status, ...agent }) => {
-        void _status;
-        return {
-          ...agent,
-        };
-      })
-    );
-
-    setAgents(normalizedAgents);
-
-    try {
-      await invoke("save_mode_agents", {
-        modeName: selectedMode,
-        agents: normalizedAgents.map(({ status: _status, ...agent }) => {
-          void _status;
-          return agent;
-        }),
-      });
-    } catch {
-      setAgents(previousAgents);
-      throw new Error("에이전트 설정을 저장하지 못했습니다.");
-    }
-  };
-
   const exportChat = async () => {
     const text = messages
       .map((item) => {
@@ -1353,58 +1064,8 @@ export function useAppController() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  const savePanelModalSettings = async () => {
-    setIsSavingProvider(true);
-    try {
-      const next = await invoke<LLMSettings>("save_llm_settings", { input: settings });
-      setSettings(normalizeLlmSettings(next));
-      setPanelModalError("");
-      setIsPanelModalOpen(false);
-    } catch (error) {
-      setPanelModalError(error instanceof Error ? error.message : "Provider 설정을 저장하지 못했습니다.");
-    } finally {
-      setIsSavingProvider(false);
-    }
-  };
-
-  const loginChatGPT = async () => {
-    if (chatGPTLoginUrl) {
-      await openExternalUrl(chatGPTLoginUrl);
-      return;
-    }
-
-    setIsChatGPTLoginBusy(true);
-    try {
-      const auth = await invoke<StartChatgptLoginPayload>("begin_chatgpt_login");
-      setChatGPTLoginUrl(auth.authorizationUrl);
-      await openExternalUrl(auth.authorizationUrl);
-      setPanelModalError("");
-      setIsChatGPTLoginBusy(false);
-
-      const timeoutAt = Date.now() + 305_000;
-      while (Date.now() < timeoutAt) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1200);
-        });
-
-        const next = await invoke<LLMSettings>("get_llm_settings");
-        setSettings(normalizeLlmSettings(next));
-        if (next.chatgptLoggedIn) {
-          setChatGPTLoginUrl("");
-          return;
-        }
-      }
-
+  /*
       setPanelModalError("로그인 시간이 초과되었습니다. 브라우저에서 인증을 완료한 뒤 다시 시도해 주세요.");
-    } catch (error) {
-      setPanelModalError(
-        error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
-      );
-    } finally {
-      setIsChatGPTLoginBusy(false);
-    }
-  };
-
   const logoutChatGPT = async () => {
     setIsChatGPTLoginBusy(true);
     try {
@@ -1418,6 +1079,8 @@ export function useAppController() {
       setIsChatGPTLoginBusy(false);
     }
   };
+
+  */
 
   return {
     activity,
