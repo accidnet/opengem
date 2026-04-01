@@ -700,7 +700,7 @@ export function useAppController() {
       const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
         sessionId: session.id,
       });
-      updateStreamingStatusMessage(typingMessage.id, "Analyzing request...");
+      updateStreamingStatusMessage(typingMessage.id, "생각 중...");
       const activeSettings = await resolveProviderSettings();
       const resolvedMainModel =
         activeSettings.providerKind === "chatgpt_oauth"

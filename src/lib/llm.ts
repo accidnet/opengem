@@ -352,8 +352,11 @@ async function parseSSEStream(
       const json = safeJsonParse<JsonRecord>(event.data);
       if (!json) {
         if (event.event === "chunk" || event.event === "message") {
-          text += event.data;
-          onChunk?.(event.data);
+          const merged = mergeStreamText(text, event.data);
+          text = merged.text;
+          if (merged.delta) {
+            onChunk?.(merged.delta);
+          }
         }
         continue;
       }
@@ -367,8 +370,11 @@ async function parseSSEStream(
         continue;
       }
 
-      text += chunk;
-      onChunk?.(chunk);
+      const merged = mergeStreamText(text, chunk);
+      text = merged.text;
+      if (merged.delta) {
+        onChunk?.(merged.delta);
+      }
     }
   }
 
@@ -383,14 +389,51 @@ async function parseSSEStream(
         }
         const chunk = extractTextChunk(json, protocol);
         if (chunk) {
-          text += chunk;
-          onChunk?.(chunk);
+          const merged = mergeStreamText(text, chunk);
+          text = merged.text;
+          if (merged.delta) {
+            onChunk?.(merged.delta);
+          }
         }
       }
     }
   }
 
   return { text, usage };
+}
+
+function mergeStreamText(currentText: string, nextChunk: string): {
+  text: string;
+  delta: string;
+} {
+  if (!nextChunk) {
+    return { text: currentText, delta: "" };
+  }
+
+  if (!currentText) {
+    return { text: nextChunk, delta: nextChunk };
+  }
+
+  // 일부 SSE 프로토콜은 마지막 이벤트에서 누적 전체 텍스트를 다시 보낸다.
+  if (nextChunk === currentText) {
+    return { text: currentText, delta: "" };
+  }
+
+  if (nextChunk.startsWith(currentText)) {
+    return {
+      text: nextChunk,
+      delta: nextChunk.slice(currentText.length),
+    };
+  }
+
+  if (currentText.endsWith(nextChunk)) {
+    return { text: currentText, delta: "" };
+  }
+
+  return {
+    text: `${currentText}${nextChunk}`,
+    delta: nextChunk,
+  };
 }
 
 function extractCompleteSSEEvents(buffer: string): {
