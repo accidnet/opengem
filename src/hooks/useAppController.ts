@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type SetStateAction } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { sendToLLM } from "../lib/llm";
@@ -14,6 +14,7 @@ import {
   type Mode,
   type ModeIcon,
 } from "../data/appData";
+import { normalizeLlmSettings } from "../data/llmCatalog";
 import {
   AGENT_COLOR_VALUES,
   appendChunkToMessage,
@@ -112,10 +113,10 @@ export function useAppController() {
   const loadProviderSettings = async () => {
     try {
       const next = await invoke<LLMSettings>("get_llm_settings");
-      setSettings((prev) => ({ ...prev, ...next }));
+      setSettings(normalizeLlmSettings(next));
       setProviderError("");
     } catch {
-      setSettings((prev) => ({ ...LLM_CONFIG, ...prev }));
+      setSettings(normalizeLlmSettings(LLM_CONFIG));
     }
   };
 
@@ -286,9 +287,14 @@ export function useAppController() {
 
   const resolveProviderSettings = async (): Promise<ResolvedLLMSettings> => {
     try {
-      return await invoke<ResolvedLLMSettings>("resolve_llm_settings");
+      const next = await invoke<ResolvedLLMSettings>("resolve_llm_settings");
+      return {
+        ...normalizeLlmSettings(next),
+        accessToken: next.accessToken,
+        accountId: next.accountId,
+      };
     } catch {
-      return settings;
+      return normalizeLlmSettings(settings);
     }
   };
 
@@ -409,6 +415,7 @@ export function useAppController() {
     ];
 
     const routingResponse = await sendToLLM({
+      providerId: activeSettings.providerId,
       providerKind: activeSettings.providerKind,
       apiBaseUrl: activeSettings.baseUrl,
       apiKey: activeSettings.apiKey,
@@ -491,6 +498,7 @@ export function useAppController() {
 
         try {
           const response = await sendToLLM({
+            providerId: activeSettings.providerId,
             providerKind: activeSettings.providerKind,
             apiBaseUrl: activeSettings.baseUrl,
             apiKey: activeSettings.apiKey,
@@ -578,6 +586,7 @@ export function useAppController() {
     ].join("\n");
 
     const response = await sendToLLM({
+      providerId: activeSettings.providerId,
       providerKind: activeSettings.providerKind,
       apiBaseUrl: activeSettings.baseUrl,
       apiKey: activeSettings.apiKey,
@@ -620,6 +629,7 @@ export function useAppController() {
   ) => {
     let streamedText = "";
     const response = await sendToLLM({
+      providerId: activeSettings.providerId,
       providerKind: activeSettings.providerKind,
       apiBaseUrl: activeSettings.baseUrl,
       apiKey: activeSettings.apiKey,
@@ -1124,7 +1134,7 @@ export function useAppController() {
     setIsSavingProvider(true);
     try {
       const next = await invoke<LLMSettings>("save_llm_settings", { input: settings });
-      setSettings(next);
+      setSettings(normalizeLlmSettings(next));
       setProviderError("");
       setIsProviderDialogOpen(false);
     } catch (error) {
@@ -1155,7 +1165,7 @@ export function useAppController() {
         });
 
         const next = await invoke<LLMSettings>("get_llm_settings");
-        setSettings((prev) => ({ ...prev, ...next }));
+        setSettings(normalizeLlmSettings(next));
         if (next.chatgptLoggedIn) {
           setChatGPTLoginUrl("");
           return;
@@ -1176,7 +1186,7 @@ export function useAppController() {
     setIsChatGPTLoginBusy(true);
     try {
       const next = await invoke<LLMSettings>("logout_chatgpt");
-      setSettings(next);
+      setSettings(normalizeLlmSettings(next));
       setChatGPTLoginUrl("");
       setProviderError("");
     } catch (error) {
@@ -1227,7 +1237,13 @@ export function useAppController() {
     setInputValue,
     setIsProviderDialogOpen,
     setProviderError,
-    setSettings,
+    setSettings: (next: SetStateAction<LLMSettings>) => {
+      if (typeof next === "function") {
+        setSettings((prev) => normalizeLlmSettings((next as (prev: LLMSettings) => LLMSettings)(prev)));
+        return;
+      }
+      setSettings(normalizeLlmSettings(next));
+    },
     settings,
     startNewChat,
     theme,

@@ -194,6 +194,7 @@ export async function synthesizeRuntimeResponse(input: {
   ].join("\n");
 
   const response = await sendToLLM({
+    providerId: input.activeSettings.providerId,
     providerKind: input.activeSettings.providerKind,
     apiBaseUrl: input.activeSettings.baseUrl,
     apiKey: input.activeSettings.apiKey,
@@ -288,6 +289,7 @@ async function decideRuntimePlan(input: {
   ].join("\n");
 
   const response = await sendToLLM({
+    providerId: input.activeSettings.providerId,
     providerKind: input.activeSettings.providerKind,
     apiBaseUrl: input.activeSettings.baseUrl,
     apiKey: input.activeSettings.apiKey,

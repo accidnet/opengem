@@ -1,48 +1,13 @@
 import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
-import PROMPT_ANTHROPIC from "./prompts/anthropic.txt?raw";
-import PROMPT_CODEX from "./prompts/codex.txt?raw";
-import PROMPT_DEFAULT from "./prompts/default.txt?raw";
-import PROMPT_GEMINI from "./prompts/gemini.txt?raw";
-import PROMPT_GPT from "./prompts/gpt.txt?raw";
+import { createDefaultLlmSettings, getPromptForModel } from "./llmCatalog";
 
-const env = import.meta.env;
+export const LLM_CONFIG: LLMSettings = createDefaultLlmSettings();
 
-export const LLM_CONFIG: LLMSettings = {
-  providerKind: "api_key",
-  baseUrl: env.VITE_LLM_BASE_URL || "https://api.openai.com/v1",
-  model: env.VITE_LLM_MODEL || "gpt-4o-mini",
-  apiKey: env.VITE_LLM_API_KEY,
-  chatgptLoggedIn: false,
+export const getModelSystemPrompt = (model?: string, providerId?: LLMSettings["providerId"]) => {
+  return getPromptForModel(model, providerId);
 };
 
-export const getModelSystemPrompt = (model?: string) => {
-  const normalizedModel = model?.toLowerCase() ?? "";
-
-  if (normalizedModel.includes("codex")) {
-    return PROMPT_CODEX.trim();
-  }
-
-  if (
-    normalizedModel.includes("gpt") ||
-    normalizedModel.includes("o1") ||
-    normalizedModel.includes("o3") ||
-    normalizedModel.includes("o4")
-  ) {
-    return PROMPT_GPT.trim();
-  }
-
-  if (normalizedModel.includes("gemini")) {
-    return PROMPT_GEMINI.trim();
-  }
-
-  if (normalizedModel.includes("claude") || normalizedModel.includes("anthropic")) {
-    return PROMPT_ANTHROPIC.trim();
-  }
-
-  return PROMPT_DEFAULT.trim();
-};
-
-export const LLM_SYSTEM_PROMPT = getModelSystemPrompt(LLM_CONFIG.model);
+export const LLM_SYSTEM_PROMPT = getModelSystemPrompt(LLM_CONFIG.model, LLM_CONFIG.providerId);
 
 const ORCHESTRATOR_PROMPT_SECTIONS = [
   "You are the primary orchestration agent.",

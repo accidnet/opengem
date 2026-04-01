@@ -1,3 +1,4 @@
+import { getProviderCatalog, normalizeBaseUrl, type ProviderProtocol } from "@/data/llmCatalog";
 import type { LLMConfig } from "@/types/chat";
 
 export type LLMRole = "user" | "assistant" | "system";
@@ -14,6 +15,7 @@ export type LLMUsage = {
 };
 
 export type LLMRequest = {
+  providerId?: LLMConfig["providerId"];
   providerKind?: LLMConfig["providerKind"];
   apiBaseUrl: string;
   apiKey?: string;
@@ -38,62 +40,164 @@ export type LLMStreamEvent = {
   id?: string;
 };
 
-const DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
-const CHATGPT_API_BASE_URL = "https://chatgpt.com/backend-api/codex";
-
-type OpenAIChoice = {
-  finish_reason?: string;
-  delta?: {
-    content?: string;
-  };
-  message?: {
-    role?: string;
-    content?: string;
-  };
-};
-
 type OpenAIUsage = {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
 };
 
-type OpenAIResponse = {
-  choices?: OpenAIChoice[];
-  usage?: OpenAIUsage;
+type GoogleUsage = {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  totalTokenCount?: number;
 };
 
+type JsonRecord = Record<string, unknown>;
+
+const DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
+const CHATGPT_API_BASE_URL = "https://chatgpt.com/backend-api/codex";
+
 export async function sendToLLM(input: LLMRequest): Promise<LLMResponse> {
-  if (input.providerKind === "chatgpt_oauth") {
+  const provider = getProviderCatalog(input.providerId);
+  const protocol = provider.protocol;
+
+  if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
     return sendToChatGptOAuth(input);
   }
 
-  const requestUrl = resolveRequestUrl(input);
+  if (protocol === "anthropic") {
+    return sendToAnthropic(input);
+  }
+
+  if (protocol === "google-gemini") {
+    return sendToGemini(input);
+  }
+
+  return sendToOpenAICompatible(input);
+}
+
+async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {
   const shouldStream = input.stream ?? true;
-  const response = await fetch(requestUrl, {
+  const response = await fetch(resolveRequestUrl(input.apiBaseUrl, "openai-compatible"), {
     method: "POST",
-    headers: buildHeaders(input.apiKey),
-    body: JSON.stringify(buildRequestBody(input, shouldStream)),
+    headers: buildOpenAIHeaders(input.apiKey),
+    body: JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      temperature: 0.4,
+      stream: shouldStream,
+    }),
     signal: input.signal,
   });
 
   if (!response.ok) {
     const detail = await safeReadText(response);
-    throw new Error(`LLM API 오류 (${response.status}): ${detail || response.statusText}`);
+    throw new Error(`LLM API error (${response.status}): ${detail || response.statusText}`);
   }
 
   if (!response.body) {
-    throw new Error("LLM 응답 본문을 읽을 수 없습니다.");
+    throw new Error("LLM response body is missing.");
   }
 
   if (shouldStream) {
-    return parseSSEStream(response, input.onChunk, input.onEvent);
+    return parseSSEStream(response, "openai-compatible", input.onChunk, input.onEvent);
   }
 
-  const json = (await response.json()) as OpenAIResponse;
-  const message = (json.choices?.[0]?.message?.content || "") as string;
-  const usage = toUsage(json.usage);
-  return { text: message, usage };
+  const json = (await response.json()) as JsonRecord;
+  return {
+    text: extractTextChunk(json, "openai-compatible"),
+    usage: extractUsage(json, "openai-compatible"),
+  };
+}
+
+async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
+  const shouldStream = input.stream ?? true;
+  const { system, messages } = splitSystemMessages(input.messages);
+  const response = await fetch(resolveRequestUrl(input.apiBaseUrl, "anthropic"), {
+    method: "POST",
+    headers: buildAnthropicHeaders(input.apiKey),
+    body: JSON.stringify({
+      model: input.model,
+      system,
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: [{ type: "text", text: message.content }],
+      })),
+      max_tokens: 4096,
+      temperature: 0.4,
+      stream: shouldStream,
+    }),
+    signal: input.signal,
+  });
+
+  if (!response.ok) {
+    const detail = await safeReadText(response);
+    throw new Error(`Anthropic API error (${response.status}): ${detail || response.statusText}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Anthropic response body is missing.");
+  }
+
+  if (shouldStream) {
+    return parseSSEStream(response, "anthropic", input.onChunk, input.onEvent);
+  }
+
+  const json = (await response.json()) as JsonRecord;
+  return {
+    text: extractTextChunk(json, "anthropic"),
+    usage: extractUsage(json, "anthropic"),
+  };
+}
+
+async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
+  const shouldStream = input.stream ?? true;
+  const { system, messages } = splitSystemMessages(input.messages);
+  const apiKey = input.apiKey?.trim();
+  if (!apiKey) {
+    throw new Error("Gemini API key is missing.");
+  }
+
+  const response = await fetch(resolveGeminiUrl(input.apiBaseUrl, input.model, apiKey, shouldStream), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      systemInstruction: system
+        ? {
+            parts: [{ text: system }],
+          }
+        : undefined,
+      contents: messages.map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
+      })),
+      generationConfig: {
+        temperature: 0.4,
+      },
+    }),
+    signal: input.signal,
+  });
+
+  if (!response.ok) {
+    const detail = await safeReadText(response);
+    throw new Error(`Gemini API error (${response.status}): ${detail || response.statusText}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Gemini response body is missing.");
+  }
+
+  if (shouldStream) {
+    return parseSSEStream(response, "google-gemini", input.onChunk, input.onEvent);
+  }
+
+  const json = (await response.json()) as JsonRecord;
+  return {
+    text: extractTextChunk(json, "google-gemini"),
+    usage: extractUsage(json, "google-gemini"),
+  };
 }
 
 async function sendToChatGptOAuth(input: LLMRequest): Promise<LLMResponse> {
@@ -114,19 +218,10 @@ async function sendToChatGptOAuth(input: LLMRequest): Promise<LLMResponse> {
   }
 
   if (input.stream ?? true) {
-    return parseSSEStream(response, input.onChunk, input.onEvent);
+    return parseSSEStream(response, "chatgpt-responses", input.onChunk, input.onEvent);
   }
 
-  return parseSSEStream(response);
-}
-
-function buildRequestBody(input: LLMRequest, stream: boolean) {
-  return {
-    model: input.model,
-    messages: input.messages,
-    temperature: 0.4,
-    stream,
-  };
+  return parseSSEStream(response, "chatgpt-responses");
 }
 
 function buildChatGptRequestBody(input: LLMRequest) {
@@ -152,7 +247,21 @@ function buildChatGptRequestBody(input: LLMRequest) {
   };
 }
 
-function buildHeaders(apiKey?: string): HeadersInit {
+function resolveRequestUrl(baseUrl: string, protocol: Exclude<ProviderProtocol, "google-gemini" | "chatgpt-responses">) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl || DEFAULT_API_BASE_URL);
+  if (protocol === "anthropic") {
+    return `${normalizedBaseUrl}/messages`;
+  }
+  return `${normalizedBaseUrl}/chat/completions`;
+}
+
+function resolveGeminiUrl(baseUrl: string, model: string, apiKey: string, stream: boolean): string {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const operation = stream ? "streamGenerateContent?alt=sse" : "generateContent";
+  return `${normalizedBaseUrl}/models/${model}:${operation}&key=${apiKey}`.replace(":generateContent&", ":generateContent?");
+}
+
+function buildOpenAIHeaders(apiKey?: string): HeadersInit {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -160,6 +269,20 @@ function buildHeaders(apiKey?: string): HeadersInit {
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
+
+  return headers;
+}
+
+function buildAnthropicHeaders(apiKey?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+  };
+
+  if (apiKey) {
+    headers["x-api-key"] = apiKey;
+  }
+
   return headers;
 }
 
@@ -180,17 +303,22 @@ function buildChatGptHeaders(accessToken?: string, accountId?: string): HeadersI
   return headers;
 }
 
-function resolveRequestUrl(input: LLMRequest): string {
-  const baseUrl = normalizeBaseUrl(input.apiBaseUrl || DEFAULT_API_BASE_URL);
-  return `${baseUrl}/chat/completions`;
-}
+function splitSystemMessages(messages: LLMMessage[]) {
+  const system = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .join("\n\n");
 
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
+  return {
+    system,
+    messages: messages.filter((message) => message.role !== "system"),
+  };
 }
 
 async function parseSSEStream(
   response: Response,
+  protocol: ProviderProtocol,
   onChunk?: (chunk: string) => void,
   onEvent?: (event: LLMStreamEvent) => void
 ): Promise<LLMResponse> {
@@ -209,6 +337,7 @@ async function parseSSEStream(
     if (done) {
       break;
     }
+
     buffer += decoder.decode(value, { stream: true });
     const parsed = extractCompleteSSEEvents(buffer);
     buffer = parsed.remainder;
@@ -220,7 +349,7 @@ async function parseSSEStream(
         continue;
       }
 
-      const json = safeJsonParse<Record<string, unknown> & OpenAIResponse>(event.data);
+      const json = safeJsonParse<JsonRecord>(event.data);
       if (!json) {
         if (event.event === "chunk" || event.event === "message") {
           text += event.data;
@@ -229,11 +358,11 @@ async function parseSSEStream(
         continue;
       }
 
-      if (!usage && "usage" in json) {
-        usage = toUsage(json.usage as OpenAIUsage | undefined);
+      if (!usage) {
+        usage = extractUsage(json, protocol);
       }
 
-      const chunk = extractTextChunk(json);
+      const chunk = extractTextChunk(json, protocol);
       if (!chunk) {
         continue;
       }
@@ -247,12 +376,12 @@ async function parseSSEStream(
     const fallback = parseSSEEventBlock(buffer);
     if (fallback) {
       onEvent?.(fallback);
-      const json = safeJsonParse<Record<string, unknown> & OpenAIResponse>(fallback.data);
+      const json = safeJsonParse<JsonRecord>(fallback.data);
       if (json) {
-        if (!usage && "usage" in json) {
-          usage = toUsage(json.usage as OpenAIUsage | undefined);
+        if (!usage) {
+          usage = extractUsage(json, protocol);
         }
-        const chunk = extractTextChunk(json);
+        const chunk = extractTextChunk(json, protocol);
         if (chunk) {
           text += chunk;
           onChunk?.(chunk);
@@ -272,10 +401,7 @@ function extractCompleteSSEEvents(buffer: string): {
   const blocks = normalized.split("\n\n");
   const remainder = blocks.pop() ?? "";
   const events = blocks.map(parseSSEEventBlock).filter((event): event is LLMStreamEvent => Boolean(event));
-  return {
-    events,
-    remainder,
-  };
+  return { events, remainder };
 }
 
 function parseSSEEventBlock(block: string): LLMStreamEvent | null {
@@ -316,13 +442,38 @@ function parseSSEEventBlock(block: string): LLMStreamEvent | null {
   };
 }
 
-function extractTextChunk(payload: Record<string, unknown> & OpenAIResponse): string {
-  const openAIChunk = payload.choices?.[0]?.delta?.content;
+function extractTextChunk(payload: JsonRecord, protocol: ProviderProtocol): string {
+  if (protocol === "anthropic") {
+    const delta = readPath(payload, ["delta", "text"]);
+    if (typeof delta === "string") {
+      return delta;
+    }
+
+    const anthropicContent = readPath(payload, ["content"]);
+    if (Array.isArray(anthropicContent)) {
+      return anthropicContent
+        .map((item) => (item && typeof item === "object" ? (item as JsonRecord).text : ""))
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .join("");
+    }
+  }
+
+  if (protocol === "google-gemini") {
+    const parts = readPath(payload, ["candidates", 0, "content", "parts"]);
+    if (Array.isArray(parts)) {
+      return parts
+        .map((part) => (part && typeof part === "object" ? (part as JsonRecord).text : ""))
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .join("");
+    }
+  }
+
+  const openAIChunk = readPath(payload, ["choices", 0, "delta", "content"]);
   if (typeof openAIChunk === "string" && openAIChunk.length > 0) {
     return openAIChunk;
   }
 
-  const openAIMessage = payload.choices?.[0]?.message?.content;
+  const openAIMessage = readPath(payload, ["choices", 0, "message", "content"]);
   if (typeof openAIMessage === "string" && openAIMessage.length > 0) {
     return openAIMessage;
   }
@@ -337,18 +488,73 @@ function extractTextChunk(payload: Record<string, unknown> & OpenAIResponse): st
     return directText;
   }
 
+  const outputText = payload.output_text;
+  if (typeof outputText === "string" && outputText.length > 0) {
+    return outputText;
+  }
+
+  const nestedOutputText = readPath(payload, ["response", "output_text"]);
+  if (typeof nestedOutputText === "string" && nestedOutputText.length > 0) {
+    return nestedOutputText;
+  }
+
   return "";
 }
 
-function toUsage(raw?: OpenAIUsage): LLMUsage | undefined {
-  if (!raw) {
+function extractUsage(payload: JsonRecord, protocol: ProviderProtocol): LLMUsage | undefined {
+  if (protocol === "google-gemini") {
+    const usage = payload.usageMetadata as GoogleUsage | undefined;
+    if (!usage) return undefined;
+    return {
+      promptTokens: usage.promptTokenCount,
+      completionTokens: usage.candidatesTokenCount,
+      totalTokens: usage.totalTokenCount,
+    };
+  }
+
+  const usage = payload.usage as OpenAIUsage | JsonRecord | undefined;
+  if (!usage || typeof usage !== "object") {
     return undefined;
   }
+
+  if ("input_tokens" in usage || "output_tokens" in usage || "total_tokens" in usage) {
+    return {
+      promptTokens: readNumber(usage, "input_tokens"),
+      completionTokens: readNumber(usage, "output_tokens"),
+      totalTokens: readNumber(usage, "total_tokens"),
+    };
+  }
+
   return {
-    promptTokens: raw.prompt_tokens,
-    completionTokens: raw.completion_tokens,
-    totalTokens: raw.total_tokens,
+    promptTokens: readNumber(usage, "prompt_tokens"),
+    completionTokens: readNumber(usage, "completion_tokens"),
+    totalTokens: readNumber(usage, "total_tokens"),
   };
+}
+
+function readNumber(value: JsonRecord, key: string): number | undefined {
+  const result = value[key];
+  return typeof result === "number" ? result : undefined;
+}
+
+function readPath(value: unknown, path: Array<string | number>): unknown {
+  let current = value;
+  for (const key of path) {
+    if (typeof key === "number") {
+      if (!Array.isArray(current)) {
+        return undefined;
+      }
+      current = current[key];
+      continue;
+    }
+
+    if (!current || typeof current !== "object") {
+      return undefined;
+    }
+
+    current = (current as JsonRecord)[key];
+  }
+  return current;
 }
 
 async function safeReadText(response: Response): Promise<string> {

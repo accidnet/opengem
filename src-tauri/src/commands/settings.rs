@@ -19,6 +19,7 @@ use url::Url;
 
 const DEFAULT_API_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_MODEL: &str = "gpt-4o-mini";
+const DEFAULT_PROVIDER_ID: &str = "openai";
 const CHATGPT_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const CHATGPT_DEFAULT_MODEL: &str = "gpt-5.2";
 const OPENAI_ISSUER: &str = "https://auth.openai.com";
@@ -29,6 +30,7 @@ const OAUTH_PORT: u16 = 1455;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmSettingsPayload {
+    provider_id: String,
     provider_kind: String,
     base_url: String,
     model: String,
@@ -40,6 +42,7 @@ pub struct LlmSettingsPayload {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveLlmSettingsInput {
+    provider_id: String,
     provider_kind: String,
     base_url: String,
     model: String,
@@ -49,6 +52,7 @@ pub struct SaveLlmSettingsInput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedLlmSettingsPayload {
+    provider_id: String,
     provider_kind: String,
     base_url: String,
     model: String,
@@ -94,6 +98,7 @@ pub struct ChatgptResponsePayload {
 
 #[derive(Default)]
 struct StoredLlmSettings {
+    provider_id: String,
     provider_kind: String,
     base_url: String,
     model: String,
@@ -189,6 +194,7 @@ pub fn save_llm_settings(
     let connection = state.open_connection()?;
     let current = load_settings(&connection)?;
     let provider_kind = normalize_provider_kind(&input.provider_kind);
+    let provider_id = normalize_provider_id(&input.provider_id, &provider_kind);
     let base_url =
         normalize_text(&input.base_url).unwrap_or_else(|| DEFAULT_API_BASE_URL.to_string());
     let model = normalize_text(&input.model).unwrap_or_else(|| DEFAULT_MODEL.to_string());
@@ -198,6 +204,7 @@ pub fn save_llm_settings(
     save_settings(
         &connection,
         StoredLlmSettings {
+            provider_id: provider_id.clone(),
             provider_kind: provider_kind.clone(),
             base_url,
             model: model.clone(),
@@ -211,6 +218,7 @@ pub fn save_llm_settings(
     )?;
 
     info!(
+        provider_id = %provider_id,
         provider_kind = %provider_kind,
         model = %model,
         has_api_key = has_api_key,
@@ -225,6 +233,7 @@ pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSetting
     let connection = state.open_connection()?;
     let settings = resolve_settings(&connection)?;
     debug!(
+        provider_id = %settings.provider_id,
         provider_kind = %settings.provider_kind,
         model = %settings.model,
         has_access_token = settings.access_token.is_some(),
@@ -232,6 +241,7 @@ pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSetting
     );
 
     Ok(ResolvedLlmSettingsPayload {
+        provider_id: settings.provider_id,
         provider_kind: settings.provider_kind,
         base_url: settings.base_url,
         model: settings.model,
@@ -378,6 +388,11 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
     save_settings(
         &connection,
         StoredLlmSettings {
+            provider_id: if current.provider_id == "chatgpt" {
+                "openai".to_string()
+            } else {
+                current.provider_id
+            },
             provider_kind: if current.provider_kind == "chatgpt_oauth" {
                 "api_key".to_string()
             } else {
@@ -444,6 +459,7 @@ fn run_chatgpt_login_flow(
     save_settings(
         &connection,
         StoredLlmSettings {
+            provider_id: "chatgpt".to_string(),
             provider_kind: "chatgpt_oauth".to_string(),
             base_url: CHATGPT_BASE_URL.to_string(),
             model: next_model,
@@ -734,19 +750,20 @@ fn get_responses_text(response: &ResponsesApiResponse) -> String {
 fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettings, String> {
     connection
         .query_row(
-            "SELECT provider_kind, base_url, model, api_key, access_token, refresh_token, expires_at, account_id, chatgpt_email FROM llm_settings WHERE id = 1",
+            "SELECT provider_id, provider_kind, base_url, model, api_key, access_token, refresh_token, expires_at, account_id, chatgpt_email FROM llm_settings WHERE id = 1",
             [],
             |row| {
                 Ok(StoredLlmSettings {
-                    provider_kind: row.get(0)?,
-                    base_url: row.get(1)?,
-                    model: row.get(2)?,
-                    api_key: row.get(3)?,
-                    access_token: row.get(4)?,
-                    refresh_token: row.get(5)?,
-                    expires_at: row.get(6)?,
-                    account_id: row.get(7)?,
-                    chatgpt_email: row.get(8)?,
+                    provider_id: row.get(0)?,
+                    provider_kind: row.get(1)?,
+                    base_url: row.get(2)?,
+                    model: row.get(3)?,
+                    api_key: row.get(4)?,
+                    access_token: row.get(5)?,
+                    refresh_token: row.get(6)?,
+                    expires_at: row.get(7)?,
+                    account_id: row.get(8)?,
+                    chatgpt_email: row.get(9)?,
                 })
             },
         )
@@ -755,6 +772,7 @@ fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettings,
         .map(Ok)
         .unwrap_or_else(|| {
             Ok(StoredLlmSettings {
+                provider_id: DEFAULT_PROVIDER_ID.to_string(),
                 provider_kind: "api_key".to_string(),
                 base_url: DEFAULT_API_BASE_URL.to_string(),
                 model: DEFAULT_MODEL.to_string(),
@@ -771,11 +789,12 @@ fn save_settings(
         .execute(
             "
             INSERT INTO llm_settings (
-              id, provider_kind, base_url, model, api_key, access_token, refresh_token, expires_at, account_id, chatgpt_email, updated_at
+              id, provider_id, provider_kind, base_url, model, api_key, access_token, refresh_token, expires_at, account_id, chatgpt_email, updated_at
             ) VALUES (
-              1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, CURRENT_TIMESTAMP
+              1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, CURRENT_TIMESTAMP
             )
             ON CONFLICT(id) DO UPDATE SET
+              provider_id = excluded.provider_id,
               provider_kind = excluded.provider_kind,
               base_url = excluded.base_url,
               model = excluded.model,
@@ -788,6 +807,7 @@ fn save_settings(
               updated_at = CURRENT_TIMESTAMP
             ",
             params![
+                settings.provider_id,
                 settings.provider_kind,
                 settings.base_url,
                 settings.model,
@@ -806,6 +826,7 @@ fn save_settings(
 fn to_payload(settings: StoredLlmSettings) -> LlmSettingsPayload {
     let chatgpt_logged_in = settings.refresh_token.is_some();
     LlmSettingsPayload {
+        provider_id: settings.provider_id,
         provider_kind: settings.provider_kind,
         base_url: settings.base_url,
         model: settings.model,
@@ -820,6 +841,18 @@ fn normalize_provider_kind(value: &str) -> String {
         return "chatgpt_oauth".to_string();
     }
     "api_key".to_string()
+}
+
+fn normalize_provider_id(value: &str, provider_kind: &str) -> String {
+    let trimmed = value.trim();
+    if provider_kind == "chatgpt_oauth" || trimmed == "chatgpt" {
+        return "chatgpt".to_string();
+    }
+
+    match trimmed {
+        "anthropic" | "google" | "openrouter" | "custom_openai" => trimmed.to_string(),
+        _ => "openai".to_string(),
+    }
 }
 
 fn normalize_text(value: &str) -> Option<String> {
