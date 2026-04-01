@@ -178,7 +178,7 @@ export function ChatPage() {
         <div
           className="panel-resizer panel-resizer-left"
           role="separator"
-          aria-label="?쇱そ ?⑤꼸 ?덈퉬 議곗젅"
+          aria-label="왼쪽 패널 너비 조절"
           aria-orientation="vertical"
           onPointerDown={(event) => {
             if (window.innerWidth <= 980) {
@@ -209,7 +209,7 @@ export function ChatPage() {
         <div
           className="panel-resizer panel-resizer-right"
           role="separator"
-          aria-label="?ㅻⅨ履??⑤꼸 ?덈퉬 議곗젅"
+          aria-label="오른쪽 패널 너비 조절"
           aria-orientation="vertical"
           onPointerDown={(event) => {
             if (window.innerWidth <= 1280) {
