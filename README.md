@@ -51,6 +51,7 @@ pnpm run tauri:dev
 - `pnpm run build`: 프론트엔드 빌드 (`dist/`)
 - `pnpm run tauri:build`: Tauri 앱 배포 빌드
 - `pnpm run preview`: 빌드 결과 미리보기
+- `cargo clean`: 백엔드 캐시 클린
 
 ## UI 미리보기
 
