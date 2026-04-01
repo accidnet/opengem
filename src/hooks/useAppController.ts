@@ -89,11 +89,11 @@ export function useAppController() {
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [agents, setAgents] = useState<AgentItem[]>(normalizeAgentsForUi([...AGENTS]));
   const [settings, setSettings] = useState<LLMSettings>(LLM_CONFIG);
-  const [isProviderDialogOpen, setIsProviderDialogOpen] = useState(false);
+  const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
   const [chatGPTLoginUrl, setChatGPTLoginUrl] = useState("");
-  const [providerError, setProviderError] = useState("");
+  const [panelModalError, setPanelModalError] = useState("");
   const [openSelectedModeSignal, setOpenSelectedModeSignal] = useState(0);
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function useAppController() {
     try {
       const next = await invoke<LLMSettings>("get_llm_settings");
       setSettings(normalizeLlmSettings(next));
-      setProviderError("");
+      setPanelModalError("");
     } catch {
       setSettings(normalizeLlmSettings(LLM_CONFIG));
     }
@@ -1345,15 +1345,15 @@ export function useAppController() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  const saveProviderSettings = async () => {
+  const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
       const next = await invoke<LLMSettings>("save_llm_settings", { input: settings });
       setSettings(normalizeLlmSettings(next));
-      setProviderError("");
-      setIsProviderDialogOpen(false);
+      setPanelModalError("");
+      setIsPanelModalOpen(false);
     } catch (error) {
-      setProviderError(error instanceof Error ? error.message : "Provider 설정을 저장하지 못했습니다.");
+      setPanelModalError(error instanceof Error ? error.message : "Provider 설정을 저장하지 못했습니다.");
     } finally {
       setIsSavingProvider(false);
     }
@@ -1370,7 +1370,7 @@ export function useAppController() {
       const auth = await invoke<StartChatgptLoginPayload>("begin_chatgpt_login");
       setChatGPTLoginUrl(auth.authorizationUrl);
       await openExternalUrl(auth.authorizationUrl);
-      setProviderError("");
+      setPanelModalError("");
       setIsChatGPTLoginBusy(false);
 
       const timeoutAt = Date.now() + 305_000;
@@ -1387,9 +1387,9 @@ export function useAppController() {
         }
       }
 
-      setProviderError("로그인 시간이 초과되었습니다. 브라우저에서 인증을 완료한 뒤 다시 시도해 주세요.");
+      setPanelModalError("로그인 시간이 초과되었습니다. 브라우저에서 인증을 완료한 뒤 다시 시도해 주세요.");
     } catch (error) {
-      setProviderError(
+      setPanelModalError(
         error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
       );
     } finally {
@@ -1403,9 +1403,9 @@ export function useAppController() {
       const next = await invoke<LLMSettings>("logout_chatgpt");
       setSettings(normalizeLlmSettings(next));
       setChatGPTLoginUrl("");
-      setProviderError("");
+      setPanelModalError("");
     } catch (error) {
-      setProviderError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
+      setPanelModalError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
     } finally {
       setIsChatGPTLoginBusy(false);
     }
@@ -1431,7 +1431,7 @@ export function useAppController() {
     handleSessionSelect,
     inputValue,
     isChatGPTLoginBusy,
-    isProviderDialogOpen,
+    isPanelModalOpen,
     isSavingProvider,
     loginChatGPT,
     logoutChatGPT,
@@ -1439,20 +1439,20 @@ export function useAppController() {
     modes,
     onEnterSubmit,
     openSelectedModeSignal,
-    providerError,
+    panelModalError,
     resourceCost,
     resourceToken,
     openProjectFolder,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
-    saveProviderSettings,
+    savePanelModalSettings,
     selectOperationMode,
     selectedMode,
     sendMessage,
     sessionsByMode,
     setInputValue,
-    setIsProviderDialogOpen,
-    setProviderError,
+    setIsPanelModalOpen,
+    setPanelModalError,
     setSettings: (next: SetStateAction<LLMSettings>) => {
       if (typeof next === "function") {
         setSettings((prev) => normalizeLlmSettings((next as (prev: LLMSettings) => LLMSettings)(prev)));

@@ -132,12 +132,12 @@
     padding: 12px;
   }
 
-  .provider-modal {
+  .panel-modal {
     max-height: calc(100vh - 24px);
     border-radius: 16px;
   }
 
-  .provider-header {
+  .panel-modal-header {
     padding: 16px;
   }
 
@@ -145,28 +145,28 @@
     font-size: 24px;
   }
 
-  .provider-body {
+  .panel-modal-body {
     grid-template-columns: 1fr;
   }
 
-  .provider-sidebar {
+  .panel-modal-sidebar {
     border-right: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border) 86%);
     padding: 14px 16px;
   }
 
-  .provider-main {
+  .panel-modal-main {
     padding: 16px;
   }
 
-  .provider-main-copy h4 {
+  .panel-modal-main-copy h4 {
     font-size: 32px;
   }
 
   .settings-card-head,
   .settings-auth-row,
   .settings-footer,
-  .provider-header {
+  .panel-modal-header {
     flex-direction: column;
   }
 

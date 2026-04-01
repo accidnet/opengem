@@ -127,38 +127,38 @@ export function ModeSettingsModal({
   return (
     <div className="settings-overlay" role="presentation" onClick={onOverlayClick}>
       <section
-        className="provider-modal mode-provider-modal"
+        className="panel-modal mode-panel-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mode-settings-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="provider-header">
-          <div className="provider-header-title-wrap">
-            <span className="provider-header-icon material-symbols-outlined" aria-hidden="true">
+        <header className="panel-modal-header">
+          <div className="panel-modal-header-title-wrap">
+            <span className="panel-modal-header-icon material-symbols-outlined" aria-hidden="true">
               tune
             </span>
             <h3 id="mode-settings-title" className="settings-title">
               Modes
             </h3>
           </div>
-          <button className="provider-close-btn" type="button" aria-label="모드 설정 닫기" onClick={onClose}>
+          <button className="panel-modal-close-btn" type="button" aria-label="모드 설정 닫기" onClick={onClose}>
             <span className="material-symbols-outlined" aria-hidden="true">
               close
             </span>
           </button>
         </header>
 
-        <div className="provider-body">
-          <aside className="provider-sidebar mode-provider-sidebar" aria-label="모드 설정 안내">
-            <p className="provider-sidebar-label">MODES</p>
-            <p className="provider-sidebar-help">모드마다 기본 모델과 프로젝트 폴더를 같이 저장할 수 있어.</p>
+        <div className="panel-modal-body">
+          <aside className="panel-modal-sidebar mode-panel-modal-sidebar" aria-label="모드 설정 안내">
+            <p className="panel-modal-sidebar-label">MODES</p>
+            <p className="panel-modal-sidebar-help">모드마다 기본 모델과 프로젝트 폴더를 같이 저장할 수 있어.</p>
 
-            <div className="mode-provider-tabs" role="tablist" aria-label="모드 설정 탭">
+            <div className="mode-panel-modal-tabs" role="tablist" aria-label="모드 설정 탭">
               <button
                 type="button"
                 role="tab"
-                className={`mode-provider-tab ${activeTab === "create" ? "is-active" : ""}`}
+                className={`mode-panel-modal-tab ${activeTab === "create" ? "is-active" : ""}`}
                 aria-selected={activeTab === "create"}
                 onClick={() => setActiveTab("create")}
               >
@@ -167,7 +167,7 @@ export function ModeSettingsModal({
               <button
                 type="button"
                 role="tab"
-                className={`mode-provider-tab ${activeTab === "list" ? "is-active" : ""}`}
+                className={`mode-panel-modal-tab ${activeTab === "list" ? "is-active" : ""}`}
                 aria-selected={activeTab === "list"}
                 onClick={() => setActiveTab("list")}
               >
@@ -176,8 +176,8 @@ export function ModeSettingsModal({
             </div>
           </aside>
 
-          <main className="provider-main mode-provider-main">
-            <div className="provider-main-copy">
+          <main className="panel-modal-main mode-panel-modal-main">
+            <div className="panel-modal-main-copy">
               <h4>{activeTab === "create" ? "모드 추가" : "모드 목록"}</h4>
               <p>
                 {activeTab === "create"
@@ -369,8 +369,8 @@ export function ModeSettingsModal({
                           <div className="mode-project-path-copy">
                             <h5>기본 프로젝트 폴더 설정</h5>
                             <p>
-                              Operation Mode내에 생성되는 session에 대해 기본값으로 설정될 프로젝트
-                              폴더 {`(${projectPathCounts[mode.id] || 0}개 연결됨)`}
+                              Operation Mode내에 생성되는 session에 대해 기본값으로 설정될 프로젝트 폴더{" "}
+                              {`(${projectPathCounts[mode.id] || 0}개 연결됨)`}
                             </p>
                           </div>
 

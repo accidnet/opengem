@@ -83,15 +83,15 @@ export function AgentSettingsModal({
   return (
     <div className="settings-overlay" role="presentation" onClick={onOverlayClick}>
       <section
-        className="provider-modal agent-provider-modal"
+        className="panel-modal agent-panel-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-settings-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="provider-header">
-          <div className="provider-header-title-wrap">
-            <span className="provider-header-icon material-symbols-outlined" aria-hidden="true">
+        <header className="panel-modal-header">
+          <div className="panel-modal-header-title-wrap">
+            <span className="panel-modal-header-icon material-symbols-outlined" aria-hidden="true">
               hub
             </span>
             <h3 id="agent-settings-title" className="settings-title">
@@ -99,7 +99,7 @@ export function AgentSettingsModal({
             </h3>
           </div>
           <button
-            className="provider-close-btn"
+            className="panel-modal-close-btn"
             type="button"
             aria-label="에이전트 설정 창 닫기"
             onClick={onClose}
@@ -110,13 +110,13 @@ export function AgentSettingsModal({
           </button>
         </header>
 
-        <div className="provider-body">
-          <aside className="provider-sidebar agent-provider-sidebar" aria-label="agent 설정 탭">
-            <p className="provider-sidebar-label">AGENTS</p>
-            <p className="provider-sidebar-help">에이전트를 추가하고 순서를 관리해.</p>
+        <div className="panel-modal-body">
+          <aside className="panel-modal-sidebar agent-panel-modal-sidebar" aria-label="agent 설정 탭">
+            <p className="panel-modal-sidebar-label">AGENTS</p>
+            <p className="panel-modal-sidebar-help">에이전트를 추가하고 순서를 관리해.</p>
 
             <button
-              className={`provider-nav-item ${agentSettingsTab === "create" ? "is-active" : ""}`}
+              className={`panel-modal-nav-item ${agentSettingsTab === "create" ? "is-active" : ""}`}
               type="button"
               aria-current={agentSettingsTab === "create" ? "true" : undefined}
               onClick={() => onTabChange("create")}
@@ -127,7 +127,7 @@ export function AgentSettingsModal({
               <span>Agent 추가</span>
             </button>
             <button
-              className={`provider-nav-item ${agentSettingsTab === "list" ? "is-active" : ""}`}
+              className={`panel-modal-nav-item ${agentSettingsTab === "list" ? "is-active" : ""}`}
               type="button"
               aria-current={agentSettingsTab === "list" ? "true" : undefined}
               onClick={() => onTabChange("list")}
@@ -139,10 +139,10 @@ export function AgentSettingsModal({
             </button>
           </aside>
 
-          <main className="provider-main agent-provider-main">
+          <main className="panel-modal-main agent-panel-modal-main">
             {agentSettingsTab === "create" ? (
               <>
-                <div className="provider-main-copy">
+                <div className="panel-modal-main-copy">
                   <h4>Agent 추가</h4>
                   <p>기본 정보와 모델, 프롬프트, 연결 리소스를 함께 설정해 새 에이전트를 만들어.</p>
                 </div>
@@ -277,7 +277,7 @@ export function AgentSettingsModal({
               </>
             ) : (
               <>
-                <div className="provider-main-copy">
+                <div className="panel-modal-main-copy">
                   <h4>Agent 목록</h4>
                   <p>순서 변경, 삭제, 그리고 각 에이전트의 이름과 아이콘을 바로 정리할 수 있어.</p>
                 </div>
@@ -340,11 +340,7 @@ export function AgentSettingsModal({
                         <button
                           className="small-icon-btn"
                           type="button"
-                          title={
-                            agent.role === "main"
-                              ? "메인 에이전트"
-                              : "메인 에이전트로 설정"
-                          }
+                          title={agent.role === "main" ? "메인 에이전트" : "메인 에이전트로 설정"}
                           aria-label={
                             agent.role === "main"
                               ? `${agent.name || "agent"} 메인 에이전트`

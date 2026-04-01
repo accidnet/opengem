@@ -11,7 +11,7 @@ type AppHeaderProps = {
   onExportChat: () => void;
   onClearContext: () => void;
   onThemeToggle: () => void;
-  onOpenProviderDialog: () => void;
+  onOpenPanelModal: () => void;
 };
 
 export function AppHeader({
@@ -23,7 +23,7 @@ export function AppHeader({
   onExportChat,
   onClearContext,
   onThemeToggle,
-  onOpenProviderDialog,
+  onOpenPanelModal,
 }: AppHeaderProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -123,7 +123,7 @@ export function AppHeader({
                 role="menuitem"
                 onClick={() => {
                   setIsProfileMenuOpen(false);
-                  onOpenProviderDialog();
+                  onOpenPanelModal();
                 }}
               >
                 Provider

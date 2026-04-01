@@ -324,15 +324,15 @@
   gap: 8px;
 }
 
-.mode-provider-modal {
+.mode-panel-modal {
   width: min(980px, 100%);
 }
 
-.mode-provider-modal .provider-body {
+.mode-panel-modal .panel-modal-body {
   grid-template-columns: 220px minmax(0, 1fr);
 }
 
-.mode-provider-sidebar {
+.mode-panel-modal-sidebar {
   padding: 28px 20px;
   background: transparent;
   display: flex;
@@ -341,12 +341,12 @@
   gap: 14px;
 }
 
-.mode-provider-tabs {
+.mode-panel-modal-tabs {
   display: grid;
   gap: 8px;
 }
 
-.mode-provider-tab {
+.mode-panel-modal-tab {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -362,23 +362,23 @@
     color 140ms ease;
 }
 
-.mode-provider-tab:hover {
+.mode-panel-modal-tab:hover {
   color: var(--text-main);
   border-color: rgba(56, 189, 248, 0.3);
 }
 
-.mode-provider-tab.is-active {
+.mode-panel-modal-tab.is-active {
   border-color: rgba(56, 189, 248, 0.45);
   background: rgba(56, 189, 248, 0.14);
   color: #e0f2fe;
 }
 
-.mode-provider-main {
+.mode-panel-modal-main {
   gap: 18px;
   padding-inline: 24px 32px;
 }
 
-.mode-provider-main > * {
+.mode-panel-modal-main > * {
   width: min(100%, 720px);
   margin-inline: auto;
 }
@@ -403,15 +403,15 @@
   width: min(1120px, 100%);
 }
 
-.agent-provider-modal {
+.agent-panel-modal {
   width: min(1180px, 100%);
 }
 
-.agent-provider-sidebar {
+.agent-panel-modal-sidebar {
   padding-top: 28px;
 }
 
-.agent-provider-main {
+.agent-panel-modal-main {
   gap: 18px;
 }
 
@@ -535,11 +535,11 @@
     grid-template-columns: 1fr;
   }
 
-  .mode-provider-main {
+  .mode-panel-modal-main {
     padding-inline: 20px;
   }
 
-  .mode-provider-main > * {
+  .mode-panel-modal-main > * {
     width: 100%;
   }
 

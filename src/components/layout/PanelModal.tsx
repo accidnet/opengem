@@ -1,7 +1,7 @@
 import { applyModelSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/data/llmCatalog";
 import type { LLMSettings } from "@/types/chat";
 
-type ProviderDialogProps = {
+type PanelModalProps = {
   settings: LLMSettings;
   isOpen: boolean;
   isSaving: boolean;
@@ -24,7 +24,7 @@ const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   custom_openai: "tune",
 };
 
-export function ProviderDialog({
+export function PanelModal({
   settings,
   isOpen,
   isSaving,
@@ -36,7 +36,7 @@ export function ProviderDialog({
   onSave,
   onLoginChatGPT,
   onLogoutChatGPT,
-}: ProviderDialogProps) {
+}: PanelModalProps) {
   if (!isOpen) {
     return null;
   }
@@ -49,39 +49,39 @@ export function ProviderDialog({
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
       <section
-        className="provider-modal"
+        className="panel-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="provider-header">
-          <div className="provider-header-title-wrap">
-            <span className="provider-header-icon material-symbols-outlined" aria-hidden="true">
+        <header className="panel-modal-header">
+          <div className="panel-modal-header-title-wrap">
+            <span className="panel-modal-header-icon material-symbols-outlined" aria-hidden="true">
               settings
             </span>
             <h3 id="settings-title" className="settings-title">
               Providers
             </h3>
           </div>
-          <button className="provider-close-btn" type="button" aria-label="Close provider dialog" onClick={onClose}>
+          <button className="panel-modal-close-btn" type="button" aria-label="Close provider dialog" onClick={onClose}>
             <span className="material-symbols-outlined" aria-hidden="true">
               close
             </span>
           </button>
         </header>
 
-        <div className="provider-body">
-          <aside className="provider-sidebar" aria-label="Provider list">
-            <p className="provider-sidebar-label">PROVIDERS</p>
-            <p className="provider-sidebar-help">Manage model families, prompts, and credentials.</p>
+        <div className="panel-modal-body">
+          <aside className="panel-modal-sidebar" aria-label="Provider list">
+            <p className="panel-modal-sidebar-label">PROVIDERS</p>
+            <p className="panel-modal-sidebar-help">Manage model families, prompts, and credentials.</p>
 
             {providers.map((provider) => {
               const isActive = provider.id === activeProvider.id;
               return (
                 <button
                   key={provider.id}
-                  className={`provider-nav-item ${isActive ? "is-active" : ""}`}
+                  className={`panel-modal-nav-item ${isActive ? "is-active" : ""}`}
                   type="button"
                   aria-current={isActive ? "true" : undefined}
                   onClick={() => onChange(applyProviderSelection(settings, provider.id))}
@@ -95,8 +95,8 @@ export function ProviderDialog({
             })}
           </aside>
 
-          <main className="provider-main">
-            <div className="provider-main-copy">
+          <main className="panel-modal-main">
+            <div className="panel-modal-main-copy">
               <h4>{activeProvider.label} Configuration</h4>
               <p>{activeProvider.description}</p>
             </div>

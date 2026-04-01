@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AppHeader } from "../../components/layout/AppHeader";
 import { ChatPanel } from "../../components/layout/ChatPanel";
 import { LeftPanel } from "../../components/layout/LeftPanel";
-import { ProviderDialog } from "../../components/layout/ProviderDialog";
+import { PanelModal } from "../../components/layout/PanelModal";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "../../data/appData";
 import { useAppController } from "../../hooks/useAppController";
@@ -39,7 +39,7 @@ export function ChatPage() {
     handleSessionSelect,
     inputValue,
     isChatGPTLoginBusy,
-    isProviderDialogOpen,
+    isPanelModalOpen,
     isSavingProvider,
     loginChatGPT,
     logoutChatGPT,
@@ -48,19 +48,19 @@ export function ChatPage() {
     onEnterSubmit,
     openSelectedModeSignal,
     openProjectFolder,
-    providerError,
+    panelModalError,
     resourceCost,
     resourceToken,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
-    saveProviderSettings,
+    savePanelModalSettings,
     selectOperationMode,
     selectedMode,
     sendMessage,
     sessionsByMode,
     setInputValue,
-    setIsProviderDialogOpen,
-    setProviderError,
+    setIsPanelModalOpen,
+    setPanelModalError,
     setSettings,
     settings,
     startNewChat,
@@ -84,19 +84,13 @@ export function ChatPage() {
 
       if (isResizingLeftPanel && window.innerWidth > 980) {
         const nextWidth = event.clientX - gridBounds.left;
-        const clampedWidth = Math.min(
-          Math.max(nextWidth, MIN_LEFT_PANEL_WIDTH),
-          MAX_LEFT_PANEL_WIDTH,
-        );
+        const clampedWidth = Math.min(Math.max(nextWidth, MIN_LEFT_PANEL_WIDTH), MAX_LEFT_PANEL_WIDTH);
         setLeftPanelWidth(clampedWidth);
       }
 
       if (isResizingRightPanel && window.innerWidth > 1280) {
         const nextWidth = gridBounds.right - event.clientX;
-        const clampedWidth = Math.min(
-          Math.max(nextWidth, MIN_RIGHT_PANEL_WIDTH),
-          MAX_RIGHT_PANEL_WIDTH,
-        );
+        const clampedWidth = Math.min(Math.max(nextWidth, MIN_RIGHT_PANEL_WIDTH), MAX_RIGHT_PANEL_WIDTH);
         setRightPanelWidth(clampedWidth);
       }
     };
@@ -145,14 +139,12 @@ export function ChatPage() {
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
-        onOpenProviderDialog={() => setIsProviderDialogOpen(true)}
+        onOpenPanelModal={() => setIsPanelModalOpen(true)}
       />
 
       <main
         ref={bodyGridRef}
-        className={`body-grid${
-          isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""
-        }`}
+        className={`body-grid${isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""}`}
         style={
           {
             "--left-panel-width": `${leftPanelWidth}px`,
@@ -232,21 +224,21 @@ export function ChatPage() {
         />
       </main>
 
-      <ProviderDialog
+      <PanelModal
         settings={settings}
-        isOpen={isProviderDialogOpen}
+        isOpen={isPanelModalOpen}
         isSaving={isSavingProvider}
         isLoginBusy={isChatGPTLoginBusy}
         loginUrl={chatGPTLoginUrl}
-        errorMessage={providerError}
-        onClose={() => setIsProviderDialogOpen(false)}
+        errorMessage={panelModalError}
+        onClose={() => setIsPanelModalOpen(false)}
         onChange={(patch) => {
           setSettings((prev) => ({ ...prev, ...patch }));
-          if (providerError) {
-            setProviderError("");
+          if (panelModalError) {
+            setPanelModalError("");
           }
         }}
-        onSave={saveProviderSettings}
+        onSave={savePanelModalSettings}
         onLoginChatGPT={loginChatGPT}
         onLogoutChatGPT={logoutChatGPT}
       />
