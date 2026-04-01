@@ -7,6 +7,7 @@ export type DraftModeItem = {
   icon: ModeIcon;
   originalName?: Mode;
   projectPaths: string[];
+  defaultModel?: string;
 };
 
 export type DraftAgentItem = AgentItem & {

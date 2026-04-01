@@ -13,6 +13,7 @@ type ModeSettingsModalProps = {
   newModeIcon: ModeIcon;
   newModeProjectPath: string;
   newModeProjectPaths: string[];
+  newModeDefaultModel: string;
   modeNameError: string;
   draftModes: DraftModeItem[];
   suppressOverlayCloseRef: MutableRefObject<boolean>;
@@ -20,6 +21,7 @@ type ModeSettingsModalProps = {
   onOverlayClick: () => void;
   onNewModeNameChange: (value: string) => void;
   onNewModeIconChange: (icon: ModeIcon) => void;
+  onNewModeDefaultModelChange: (value: string) => void;
   onNewModeProjectPathChange: (value: string) => void;
   onAddNewModeProjectPath: () => void;
   onAddNewModeProjectPathOnEnter: (event: KeyboardEvent<HTMLInputElement>) => void;
@@ -29,6 +31,7 @@ type ModeSettingsModalProps = {
   onCreateModeOnEnter: (event: KeyboardEvent<HTMLInputElement>) => void;
   onDraftModeNameChange: (id: string, value: string) => void;
   onDraftModeIconChange: (id: string, icon: ModeIcon) => void;
+  onDraftModeDefaultModelChange: (id: string, value: string) => void;
   onAddDraftModeProjectPath: (id: string, value: string) => void;
   onPickDraftModeProjectPath: (id: string) => void | Promise<void>;
   onRemoveDraftModeProjectPath: (id: string, projectPath: string) => void;
@@ -80,6 +83,7 @@ export function ModeSettingsModal({
   newModeIcon,
   newModeProjectPath,
   newModeProjectPaths,
+  newModeDefaultModel,
   modeNameError,
   draftModes,
   suppressOverlayCloseRef,
@@ -87,6 +91,7 @@ export function ModeSettingsModal({
   onOverlayClick,
   onNewModeNameChange,
   onNewModeIconChange,
+  onNewModeDefaultModelChange,
   onNewModeProjectPathChange,
   onAddNewModeProjectPath,
   onAddNewModeProjectPathOnEnter,
@@ -96,6 +101,7 @@ export function ModeSettingsModal({
   onCreateModeOnEnter,
   onDraftModeNameChange,
   onDraftModeIconChange,
+  onDraftModeDefaultModelChange,
   onAddDraftModeProjectPath,
   onPickDraftModeProjectPath,
   onRemoveDraftModeProjectPath,
@@ -146,7 +152,7 @@ export function ModeSettingsModal({
         <div className="provider-body">
           <aside className="provider-sidebar mode-provider-sidebar" aria-label="모드 설정 안내">
             <p className="provider-sidebar-label">MODES</p>
-            <p className="provider-sidebar-help">모드마다 연결할 프로젝트 폴더를 같이 저장할 수 있어.</p>
+            <p className="provider-sidebar-help">모드마다 기본 모델과 프로젝트 폴더를 같이 저장할 수 있어.</p>
 
             <div className="mode-provider-tabs" role="tablist" aria-label="모드 설정 탭">
               <button
@@ -175,8 +181,8 @@ export function ModeSettingsModal({
               <h4>{activeTab === "create" ? "모드 추가" : "모드 목록"}</h4>
               <p>
                 {activeTab === "create"
-                  ? "새 모드를 만들면서 프로젝트 폴더를 미리 연결해 둘 수 있어."
-                  : "기존 모드별 이름, 아이콘, 순서, 프로젝트 폴더를 한 번에 관리할 수 있어."}
+                  ? "새 모드에 기본 모델과 기본 프로젝트 폴더 설정을 미리 저장할 수 있어."
+                  : "기존 모드별 이름, 아이콘, 기본 모델, 기본 프로젝트 폴더 설정을 한 번에 관리할 수 있어."}
               </p>
             </div>
 
@@ -185,7 +191,7 @@ export function ModeSettingsModal({
                 <div className="settings-card-head settings-card-head-column">
                   <div>
                     <h4>새 모드 추가</h4>
-                    <p>이름과 아이콘, 프로젝트 폴더를 설정한 뒤 초안 목록에 추가해.</p>
+                    <p>이름, 아이콘, 기본 모델, 기본 프로젝트 폴더 설정을 초안 목록에 추가해.</p>
                   </div>
                 </div>
 
@@ -221,6 +227,17 @@ export function ModeSettingsModal({
                       ))}
                     </select>
                   </div>
+                  <input
+                    type="text"
+                    className="mode-settings-input"
+                    placeholder="기본 모델 예: gpt-5.4"
+                    value={newModeDefaultModel}
+                    onMouseDown={() => {
+                      suppressOverlayCloseRef.current = true;
+                    }}
+                    onChange={(event) => onNewModeDefaultModelChange(event.target.value)}
+                    aria-label="새 모드 기본 모델"
+                  />
                   <button className="mode-settings-action" type="button" onClick={onCreateMode}>
                     추가
                   </button>
@@ -228,8 +245,8 @@ export function ModeSettingsModal({
 
                 <div className="mode-project-path-section">
                   <div className="mode-project-path-copy">
-                    <h5>프로젝트 폴더</h5>
-                    <p>직접 경로를 입력하거나 폴더 선택 창으로 추가할 수 있어.</p>
+                    <h5>기본 프로젝트 폴더 설정</h5>
+                    <p>Operation Mode내에 생성되는 session에 대해 기본값으로 설정될 프로젝트 폴더야.</p>
                   </div>
 
                   <div className="mode-project-path-input-row">
@@ -303,6 +320,16 @@ export function ModeSettingsModal({
                               ))}
                             </select>
                           </div>
+                          <input
+                            className="mode-settings-input"
+                            value={mode.defaultModel || ""}
+                            placeholder="기본 모델 예: gpt-5.4"
+                            aria-label={`${mode.name || "mode"} 기본 모델 설정`}
+                            onMouseDown={() => {
+                              suppressOverlayCloseRef.current = true;
+                            }}
+                            onChange={(event) => onDraftModeDefaultModelChange(mode.id, event.target.value)}
+                          />
                           <button
                             className="small-icon-btn"
                             type="button"
@@ -340,8 +367,11 @@ export function ModeSettingsModal({
 
                         <div className="mode-settings-item-folders">
                           <div className="mode-project-path-copy">
-                            <h5>프로젝트 폴더</h5>
-                            <p>{projectPathCounts[mode.id] || 0}개 연결됨</p>
+                            <h5>기본 프로젝트 폴더 설정</h5>
+                            <p>
+                              Operation Mode내에 생성되는 session에 대해 기본값으로 설정될 프로젝트
+                              폴더 {`(${projectPathCounts[mode.id] || 0}개 연결됨)`}
+                            </p>
                           </div>
 
                           <div className="mode-project-path-input-row">

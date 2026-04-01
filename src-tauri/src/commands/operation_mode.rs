@@ -42,6 +42,7 @@ pub struct OperationModeInput {
     name: String,
     original_name: Option<String>,
     project_paths: Option<Vec<String>>,
+    default_model: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -49,6 +50,7 @@ pub struct OperationModeInput {
 pub struct OperationModeItem {
     name: String,
     project_paths: Vec<String>,
+    default_model: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -113,6 +115,10 @@ fn default_mode_agents() -> Vec<AgentPayload> {
         mcp_servers: Some(vec!["linear".to_string()]),
         skills: Some(vec!["task-routing".to_string()]),
     }]
+}
+
+fn default_mode_model() -> String {
+    "gpt-5.4".to_string()
 }
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {
@@ -237,7 +243,13 @@ fn ensure_default_operation_mode(
     connection
         .execute(
             SQL_INSERT_OPERATION_MODE,
-            params![&default_mode, 0_i64, 1_i64, Option::<String>::None],
+            params![
+                &default_mode,
+                0_i64,
+                1_i64,
+                Option::<String>::None,
+                Some(default_mode_model())
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -260,6 +272,7 @@ fn ensure_default_operation_mode(
         items: vec![OperationModeItem {
             name: default_mode,
             project_paths: Vec::new(),
+            default_model: Some(default_mode_model()),
         }],
     })
 }
@@ -276,7 +289,8 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
             let mode_name: String = row.get(0)?;
             let is_selected: i64 = row.get(1)?;
             let project_paths = deserialize_json(row.get(2)?)?.unwrap_or_default();
-            Ok((mode_name, is_selected, project_paths))
+            let default_model = normalize_optional_text(row.get(3)?);
+            Ok((mode_name, is_selected, project_paths, default_model))
         })
         .map_err(|error| error.to_string())?;
 
@@ -285,7 +299,8 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
     let mut selected_mode: Option<String> = None;
 
     for row in rows {
-        let (mode_name, is_selected, project_paths) = row.map_err(|error| error.to_string())?;
+        let (mode_name, is_selected, project_paths, default_model) =
+            row.map_err(|error| error.to_string())?;
         if is_selected == 1 {
             selected_mode = Some(mode_name.clone());
         }
@@ -293,6 +308,7 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
         items.push(OperationModeItem {
             name: mode_name.clone(),
             project_paths,
+            default_model,
         });
         modes.push(mode_name);
     }
@@ -347,6 +363,7 @@ pub fn save_operation_mode(
             name: trimmed.to_string(),
             original_name: normalize_optional_text(mode.original_name),
             project_paths: normalize_optional_list(mode.project_paths),
+            default_model: normalize_optional_text(mode.default_model),
         });
     }
 
@@ -390,6 +407,10 @@ pub fn save_operation_mode(
         });
 
         let serialized_project_paths = serialize_json(&mode.project_paths)?;
+        let default_model = mode
+            .default_model
+            .clone()
+            .unwrap_or_else(default_mode_model);
 
         if let Some(mode_id) = existing_match {
             let original_name = mode.original_name.as_deref().unwrap_or(&mode.name);
@@ -401,14 +422,16 @@ pub fn save_operation_mode(
                     SET mode_name = ?1,
                         display_order = ?2,
                         is_selected = ?3,
-                        project_paths = ?4
-                    WHERE id = ?5
+                        project_paths = ?4,
+                        default_model = ?5
+                    WHERE id = ?6
                     ",
                     params![
                         mode.name,
                         index as i64,
                         if mode.name == selected_mode { 1_i64 } else { 0_i64 },
                         serialized_project_paths,
+                        default_model,
                         mode_id
                     ],
                 )
@@ -430,7 +453,8 @@ pub fn save_operation_mode(
                     mode.name,
                     index as i64,
                     if mode.name == selected_mode { 1_i64 } else { 0_i64 },
-                    serialized_project_paths
+                    serialized_project_paths,
+                    default_model
                 ],
             )
             .map_err(|error| error.to_string())?;

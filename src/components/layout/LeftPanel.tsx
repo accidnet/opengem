@@ -13,6 +13,24 @@ import { ToolsSection } from "./left-panel/ToolsSection";
 import type { AgentSettingsTab, DraftAgentItem, DraftModeItem } from "./left-panel/types";
 import { parseConfigList } from "./left-panel/utils";
 
+type QuickEditAgentDraft = {
+  name: string;
+  model: string;
+  role: AgentRole;
+  active: boolean;
+};
+
+type QuickEditPopoverPosition = {
+  top: number;
+  left: number;
+};
+
+type QuickEditPopoverAnchor = {
+  top: number;
+  bottom: number;
+  right: number;
+};
+
 type LeftPanelProps = {
   modes: readonly Mode[];
   selectedMode: Mode;
@@ -22,11 +40,12 @@ type LeftPanelProps = {
     nextModes: Mode[],
     nextModeIcons: Record<Mode, ModeIcon>,
     nextSelectedMode: Mode,
-    modeItems: Array<{ name: Mode; originalName?: Mode; projectPaths?: string[] }>
+    modeItems: Array<{ name: Mode; originalName?: Mode; projectPaths?: string[]; defaultModel?: string }>
   ) => void | Promise<void>;
   onSaveAgents: (nextAgents: AgentItem[]) => void | Promise<void>;
   getModeIcon: (mode: Mode) => ModeIcon;
   getModeProjectPaths: (mode: Mode) => string[];
+  getModeDefaultModel: (mode: Mode) => string;
   agents: AgentItem[];
   sessionsByMode: Record<Mode, SessionItem[]>;
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
@@ -43,6 +62,7 @@ export function LeftPanel({
   onSaveAgents,
   getModeIcon,
   getModeProjectPaths,
+  getModeDefaultModel,
   agents,
   sessionsByMode,
   onSessionSelect,
@@ -57,6 +77,7 @@ export function LeftPanel({
   const [newModeIcon, setNewModeIcon] = useState<ModeIcon>("tune");
   const [newModeProjectPath, setNewModeProjectPath] = useState("");
   const [newModeProjectPaths, setNewModeProjectPaths] = useState<string[]>([]);
+  const [newModeDefaultModel, setNewModeDefaultModel] = useState(DEFAULT_AGENT_MODEL);
   const [modeNameError, setModeNameError] = useState("");
   const [draftModes, setDraftModes] = useState<DraftModeItem[]>([]);
   const [draftAgents, setDraftAgents] = useState<DraftAgentItem[]>([]);
@@ -69,7 +90,13 @@ export function LeftPanel({
   const [newAgentMcpServers, setNewAgentMcpServers] = useState("");
   const [newAgentSkills, setNewAgentSkills] = useState("");
   const [agentNameError, setAgentNameError] = useState("");
+  const [quickEditAgentIndex, setQuickEditAgentIndex] = useState<number | null>(null);
+  const [quickEditAgentDraft, setQuickEditAgentDraft] = useState<QuickEditAgentDraft | null>(null);
+  const [quickEditPopoverPosition, setQuickEditPopoverPosition] = useState<QuickEditPopoverPosition | null>(null);
+  const [quickEditPopoverAnchor, setQuickEditPopoverAnchor] = useState<QuickEditPopoverAnchor | null>(null);
+  const [quickEditError, setQuickEditError] = useState("");
   const suppressOverlayCloseRef = useRef(false);
+  const quickEditPopoverRef = useRef<HTMLElement | null>(null);
   const draftModeIdRef = useRef(0);
   const draftAgentIdRef = useRef(0);
   const isSettingsOpen = isModeSettingsOpen || isAgentSettingsOpen;
@@ -135,6 +162,48 @@ export function LeftPanel({
     return () => window.removeEventListener("mouseup", handleMouseUp);
   }, [isSettingsOpen]);
 
+  useEffect(() => {
+    if (!quickEditPopoverAnchor || !quickEditPopoverRef.current) {
+      return;
+    }
+
+    const reposition = () => {
+      if (!quickEditPopoverRef.current) {
+        return;
+      }
+
+      const viewportPadding = 8;
+      const popoverWidth = quickEditPopoverRef.current.offsetWidth;
+      const popoverHeight = quickEditPopoverRef.current.offsetHeight;
+      const preferredLeft = quickEditPopoverAnchor.right - popoverWidth;
+      const preferredTop = quickEditPopoverAnchor.bottom + 6;
+      const fallbackTop = quickEditPopoverAnchor.top - popoverHeight - 6;
+
+      const nextLeft = Math.min(
+        Math.max(preferredLeft, viewportPadding),
+        Math.max(viewportPadding, window.innerWidth - popoverWidth - viewportPadding)
+      );
+      const nextTop =
+        preferredTop + popoverHeight + viewportPadding <= window.innerHeight
+          ? preferredTop
+          : Math.max(
+              viewportPadding,
+              Math.min(fallbackTop, window.innerHeight - popoverHeight - viewportPadding)
+            );
+
+      setQuickEditPopoverPosition((prev) => {
+        if (prev && prev.top === nextTop && prev.left === nextLeft) {
+          return prev;
+        }
+        return { top: nextTop, left: nextLeft };
+      });
+    };
+
+    reposition();
+    window.addEventListener("resize", reposition);
+    return () => window.removeEventListener("resize", reposition);
+  }, [quickEditPopoverAnchor, quickEditAgentDraft, quickEditError]);
+
   const openModeSettings = () => {
     setDraftModes(
       modes.map((mode, index) => ({
@@ -143,12 +212,14 @@ export function LeftPanel({
         icon: getModeIcon(mode),
         originalName: mode,
         projectPaths: [...getModeProjectPaths(mode)],
+        defaultModel: getModeDefaultModel(mode),
       }))
     );
     setNewModeName("");
     setNewModeIcon("tune");
     setNewModeProjectPath("");
     setNewModeProjectPaths([]);
+    setNewModeDefaultModel(getModeDefaultModel(selectedMode));
     setModeNameError("");
     setIsModeSettingsOpen(true);
   };
@@ -161,7 +232,7 @@ export function LeftPanel({
     setNewAgentName("");
     setNewAgentIcon("smart_toy");
     setNewAgentColor("indigo");
-    setNewAgentModel(DEFAULT_AGENT_MODEL);
+    setNewAgentModel(getModeDefaultModel(selectedMode));
     setNewAgentPrompt("");
     setNewAgentTools("");
     setNewAgentMcpServers("");
@@ -222,6 +293,7 @@ export function LeftPanel({
         name: trimmedName,
         icon: newModeIcon,
         projectPaths: [...newModeProjectPaths],
+        defaultModel: newModeDefaultModel.trim() || DEFAULT_AGENT_MODEL,
       },
     ]);
     setModeNameError("");
@@ -229,6 +301,7 @@ export function LeftPanel({
     setNewModeIcon("tune");
     setNewModeProjectPath("");
     setNewModeProjectPaths([]);
+    setNewModeDefaultModel(getModeDefaultModel(selectedMode));
   };
 
   const handleCreateModeOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -385,12 +458,14 @@ export function LeftPanel({
         icon: "smart_toy",
         originalName: modes[0] || "Orchestration",
         projectPaths: [],
+        defaultModel: getModeDefaultModel(modes[0] || "Orchestration"),
       },
     ]);
     setNewModeName("");
     setNewModeIcon("tune");
     setNewModeProjectPath("");
     setNewModeProjectPaths([]);
+    setNewModeDefaultModel(getModeDefaultModel(modes[0] || "Orchestration"));
     setModeNameError("");
   };
 
@@ -407,6 +482,7 @@ export function LeftPanel({
     const normalizedModes = draftModes.map((mode) => ({
       ...mode,
       name: mode.name.trim(),
+      defaultModel: mode.defaultModel?.trim() || DEFAULT_AGENT_MODEL,
       projectPaths: mode.projectPaths
         .map((projectPath) => normalizeProjectPath(projectPath))
         .filter((projectPath, index, items) => {
@@ -439,6 +515,7 @@ export function LeftPanel({
       name: mode.name,
       originalName: mode.originalName,
       projectPaths: mode.projectPaths,
+      defaultModel: mode.defaultModel,
     }));
     const nextModeIcons = normalizedModes.reduce<Record<Mode, ModeIcon>>((acc, mode, index) => {
       acc[mode.name] = mode.icon || (index === 0 ? "smart_toy" : "tune");
@@ -599,6 +676,100 @@ export function LeftPanel({
     closeAgentSettings();
   };
 
+  const handleStartQuickEditAgent = (index: number, anchorRect: DOMRect) => {
+    const target = agents[index];
+    if (!target) {
+      return;
+    }
+
+    setQuickEditAgentIndex(index);
+    setQuickEditAgentDraft({
+      name: target.name,
+      model: target.model?.trim() || getModeDefaultModel(selectedMode),
+      role: (target.role ?? (index === 0 ? "main" : "sub")) as AgentRole,
+      active: Boolean(target.active),
+    });
+    setQuickEditPopoverAnchor({
+      top: anchorRect.top,
+      bottom: anchorRect.bottom,
+      right: anchorRect.right,
+    });
+    setQuickEditPopoverPosition({
+      top: Math.max(8, anchorRect.bottom + 6),
+      left: Math.max(8, anchorRect.right - 280),
+    });
+    setQuickEditError("");
+  };
+
+  const handleQuickEditAgentChange = <K extends keyof QuickEditAgentDraft>(
+    key: K,
+    value: QuickEditAgentDraft[K]
+  ) => {
+    setQuickEditAgentDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+    if (key === "name" && quickEditError) {
+      setQuickEditError("");
+    }
+  };
+
+  const handleCancelQuickEditAgent = () => {
+    setQuickEditAgentIndex(null);
+    setQuickEditAgentDraft(null);
+    setQuickEditPopoverAnchor(null);
+    setQuickEditPopoverPosition(null);
+    setQuickEditError("");
+  };
+
+  const handleSaveQuickEditAgent = async () => {
+    if (quickEditAgentIndex === null || !quickEditAgentDraft) {
+      return;
+    }
+
+    const trimmedName = quickEditAgentDraft.name.trim();
+    if (!trimmedName) {
+      setQuickEditError("에이전트 이름을 입력해줘.");
+      return;
+    }
+
+    const duplicateName = agents.some(
+      (agent, index) => index !== quickEditAgentIndex && agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicateName) {
+      setQuickEditError("같은 이름의 에이전트가 이미 있어.");
+      return;
+    }
+
+    const nextAgents = agents.map((agent, index) => {
+      if (index !== quickEditAgentIndex) {
+        return agent;
+      }
+
+      return {
+        ...agent,
+        name: trimmedName,
+        model: quickEditAgentDraft.model.trim() || getModeDefaultModel(selectedMode),
+        role: quickEditAgentDraft.role,
+        active: quickEditAgentDraft.active,
+        status: quickEditAgentDraft.active ? "Active" : "Offline",
+      };
+    });
+
+    const normalizedAgents =
+      quickEditAgentDraft.role === "main"
+        ? nextAgents.map((agent, index) => ({
+            ...agent,
+            role: (index === quickEditAgentIndex ? "main" : "sub") as AgentRole,
+          }))
+        : nextAgents.some((agent) => agent.role === "main")
+          ? nextAgents
+          : nextAgents.map((agent, index) => ({
+              ...agent,
+              role: (index === 0 ? "main" : "sub") as AgentRole,
+            }));
+
+    await onSaveAgents(normalizedAgents);
+    handleCancelQuickEditAgent();
+  };
+
   return (
     <aside className="left-panel">
       <ModeSection
@@ -612,7 +783,13 @@ export function LeftPanel({
         onSessionSelect={onSessionSelect}
         onSessionDelete={onSessionDelete}
       />
-      <AgentsSection agents={agents} onOpenSettings={openAgentSettings} />
+      <AgentsSection
+        agents={agents}
+        onOpenSettings={openAgentSettings}
+        quickEditAgentIndex={quickEditAgentIndex}
+        quickEditDraft={quickEditAgentDraft}
+        onStartQuickEditAgent={handleStartQuickEditAgent}
+      />
       <ToolsSection tools={tools} />
 
       <ModeSettingsModal
@@ -623,6 +800,7 @@ export function LeftPanel({
         draftModes={draftModes}
         newModeProjectPath={newModeProjectPath}
         newModeProjectPaths={newModeProjectPaths}
+        newModeDefaultModel={newModeDefaultModel}
         suppressOverlayCloseRef={suppressOverlayCloseRef}
         onClose={closeModeSettings}
         onOverlayClick={handleModeSettingsOverlayClick}
@@ -633,6 +811,7 @@ export function LeftPanel({
           }
         }}
         onNewModeIconChange={setNewModeIcon}
+        onNewModeDefaultModelChange={setNewModeDefaultModel}
         onCreateMode={handleCreateMode}
         onCreateModeOnEnter={handleCreateModeOnEnter}
         onNewModeProjectPathChange={setNewModeProjectPath}
@@ -642,6 +821,9 @@ export function LeftPanel({
         onRemoveNewModeProjectPath={handleRemoveNewModeProjectPath}
         onDraftModeNameChange={handleDraftModeNameChange}
         onDraftModeIconChange={handleDraftModeIconChange}
+        onDraftModeDefaultModelChange={(id, value) => {
+          setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, defaultModel: value } : mode)));
+        }}
         onAddDraftModeProjectPath={handleAddDraftModeProjectPath}
         onPickDraftModeProjectPath={handlePickDraftModeProjectPath}
         onRemoveDraftModeProjectPath={handleRemoveDraftModeProjectPath}
@@ -689,6 +871,92 @@ export function LeftPanel({
         onRemoveDraftAgent={handleRemoveDraftAgent}
         onSave={handleSaveAgentSettings}
       />
+
+      {quickEditAgentIndex !== null && quickEditAgentDraft && quickEditPopoverPosition && (
+        <div className="agent-quick-popover-backdrop" role="presentation" onClick={handleCancelQuickEditAgent}>
+          <section
+            className="agent-quick-popover"
+            ref={quickEditPopoverRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agent-quick-edit-title"
+            style={{
+              top: `${quickEditPopoverPosition.top}px`,
+              left: `${quickEditPopoverPosition.left}px`,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="agent-quick-popover-header">
+              <div className="agent-quick-popover-title-wrap">
+                <h3 id="agent-quick-edit-title" className="agent-quick-popover-title">
+                  Agent Quick Edit
+                </h3>
+                <p className="agent-quick-popover-subtitle">{agents[quickEditAgentIndex]?.name}</p>
+              </div>
+              <button
+                className="agent-quick-popover-close"
+                type="button"
+                aria-label="에이전트 빠른 설정 닫기"
+                onClick={handleCancelQuickEditAgent}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </header>
+
+            <div className="agent-quick-popover-body">
+              <label className="agent-quick-edit-field">
+                <span>이름</span>
+                <input
+                  className="mode-settings-input"
+                  type="text"
+                  value={quickEditAgentDraft.name}
+                  onChange={(event) => handleQuickEditAgentChange("name", event.target.value)}
+                />
+              </label>
+              <label className="agent-quick-edit-field">
+                <span>모델</span>
+                <input
+                  className="mode-settings-input"
+                  type="text"
+                  value={quickEditAgentDraft.model}
+                  onChange={(event) => handleQuickEditAgentChange("model", event.target.value)}
+                />
+              </label>
+              <label className="agent-quick-edit-field">
+                <span>역할</span>
+                <select
+                  className="mode-settings-select"
+                  value={quickEditAgentDraft.role}
+                  onChange={(event) => handleQuickEditAgentChange("role", event.target.value as AgentRole)}
+                >
+                  <option value="main">main</option>
+                  <option value="sub">sub</option>
+                </select>
+              </label>
+              <label className="agent-quick-edit-toggle">
+                <input
+                  type="checkbox"
+                  checked={quickEditAgentDraft.active}
+                  onChange={(event) => handleQuickEditAgentChange("active", event.target.checked)}
+                />
+                <span>활성 상태 유지</span>
+              </label>
+              {quickEditError && <p className="agent-quick-edit-error">{quickEditError}</p>}
+            </div>
+
+            <footer className="agent-quick-popover-footer">
+              <button className="settings-secondary-btn agent-quick-popover-btn" type="button" onClick={handleCancelQuickEditAgent}>
+                취소
+              </button>
+              <button className="settings-primary-btn agent-quick-popover-btn" type="button" onClick={() => void handleSaveQuickEditAgent()}>
+                저장
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </aside>
   );
 }

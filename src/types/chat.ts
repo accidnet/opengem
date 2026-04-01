@@ -92,6 +92,7 @@ export type ResolvedLLMSettings = LLMConfig & {
 export type OperationModeItem = {
   name: string;
   projectPaths: string[];
+  defaultModel?: string;
 };
 
 export type OperationModeState = {

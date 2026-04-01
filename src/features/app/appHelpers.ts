@@ -8,6 +8,7 @@ export type OperationModeInput = {
   name: string;
   originalName?: string;
   projectPaths?: string[];
+  defaultModel?: string;
 };
 
 export type PersistedAgent = Omit<AgentItem, "status">;

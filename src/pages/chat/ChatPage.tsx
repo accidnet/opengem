@@ -14,7 +14,7 @@ const MAX_RIGHT_PANEL_WIDTH = 420;
 
 export function ChatPage() {
   const bodyGridRef = useRef<HTMLElement | null>(null);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(232);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(250);
   const [rightPanelWidth, setRightPanelWidth] = useState(270);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
@@ -30,6 +30,7 @@ export function ChatPage() {
     currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,
+    getModeDefaultModel,
     getModeIcon,
     getModeProjectPaths,
     handleApprovePlan,
@@ -168,6 +169,7 @@ export function ChatPage() {
           onSaveAgents={saveAgentsForSelectedMode}
           getModeIcon={getModeIcon}
           getModeProjectPaths={getModeProjectPaths}
+          getModeDefaultModel={getModeDefaultModel}
           agents={agents}
           sessionsByMode={sessionsByMode}
           onSessionSelect={handleSessionSelect}

@@ -13,7 +13,7 @@
   flex: 1;
   display: grid;
   grid-template-columns:
-    var(--left-panel-width, 232px)
+    var(--left-panel-width, 250px)
     0px
     minmax(0, 1fr)
     0px

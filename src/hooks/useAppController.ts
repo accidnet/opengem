@@ -83,6 +83,7 @@ export function useAppController() {
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
   const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
   const [modeProjectPaths, setModeProjectPaths] = useState<Record<Mode, string[]>>({});
+  const [modeDefaultModels, setModeDefaultModels] = useState<Record<Mode, string>>({});
   const [resourceToken, setResourceToken] = useState(2405);
   const [resourceCost, setResourceCost] = useState(0.04);
   const [theme, setTheme] = useState<ThemeMode>("dark");
@@ -235,6 +236,12 @@ export function useAppController() {
           return acc;
         }, {})
       );
+      setModeDefaultModels(
+        next.items.reduce<Record<Mode, string>>((acc, item) => {
+          acc[item.name] = item.defaultModel?.trim() || LLM_CONFIG.model;
+          return acc;
+        }, {})
+      );
 
       try {
         const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
@@ -260,6 +267,7 @@ export function useAppController() {
       setModes([...MODES]);
       setSelectedMode(MODES[0]);
       setModeProjectPaths({});
+      setModeDefaultModels({});
       setAgents(normalizeAgentsForUi([...AGENTS]));
       setSessionsByMode({});
     }
@@ -1212,16 +1220,22 @@ export function useAppController() {
     const previousModes = modes;
     const previousModeIcons = modeIcons;
     const previousModeProjectPaths = modeProjectPaths;
+    const previousModeDefaultModels = modeDefaultModels;
     const previousSelectedMode = selectedMode;
     const previousAgents = agents;
     const nextModeProjectPaths = modeItems.reduce<Record<Mode, string[]>>((acc, mode) => {
       acc[mode.name] = mode.projectPaths || [];
       return acc;
     }, {});
+    const nextModeDefaultModels = modeItems.reduce<Record<Mode, string>>((acc, mode) => {
+      acc[mode.name] = mode.defaultModel?.trim() || LLM_CONFIG.model;
+      return acc;
+    }, {});
 
     setModes(nextModes);
     setModeIcons(nextModeIcons);
     setModeProjectPaths(nextModeProjectPaths);
+    setModeDefaultModels(nextModeDefaultModels);
     setSelectedMode(nextSelectedMode);
 
     try {
@@ -1232,6 +1246,7 @@ export function useAppController() {
       setModes(previousModes);
       setModeIcons(previousModeIcons);
       setModeProjectPaths(previousModeProjectPaths);
+      setModeDefaultModels(previousModeDefaultModels);
       setSelectedMode(previousSelectedMode);
       setAgents(previousAgents);
       void loadOperationModes();
@@ -1244,6 +1259,10 @@ export function useAppController() {
 
   const getModeProjectPaths = (mode: Mode) => {
     return modeProjectPaths[mode] || [];
+  };
+
+  const getModeDefaultModel = (mode: Mode) => {
+    return modeDefaultModels[mode] || settings.model || LLM_CONFIG.model;
   };
 
   const updateCurrentSessionProjectPaths = async (projectPaths: string[]) => {
@@ -1403,6 +1422,7 @@ export function useAppController() {
     currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,
+    getModeDefaultModel,
     getModeIcon,
     getModeProjectPaths,
     handleApprovePlan,

@@ -33,7 +33,7 @@
 @media (max-width: 1400px) {
   .body-grid {
     grid-template-columns:
-      var(--left-panel-width, 220px)
+      var(--left-panel-width, 250px)
       0px
       minmax(0, 1fr)
       0px
@@ -87,7 +87,7 @@
   }
 
   .body-grid {
-    grid-template-columns: var(--left-panel-width, 230px) 0px minmax(0, 1fr);
+    grid-template-columns: var(--left-panel-width, 250px) 0px minmax(0, 1fr);
   }
 }
 
