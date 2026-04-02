@@ -1,4 +1,5 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
+import { fetchModelsDevCatalog } from "./modelsDevCatalog";
 
 import PROMPT_ANTHROPIC from "./prompts/anthropic.txt?raw";
 import PROMPT_CODEX from "./prompts/codex.txt?raw";
@@ -30,6 +31,8 @@ export type ProviderCatalogEntry = {
   baseUrl: string;
   modelDefault: string;
   authLabel: string;
+  sdkTarget?: "openai" | "openai-compatible" | "native-fetch";
+  modelsSource?: "static" | "models.dev";
   models: ModelCatalogEntry[];
 };
 
@@ -57,6 +60,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
     authLabel: "API Key",
+    sdkTarget: "openai",
+    modelsSource: "static",
     models: [
       { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
       { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", promptProfile: "gpt" },
@@ -77,6 +82,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: CHATGPT_BASE_URL,
     modelDefault: "gpt-5.2",
     authLabel: "ChatGPT Login",
+    sdkTarget: "openai",
+    modelsSource: "static",
     models: [
       { id: "gpt-5.2", label: "GPT-5.2", promptProfile: "gpt" },
       { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
@@ -93,6 +100,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_ANTHROPIC_BASE_URL,
     modelDefault: "claude-3-5-sonnet-latest",
     authLabel: "API Key",
+    sdkTarget: "native-fetch",
+    modelsSource: "static",
     models: [
       { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet", promptProfile: "anthropic" },
       { id: "claude-3-5-sonnet-latest", label: "Claude 3.5 Sonnet", promptProfile: "anthropic" },
@@ -108,6 +117,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_GEMINI_BASE_URL,
     modelDefault: "gemini-2.5-pro",
     authLabel: "API Key",
+    sdkTarget: "native-fetch",
+    modelsSource: "static",
     models: [
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", promptProfile: "gemini" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", promptProfile: "gemini" },
@@ -123,6 +134,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENROUTER_BASE_URL,
     modelDefault: "openai/gpt-4o-mini",
     authLabel: "API Key",
+    sdkTarget: "openai-compatible",
+    modelsSource: "static",
     models: [
       { id: "openai/gpt-4o-mini", label: "OpenAI GPT-4o Mini", promptProfile: "gpt" },
       { id: "openai/gpt-4o", label: "OpenAI GPT-4o", promptProfile: "gpt" },
@@ -139,6 +152,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
     authLabel: "API Key",
+    sdkTarget: "openai-compatible",
+    modelsSource: "static",
     models: [],
   },
 ];
@@ -146,6 +161,74 @@ const providerEntries: ProviderCatalogEntry[] = [
 const providerCatalog = new Map<ProviderId, ProviderCatalogEntry>(
   providerEntries.map((provider) => [provider.id, provider])
 );
+
+const modelsDevProviderMap: Partial<Record<string, ProviderId>> = {
+  anthropic: "anthropic",
+  google: "google",
+  openai: "openai",
+  openrouter: "openrouter",
+};
+
+function toModelsDevEntries(
+  models: Record<string, { id?: string; name?: string }> | undefined
+): ModelCatalogEntry[] {
+  if (!models) {
+    return [];
+  }
+
+  return Object.entries(models)
+    .map(([id, model]) => {
+      const modelId = model.id?.trim() || id;
+      return {
+        id: modelId,
+        label: model.name?.trim() || modelId,
+        promptProfile: resolvePromptProfile(modelId),
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function applyModelsDevProviderCatalog(providerId: ProviderId, models: ModelCatalogEntry[]): ProviderCatalogEntry {
+  const provider = getProviderCatalog(providerId);
+  const next = {
+    ...provider,
+    models: models.length > 0 ? models : provider.models,
+    modelDefault: models.some((entry) => entry.id === provider.modelDefault) ? provider.modelDefault : models[0]?.id || provider.modelDefault,
+    modelsSource: models.length > 0 ? "models.dev" : provider.modelsSource,
+  } satisfies ProviderCatalogEntry;
+
+  providerCatalog.set(providerId, next);
+  return next;
+}
+
+export async function syncProviderCatalogWithModelsDev() {
+  const payload = await fetchModelsDevCatalog();
+  let changed = false;
+
+  for (const [externalId, provider] of Object.entries(payload)) {
+    const providerId = modelsDevProviderMap[externalId];
+    if (!providerId) {
+      continue;
+    }
+
+    const nextModels = toModelsDevEntries(provider.models);
+    if (nextModels.length === 0) {
+      continue;
+    }
+
+    const current = getProviderCatalog(providerId);
+    const currentSignature = JSON.stringify(current.models.map((entry) => entry.id));
+    const nextSignature = JSON.stringify(nextModels.map((entry) => entry.id));
+    if (currentSignature === nextSignature) {
+      continue;
+    }
+
+    applyModelsDevProviderCatalog(providerId, nextModels);
+    changed = true;
+  }
+
+  return changed;
+}
 
 export function listProviders(): ProviderCatalogEntry[] {
   return Array.from(providerCatalog.values());
@@ -168,7 +251,11 @@ export function getModelCatalog(providerId: ProviderId, modelId?: string | null)
 
 export function replaceProviderModels(providerId: ProviderId, models: ModelCatalogEntry[]): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
-  const next = { ...provider, models: [...models] };
+  const next = {
+    ...provider,
+    models: [...models],
+    modelsSource: "static",
+  };
   providerCatalog.set(providerId, next);
   return next;
 }
@@ -179,7 +266,11 @@ export function upsertProviderModels(providerId: ProviderId, models: ModelCatalo
   models.forEach((model) => {
     merged.set(model.id, model);
   });
-  const next = { ...provider, models: Array.from(merged.values()) };
+  const next = {
+    ...provider,
+    models: Array.from(merged.values()),
+    modelsSource: "static",
+  };
   providerCatalog.set(providerId, next);
   return next;
 }

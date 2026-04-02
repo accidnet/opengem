@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/data/appData";
-import { normalizeLlmSettings } from "@/data/llmCatalog";
+import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/data/llmCatalog";
 import type { LLMSettings } from "@/types/chat";
 
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
@@ -38,6 +38,10 @@ export function createProviderSettingsController({
     try {
       const next = await invoke<LLMSettings>("get_llm_settings");
       setSettings(normalizeLlmSettings(next));
+      const changed = await syncProviderCatalogWithModelsDev().catch(() => false);
+      if (changed) {
+        setSettings((current) => normalizeLlmSettings({ ...current }));
+      }
       setPanelModalError("");
     } catch {
       setSettings(normalizeLlmSettings(LLM_CONFIG));

@@ -1,3 +1,7 @@
+import { streamText, generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+
 import { getProviderCatalog, normalizeBaseUrl, type ProviderProtocol } from "@/data/llmCatalog";
 import type { LLMConfig } from "@/types/chat";
 
@@ -61,6 +65,14 @@ export async function sendToLLM(input: LLMRequest): Promise<LLMResponse> {
   const provider = getProviderCatalog(input.providerId);
   const protocol = provider.protocol;
 
+  if (canUseVercelAiSdk(provider.protocol, provider.sdkTarget)) {
+    try {
+      return await sendWithVercelAiSdk(input, provider.protocol, provider.sdkTarget);
+    } catch (error) {
+      console.warn("[opengem] AI SDK path failed, falling back to direct fetch transport.", error);
+    }
+  }
+
   if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
     return sendToChatGptOAuth(input);
   }
@@ -74,6 +86,111 @@ export async function sendToLLM(input: LLMRequest): Promise<LLMResponse> {
   }
 
   return sendToOpenAICompatible(input);
+}
+
+function canUseVercelAiSdk(
+  protocol: ProviderProtocol,
+  sdkTarget?: "openai" | "openai-compatible" | "native-fetch"
+) {
+  if (!sdkTarget || sdkTarget === "native-fetch") {
+    return false;
+  }
+
+  return protocol === "openai-compatible";
+}
+
+async function sendWithVercelAiSdk(
+  input: LLMRequest,
+  protocol: ProviderProtocol,
+  sdkTarget?: "openai" | "openai-compatible" | "native-fetch"
+): Promise<LLMResponse> {
+  if (protocol !== "openai-compatible" || !sdkTarget || sdkTarget === "native-fetch") {
+    throw new Error("AI SDK transport is not configured for this provider.");
+  }
+
+  const model = createSdkLanguageModel(input, sdkTarget);
+  const messages = input.messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
+
+  if (input.stream ?? true) {
+    const result = streamText({
+      model,
+      messages,
+      abortSignal: input.signal,
+    });
+
+    let text = "";
+    input.onEvent?.({ event: "sdk-start", data: input.model });
+
+    for await (const chunk of result.textStream) {
+      text += chunk;
+      input.onChunk?.(chunk);
+      input.onEvent?.({ event: "sdk-chunk", data: chunk });
+    }
+
+    input.onEvent?.({ event: "sdk-finish", data: input.model });
+
+    return {
+      text,
+      usage: mapSdkUsage(await Promise.resolve(result.usage as unknown).catch(() => undefined)),
+    };
+  }
+
+  const result = await generateText({
+    model,
+    messages,
+    abortSignal: input.signal,
+  });
+
+  return {
+    text: result.text,
+    usage: mapSdkUsage(result.usage),
+  };
+}
+
+function createSdkLanguageModel(
+  input: LLMRequest,
+  sdkTarget: "openai" | "openai-compatible"
+) {
+  const baseURL = normalizeBaseUrl(input.apiBaseUrl || DEFAULT_API_BASE_URL);
+
+  if (sdkTarget === "openai") {
+    const openai = createOpenAI({
+      apiKey: input.apiKey,
+      baseURL,
+    });
+    return openai.chat(input.model);
+  }
+
+  const provider = createOpenAICompatible({
+    name: input.providerId || "custom-openai-compatible",
+    apiKey: input.apiKey,
+    baseURL,
+  });
+
+  return provider.chatModel(input.model);
+}
+
+function mapSdkUsage(
+  usage:
+    | {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      }
+    | undefined
+): LLMUsage | undefined {
+  if (!usage) {
+    return undefined;
+  }
+
+  return {
+    promptTokens: usage.inputTokens,
+    completionTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+  };
 }
 
 async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {
@@ -414,7 +531,6 @@ function mergeStreamText(currentText: string, nextChunk: string): {
     return { text: nextChunk, delta: nextChunk };
   }
 
-  // 일부 SSE 프로토콜은 마지막 이벤트에서 누적 전체 텍스트를 다시 보낸다.
   if (nextChunk === currentText) {
     return { text: currentText, delta: "" };
   }
