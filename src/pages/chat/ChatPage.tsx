@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AppHeader } from "../../components/layout/AppHeader";
-import { ChatPanel } from "../../components/layout/ChatPanel";
+import { ChatPanel } from "./layout/ChatPanel";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { PanelModal } from "../../components/layout/PanelModal";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "../../data/appData";
 import { useAppController } from "../../hooks/useAppController";
+import { useChatController } from "./hooks/useChat";
 
 const MIN_LEFT_PANEL_WIDTH = 180;
 const MAX_LEFT_PANEL_WIDTH = 420;
@@ -20,10 +21,25 @@ export function ChatPage() {
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
 
   const {
+    chatGPTLoginUrl,
+    isChatGPTLoginBusy,
+    isPanelModalOpen,
+    isSavingProvider,
+    loginChatGPT,
+    logoutChatGPT,
+    panelModalError,
+    savePanelModalSettings,
+    setIsPanelModalOpen,
+    setPanelModalError,
+    setSettings,
+    settings,
+    theme,
+    toggleTheme,
+  } = useAppController();
+  const {
     activity,
     agents,
     canSend,
-    chatGPTLoginUrl,
     clearContext,
     costPercent,
     currentSessionId,
@@ -38,37 +54,24 @@ export function ChatPage() {
     handleSessionDelete,
     handleSessionSelect,
     inputValue,
-    isChatGPTLoginBusy,
-    isPanelModalOpen,
-    isSavingProvider,
-    loginChatGPT,
-    logoutChatGPT,
     messages,
     modes,
     onEnterSubmit,
     openSelectedModeSignal,
     openProjectFolder,
-    panelModalError,
     resourceCost,
     resourceToken,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
-    savePanelModalSettings,
     selectOperationMode,
     selectedMode,
     sendMessage,
     sessionsByMode,
     setInputValue,
-    setIsPanelModalOpen,
-    setPanelModalError,
-    setSettings,
-    settings,
     startNewChat,
-    theme,
-    toggleTheme,
     tokenPercent,
     updateCurrentSessionProjectPaths,
-  } = useAppController();
+  } = useChatController({ settings });
 
   useEffect(() => {
     if (!isResizingLeftPanel && !isResizingRightPanel) {
