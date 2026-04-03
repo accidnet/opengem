@@ -20,6 +20,11 @@
   min-width: 0;
 }
 
+.top-left {
+  flex: 1 1 auto;
+  max-width: calc(50% - 140px);
+}
+
 .top-center {
   position: absolute;
   left: 50%;
@@ -76,11 +81,14 @@
   display: none;
   align-items: center;
   gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: clamp(180px, 24vw, 360px);
+  overflow: hidden;
+  max-width: min(100%, clamp(180px, 24vw, 360px));
 }
 
 .session-label-wrap h2 {
+  flex: 1 1 auto;
   margin: 0;
   color: var(--text-main);
   font-size: 15px;
@@ -93,6 +101,7 @@
 
 .running-pill {
   display: inline-flex;
+  flex-shrink: 0;
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 10px;
@@ -162,24 +171,6 @@
   border-color: color-mix(in srgb, var(--primary) 72%, #ffffff 0%);
 }
 
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-soft);
-  background: transparent;
-  cursor: pointer;
-}
-
-.icon-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .profile-dot {
   width: 32px;
   height: 32px;
@@ -247,4 +238,51 @@
 .profile-dot:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.08);
+}
+
+@media (min-width: 1200px) {
+  .session-label-wrap {
+    display: flex;
+  }
+}
+
+@media (max-width: 980px) {
+  .top-center {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .top-bar {
+    padding: 0 8px;
+    gap: 8px;
+  }
+
+  .session-label-wrap {
+    display: none;
+  }
+
+  .brand-copy,
+  .separator {
+    display: none;
+  }
+
+  .top-right {
+    gap: 4px;
+  }
+
+  .top-right .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .new-session-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+  }
+
+  .new-session-label {
+    display: none;
+  }
 }

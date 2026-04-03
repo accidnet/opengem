@@ -3,7 +3,7 @@ import { normalizeBaseUrl } from "@/data/llmCatalog";
 import type { LLMRequest, LLMResponse } from "../../types";
 import { safeReadText } from "../../shared/http";
 import { splitSystemMessages } from "../../shared/messages";
-import { extractTextChunk, extractUsage } from "../../shared/payload";
+import { extractFinishReason, extractTextChunk, extractUsage } from "../../shared/payload";
 import { parseSSEStream } from "../../shared/stream";
 
 export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
@@ -43,6 +43,7 @@ export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
   return {
     text: extractTextChunk(json, "anthropic"),
     usage: extractUsage(json, "anthropic"),
+    finishReason: extractFinishReason(json, "anthropic"),
   };
 }
 

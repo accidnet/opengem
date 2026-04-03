@@ -273,7 +273,7 @@ export function LeftPanel({
   const handleCreateMode = () => {
     const trimmedName = newModeName.trim();
     if (!trimmedName) {
-      setModeNameError("모드 이름을 입력해줘.");
+      setModeNameError("?? ??? ??? ???.");
       return;
     }
 
@@ -281,7 +281,7 @@ export function LeftPanel({
       (mode) => mode.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (exists) {
-      setModeNameError("이미 같은 이름의 모드가 있어.");
+      setModeNameError("?? ?? ??? ??? ???.");
       return;
     }
 
@@ -495,18 +495,18 @@ export function LeftPanel({
     }));
 
     if (normalizedModes.length === 0) {
-      setModeNameError("최소 한 개의 모드는 필요해.");
+      setModeNameError("?? ? ?? ??? ????.");
       return;
     }
 
     if (normalizedModes.some((mode) => !mode.name)) {
-      setModeNameError("모드 이름을 비워둘 수 없어.");
+      setModeNameError("?? ??? ??? ? ???.");
       return;
     }
 
     const normalizedNames = normalizedModes.map((mode) => mode.name.toLowerCase());
     if (new Set(normalizedNames).size !== normalizedNames.length) {
-      setModeNameError("이미 같은 이름의 모드가 있어.");
+      setModeNameError("?? ?? ??? ??? ???.");
       return;
     }
 
@@ -531,7 +531,7 @@ export function LeftPanel({
   const handleCreateAgent = () => {
     const trimmedName = newAgentName.trim();
     if (!trimmedName) {
-      setAgentNameError("에이전트 이름을 입력해줘.");
+      setAgentNameError("???? ??? ??? ???.");
       return;
     }
 
@@ -539,7 +539,7 @@ export function LeftPanel({
       (agent) => agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (exists) {
-      setAgentNameError("이미 같은 이름의 에이전트가 있어.");
+      setAgentNameError("?? ?? ??? ????? ???.");
       return;
     }
 
@@ -559,7 +559,7 @@ export function LeftPanel({
         tools: parseConfigList(newAgentTools),
         mcpServers: parseConfigList(newAgentMcpServers),
         skills: parseConfigList(newAgentSkills),
-        status: "대기 중",
+        status: "?? ?",
         active: true,
       },
     ]);
@@ -658,13 +658,13 @@ export function LeftPanel({
     }));
 
     if (normalizedAgents.some((agent) => !agent.name)) {
-      setAgentNameError("에이전트 이름을 비워둘 수 없어.");
+      setAgentNameError("???? ??? ??? ? ???.");
       return;
     }
 
     const normalizedNames = normalizedAgents.map((agent) => agent.name.toLowerCase());
     if (new Set(normalizedNames).size !== normalizedNames.length) {
-      setAgentNameError("이미 같은 이름의 에이전트가 있어.");
+      setAgentNameError("?? ?? ??? ????? ???.");
       return;
     }
 
@@ -726,7 +726,7 @@ export function LeftPanel({
 
     const trimmedName = quickEditAgentDraft.name.trim();
     if (!trimmedName) {
-      setQuickEditError("에이전트 이름을 입력해줘.");
+      setQuickEditError("???? ??? ??? ???.");
       return;
     }
 
@@ -734,7 +734,7 @@ export function LeftPanel({
       (agent, index) => index !== quickEditAgentIndex && agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (duplicateName) {
-      setQuickEditError("같은 이름의 에이전트가 이미 있어.");
+      setQuickEditError("?? ??? ????? ?? ???.");
       return;
     }
 
@@ -896,7 +896,7 @@ export function LeftPanel({
               <button
                 className="agent-quick-popover-close"
                 type="button"
-                aria-label="에이전트 빠른 설정 닫기"
+                aria-label="???? ?? ?? ??"
                 onClick={handleCancelQuickEditAgent}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -907,7 +907,7 @@ export function LeftPanel({
 
             <div className="agent-quick-popover-body">
               <label className="agent-quick-edit-field">
-                <span>이름</span>
+                <span>??</span>
                 <input
                   className="mode-settings-input"
                   type="text"
@@ -916,7 +916,7 @@ export function LeftPanel({
                 />
               </label>
               <label className="agent-quick-edit-field">
-                <span>모델</span>
+                <span>??</span>
                 <input
                   className="mode-settings-input"
                   type="text"
@@ -925,7 +925,7 @@ export function LeftPanel({
                 />
               </label>
               <label className="agent-quick-edit-field">
-                <span>역할</span>
+                <span>??</span>
                 <select
                   className="mode-settings-select"
                   value={quickEditAgentDraft.role}
@@ -941,17 +941,17 @@ export function LeftPanel({
                   checked={quickEditAgentDraft.active}
                   onChange={(event) => handleQuickEditAgentChange("active", event.target.checked)}
                 />
-                <span>활성 상태 유지</span>
+                <span>?? ?? ??</span>
               </label>
               {quickEditError && <p className="agent-quick-edit-error">{quickEditError}</p>}
             </div>
 
             <footer className="agent-quick-popover-footer">
               <button className="settings-secondary-btn agent-quick-popover-btn" type="button" onClick={handleCancelQuickEditAgent}>
-                취소
+                ?띯뫁??
               </button>
               <button className="settings-primary-btn agent-quick-popover-btn" type="button" onClick={() => void handleSaveQuickEditAgent()}>
-                저장
+                ????
               </button>
             </footer>
           </section>

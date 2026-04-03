@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { AppHeader } from "../../components/layout/AppHeader";
+import { AppHeader } from "./layout/AppHeader";
 import { ChatPanel } from "./layout/ChatPanel";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { PanelModal } from "../../components/layout/PanelModal";

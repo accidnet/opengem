@@ -24,12 +24,6 @@
   }
 }
 
-@media (min-width: 1200px) {
-  .session-label-wrap {
-    display: flex;
-  }
-}
-
 @media (max-width: 1400px) {
   .body-grid {
     grid-template-columns:
@@ -95,10 +89,6 @@
   .left-panel {
     width: 248px;
     min-width: 248px;
-  }
-
-  .top-center {
-    display: none;
   }
 
   .body-grid {
@@ -176,39 +166,6 @@
 
   .settings-footer {
     padding: 16px;
-  }
-
-  .top-bar {
-    padding: 0 8px;
-    gap: 8px;
-  }
-
-  .session-label-wrap {
-    display: none;
-  }
-
-  .brand-copy,
-  .separator {
-    display: none;
-  }
-
-  .top-right {
-    gap: 4px;
-  }
-
-  .top-right .icon-btn {
-    width: 30px;
-    height: 30px;
-  }
-
-  .new-session-btn {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-  }
-
-  .new-session-label {
-    display: none;
   }
 
   .chat-scroll {

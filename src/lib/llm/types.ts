@@ -1,10 +1,28 @@
 import type { LLMConfig } from "@/types/chat";
 
-export type LLMRole = "user" | "assistant" | "system";
+export type LLMRole = "user" | "assistant" | "system" | "developer" | "tool";
+
+export type LLMToolCall = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+export type LLMToolDefinition = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
 
 export type LLMMessage = {
   role: LLMRole;
   content: string;
+  name?: string;
+  toolCallId?: string;
+  toolCalls?: LLMToolCall[];
 };
 
 export type LLMUsage = {
@@ -28,6 +46,8 @@ export type LLMRequest = {
   accountId?: string;
   model: string;
   messages: LLMMessage[];
+  tools?: LLMToolDefinition[];
+  toolChoice?: "auto" | "none" | "required";
   stream?: boolean;
   signal?: AbortSignal;
   onChunk?: (chunk: string) => void;
@@ -37,6 +57,8 @@ export type LLMRequest = {
 export type LLMResponse = {
   text: string;
   usage?: LLMUsage;
+  toolCalls?: LLMToolCall[];
+  finishReason?: string;
 };
 
 export type OpenAIUsage = {

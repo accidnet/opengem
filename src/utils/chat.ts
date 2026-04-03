@@ -63,15 +63,8 @@ export const AGENT_COLOR_VALUES: Record<string, string> = {
  * @param messages 현재 세션의 메시지 목록
  * @param systemPrompt 메인 에이전트의 프롬프트 (없으면 기본 시스템 프롬프트 사용)
  */
-export function buildLLMMessages(
-  messages: Message[],
-  systemPrompt?: string,
-  model?: string
-): LLMMessage[] {
-  const resolvedSystemPrompt =
-    model || systemPrompt ? composeAgentSystemPrompt(model, systemPrompt) : LLM_SYSTEM_PROMPT;
-
-  const chatMessages = messages
+export function buildConversationMessages(messages: Message[]): LLMMessage[] {
+  return messages
     .filter((message) => message.side !== "status" && message.type !== "status")
     .map((message) => {
       const content = extractLLMMessageText(message);
@@ -85,8 +78,17 @@ export function buildLLMMessages(
       };
     })
     .filter((entry): entry is LLMMessage => Boolean(entry));
+}
 
-  return [{ role: "system", content: resolvedSystemPrompt }, ...chatMessages];
+export function buildLLMMessages(
+  messages: Message[],
+  systemPrompt?: string,
+  model?: string
+): LLMMessage[] {
+  const resolvedSystemPrompt =
+    systemPrompt?.trim() || (model ? composeAgentSystemPrompt(model) : LLM_SYSTEM_PROMPT);
+
+  return [{ role: "system", content: resolvedSystemPrompt }, ...buildConversationMessages(messages)];
 }
 
 export function appendChunkToMessage(messages: Message[], id: string, text: string): Message[] {

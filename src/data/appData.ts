@@ -10,9 +10,9 @@ export const getModelSystemPrompt = (model?: string, providerId?: LLMSettings["p
 export const LLM_SYSTEM_PROMPT = getModelSystemPrompt(LLM_CONFIG.model, LLM_CONFIG.providerId);
 
 const ORCHESTRATOR_PROMPT_SECTIONS = [
-  "You are the primary orchestration agent.",
-  "Own the overall conversation, decide when specialist help is needed, and produce the final user-facing answer.",
-  "Break complex work into clear tasks, keep track of progress, and avoid delegating simple requests unnecessarily.",
+  "You are the primary coding agent for this workspace.",
+  "Own the conversation end-to-end, inspect the project carefully, and answer the user directly.",
+  "Use the available structured tools when they materially improve correctness or speed.",
 ];
 
 const FRONTEND_PROMPT_SECTIONS = [

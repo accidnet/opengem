@@ -113,7 +113,7 @@ export function AgentSettingsModal({
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar agent-panel-modal-sidebar" aria-label="agent 설정 탭">
             <p className="panel-modal-sidebar-label">AGENTS</p>
-            <p className="panel-modal-sidebar-help">에이전트를 추가하고 순서를 관리해.</p>
+            <p className="panel-modal-sidebar-help">에이전트를 추가하고 순서를 관리해요.</p>
 
             <button
               className={`panel-modal-nav-item ${agentSettingsTab === "create" ? "is-active" : ""}`}
@@ -144,14 +144,14 @@ export function AgentSettingsModal({
               <>
                 <div className="panel-modal-main-copy">
                   <h4>Agent 추가</h4>
-                  <p>기본 정보와 모델, 프롬프트, 연결 리소스를 함께 설정해 새 에이전트를 만들어.</p>
+                  <p>기본 정보와 모델, 프롬프트, 연결 리소스를 함께 설정해서 새 에이전트를 만들어요.</p>
                 </div>
 
                 <section className="settings-card agent-create-card">
                   <div className="settings-card-head settings-card-head-column">
                     <div>
                       <h4>기본 설정</h4>
-                      <p>이름, 아이콘, 색상을 정하면 좌측 Active Agents에 바로 반영돼.</p>
+                      <p>이름, 아이콘, 색상을 정하면 좌측 Active Agents에 바로 반영돼요.</p>
                     </div>
                   </div>
 
@@ -220,7 +220,7 @@ export function AgentSettingsModal({
                   <div className="settings-card-head settings-card-head-column">
                     <div>
                       <h4>작업 컨텍스트</h4>
-                      <p>프롬프트와 연결 항목은 줄바꿈이나 쉼표로 여러 개 입력할 수 있어.</p>
+                      <p>프롬프트와 연결 항목은 줄바꿈 단위로 여러 값을 입력할 수 있어요.</p>
                     </div>
                   </div>
 
@@ -229,7 +229,7 @@ export function AgentSettingsModal({
                     <textarea
                       className="settings-input settings-textarea"
                       rows={5}
-                      placeholder="이 에이전트가 맡을 역할과 작업 방식을 적어줘"
+                      placeholder="이 에이전트가 맡을 역할과 작업 방식을 적어 주세요."
                       value={newAgentPrompt}
                       onChange={(event) => onNewAgentPromptChange(event.target.value)}
                       aria-label="새 에이전트 프롬프트 설정"
@@ -279,7 +279,7 @@ export function AgentSettingsModal({
               <>
                 <div className="panel-modal-main-copy">
                   <h4>Agent 목록</h4>
-                  <p>순서 변경, 삭제, 그리고 각 에이전트의 이름과 아이콘을 바로 정리할 수 있어.</p>
+                  <p>순서 변경, 삭제, 그리고 각 에이전트의 이름과 아이콘을 바로 정리할 수 있어요.</p>
                 </div>
 
                 <section className="settings-card agent-list-card">

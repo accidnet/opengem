@@ -1,11 +1,11 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
 import { fetchModelsDevCatalog } from "./modelsDevCatalog";
 
-import PROMPT_ANTHROPIC from "./prompts/anthropic.txt?raw";
-import PROMPT_CODEX from "./prompts/codex.txt?raw";
-import PROMPT_DEFAULT from "./prompts/default.txt?raw";
-import PROMPT_GEMINI from "./prompts/gemini.txt?raw";
-import PROMPT_GPT from "./prompts/gpt.txt?raw";
+import PROMPT_ANTHROPIC from "@/features/chat/prompts/anthropic.txt?raw";
+import PROMPT_CODEX from "@/features/chat/prompts/codex.txt?raw";
+import PROMPT_DEFAULT from "@/features/chat/prompts/default.txt?raw";
+import PROMPT_GEMINI from "@/features/chat/prompts/gemini.txt?raw";
+import PROMPT_GPT from "@/features/chat/prompts/gpt.txt?raw";
 
 export type ProviderId = LLMConfig["providerId"];
 export type ProviderKind = LLMConfig["providerKind"];

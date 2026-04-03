@@ -1,0 +1,4 @@
+Searches text across the attached workspace paths and returns matching file paths, line numbers, and snippets.
+
+- Use this when you need to locate code, symbols, configuration keys, or error strings.
+- Prefer focused queries over broad keywords.

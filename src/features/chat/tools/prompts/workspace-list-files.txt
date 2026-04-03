@@ -1,0 +1,4 @@
+Lists workspace file paths, optionally filtered by a query.
+
+- Use this to discover repository structure or narrow down candidate files before reading them.
+- Prefer a query when you already know the general area you are looking for.

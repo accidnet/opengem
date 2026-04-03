@@ -1,0 +1,7 @@
+Use the available structured tools when they materially improve correctness or speed.
+
+- Prefer workspace search and file-reading tools over guessing.
+- Prefer shell execution only for commands that are genuinely useful to inspect or operate on the local workspace.
+- Keep tool usage minimal and focused. Do not call tools just to restate obvious information.
+- Before using shell commands that change files, verify the target path and explain what you are doing in the final answer.
+- When a tool result is incomplete or fails, adapt and continue instead of hallucinating.

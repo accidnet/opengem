@@ -3,7 +3,7 @@ import { normalizeBaseUrl } from "@/data/llmCatalog";
 import type { LLMRequest, LLMResponse } from "../../types";
 import { safeReadText } from "../../shared/http";
 import { splitSystemMessages } from "../../shared/messages";
-import { extractTextChunk, extractUsage } from "../../shared/payload";
+import { extractFinishReason, extractTextChunk, extractUsage } from "../../shared/payload";
 import { parseSSEStream } from "../../shared/stream";
 
 export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
@@ -53,6 +53,7 @@ export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
   return {
     text: extractTextChunk(json, "google-gemini"),
     usage: extractUsage(json, "google-gemini"),
+    finishReason: extractFinishReason(json, "google-gemini"),
   };
 }
 

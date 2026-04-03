@@ -1,8 +1,8 @@
 import type { ProviderProtocol } from "@/data/llmCatalog";
 
-import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMUsage } from "../types";
+import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMToolCall, LLMUsage } from "../types";
 import { safeJsonParse } from "./json";
-import { extractTextChunk, extractUsage } from "./payload";
+import { extractFinishReason, extractTextChunk, extractToolCallDeltas, extractToolCalls, extractUsage } from "./payload";
 
 export async function parseSSEStream(
   response: Response,
@@ -19,6 +19,8 @@ export async function parseSSEStream(
   let usage: LLMUsage | undefined;
   let text = "";
   let buffer = "";
+  let finishReason: string | undefined;
+  const toolCallsByIndex = new Map<number, LLMToolCall>();
 
   while (true) {
     const { done, value } = await reader.read();
@@ -52,6 +54,30 @@ export async function parseSSEStream(
       if (!usage) {
         usage = extractUsage(json, protocol);
       }
+      finishReason = extractFinishReason(json, protocol) ?? finishReason;
+
+      const completeToolCalls = extractToolCalls(json, protocol);
+      if (completeToolCalls?.length) {
+        completeToolCalls.forEach((toolCall, index) => {
+          toolCallsByIndex.set(index, toolCall);
+        });
+      }
+
+      const toolCallDeltas = extractToolCallDeltas(json, protocol);
+      if (toolCallDeltas?.length) {
+        for (const delta of toolCallDeltas) {
+          const current = toolCallsByIndex.get(delta.index) ?? {
+            id: delta.id || `tool-call-${delta.index}`,
+            name: delta.name || "",
+            arguments: "",
+          };
+          toolCallsByIndex.set(delta.index, {
+            id: delta.id || current.id,
+            name: delta.name || current.name,
+            arguments: `${current.arguments}${delta.argumentsChunk || ""}`,
+          });
+        }
+      }
 
       const chunk = extractTextChunk(json, protocol);
       if (!chunk) {
@@ -75,6 +101,14 @@ export async function parseSSEStream(
         if (!usage) {
           usage = extractUsage(json, protocol);
         }
+        finishReason = extractFinishReason(json, protocol) ?? finishReason;
+
+        const completeToolCalls = extractToolCalls(json, protocol);
+        if (completeToolCalls?.length) {
+          completeToolCalls.forEach((toolCall, index) => {
+            toolCallsByIndex.set(index, toolCall);
+          });
+        }
 
         const chunk = extractTextChunk(json, protocol);
         if (chunk) {
@@ -88,7 +122,17 @@ export async function parseSSEStream(
     }
   }
 
-  return { text, usage };
+  const toolCalls = Array.from(toolCallsByIndex.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map((entry) => entry[1])
+    .filter((toolCall) => toolCall.name.trim().length > 0);
+
+  return {
+    text,
+    usage,
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    finishReason,
+  };
 }
 
 function mergeStreamText(currentText: string, nextChunk: string): {

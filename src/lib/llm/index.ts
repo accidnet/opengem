@@ -1,4 +1,4 @@
-export { sendToLLM } from "./sendToLLM";
+export { request } from "./client";
 export type {
   JsonRecord,
   LLMMessage,
@@ -6,5 +6,7 @@ export type {
   LLMResponse,
   LLMRole,
   LLMStreamEvent,
+  LLMToolCall,
+  LLMToolDefinition,
   LLMUsage,
 } from "./types";

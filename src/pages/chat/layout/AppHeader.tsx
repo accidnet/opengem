@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import "./AppHeader.css";
+
 import type { ThemeMode } from "@/types/chat";
 
 type AppHeaderProps = {
@@ -107,7 +109,7 @@ export function AppHeader({
             aria-haspopup="menu"
             aria-expanded={isProfileMenuOpen}
             aria-label="사용자 메뉴 열기"
-            title={isLoggedIn ? "ChatGPT 연결됨" : "로그인 안 됨"}
+            title={isLoggedIn ? "ChatGPT 연결됨" : "로그인되지 않음"}
             onClick={() => setIsProfileMenuOpen((prev) => !prev)}
           >
             <span className="material-symbols-outlined profile-dot-icon" aria-hidden="true">

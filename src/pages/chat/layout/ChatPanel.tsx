@@ -106,7 +106,7 @@ export function ChatPanel({
 
   const persistProjectPaths = async (nextPaths: string[]) => {
     if (!currentSessionId) {
-      setProjectError("세션이 생성된 뒤에 프로젝트 폴더를 수정할 수 있어.");
+      setProjectError("세션을 생성한 뒤에 프로젝트 폴더를 설정할 수 있어요.");
       return;
     }
 
@@ -117,7 +117,7 @@ export function ChatPanel({
   const handleAddProjectPath = async () => {
     const normalizedPath = normalizePath(projectPathInput);
     if (!normalizedPath) {
-      setProjectError("프로젝트 폴더 경로를 입력해줘.");
+      setProjectError("프로젝트 폴더 경로를 입력해 주세요.");
       return;
     }
 
@@ -131,7 +131,7 @@ export function ChatPanel({
 
     const exists = projectPaths.some((path) => path.toLowerCase() === normalizedPath.toLowerCase());
     if (exists) {
-      setProjectError("이미 연결된 프로젝트 폴더야.");
+      setProjectError("이미 연결된 프로젝트 폴더예요.");
       return;
     }
 
@@ -176,7 +176,7 @@ export function ChatPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 forum
               </span>
-              <p>오늘은 무슨 일을 도와줄까?</p>
+              <p>오늘은 무슨 일을 함께할까요?</p>
             </div>
           )}
           {messages.map((message) => (
@@ -201,8 +201,8 @@ export function ChatPanel({
                     <strong>세션 프로젝트</strong>
                     <p>
                       {currentSessionId
-                        ? "이 세션에 연결된 프로젝트 폴더를 관리해."
-                        : "세션 생성 전이라 기본 프로젝트 폴더만 확인할 수 있어."}
+                        ? "이 세션에 연결된 프로젝트 폴더를 관리해요."
+                        : "세션 생성 전이라 기본 프로젝트 폴더만 확인할 수 있어요."}
                     </p>
                   </div>
                 </div>
@@ -262,7 +262,7 @@ export function ChatPanel({
                       </div>
                     ))
                   ) : (
-                    <p className="project-path-empty">연결된 프로젝트가 없어.</p>
+                    <p className="project-path-empty">연결된 프로젝트가 없어요.</p>
                   )}
                 </div>
 
@@ -285,13 +285,23 @@ export function ChatPanel({
                     disabled={!currentSessionId}
                   />
                   <div className="project-path-editor-actions">
-                    <button type="button" className="chip project-chip-secondary" onClick={() => void handlePickProjectPath()} disabled={!currentSessionId}>
+                    <button
+                      type="button"
+                      className="chip project-chip-secondary"
+                      onClick={() => void handlePickProjectPath()}
+                      disabled={!currentSessionId}
+                    >
                       <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
                         folder_open
                       </span>
                       폴더 선택
                     </button>
-                    <button type="button" className="chip project-chip-primary" onClick={() => void handleAddProjectPath()} disabled={!currentSessionId}>
+                    <button
+                      type="button"
+                      className="chip project-chip-primary"
+                      onClick={() => void handleAddProjectPath()}
+                      disabled={!currentSessionId}
+                    >
                       <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
                         {editingPath ? "edit" : "add_circle"}
                       </span>

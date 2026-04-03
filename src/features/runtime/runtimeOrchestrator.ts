@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { composeAgentSystemPrompt } from "@/data/appData";
-import { sendToLLM, type LLMMessage } from "@/lib/llm";
+import { request, type LLMMessage } from "@/lib/llm";
 import type { AgentItem, ResolvedLLMSettings } from "@/types/chat";
 import { parseJsonObject } from "@/features/app/appHelpers";
 
@@ -193,7 +193,7 @@ export async function synthesizeRuntimeResponse(input: {
       .join("\n\n") || "No artifacts.",
   ].join("\n");
 
-  const response = await sendToLLM({
+  const response = await request({
     providerId: input.activeSettings.providerId,
     providerKind: input.activeSettings.providerKind,
     apiBaseUrl: input.activeSettings.baseUrl,
@@ -288,7 +288,7 @@ async function decideRuntimePlan(input: {
     `Latest user request:\n${input.text}`,
   ].join("\n");
 
-  const response = await sendToLLM({
+  const response = await request({
     providerId: input.activeSettings.providerId,
     providerKind: input.activeSettings.providerKind,
     apiBaseUrl: input.activeSettings.baseUrl,

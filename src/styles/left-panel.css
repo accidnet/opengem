@@ -29,6 +29,7 @@
   color: var(--text-soft);
   padding: 10px;
   min-height: 42px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -92,6 +93,7 @@
   flex: 1;
   min-width: 0;
   padding: 4px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -103,7 +105,7 @@
 
 .session-row-main span:last-child {
   color: #64748b;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .session-row-active {
@@ -645,7 +647,7 @@
 .agent-name {
   margin: 0;
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .agent-model {

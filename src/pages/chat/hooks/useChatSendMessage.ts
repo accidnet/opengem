@@ -1,16 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
+import { getProviderCatalog } from "@/data/llmCatalog";
+import { getErrorMessage } from "@/features/app/appHelpers";
+import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
 import {
-  AGENT_COLOR_VALUES,
-  appendChunkToMessage,
-  buildActivity,
-  buildLLMMessages,
-  buildTypingMessage,
-  nowTime,
-} from "@/utils/chat";
-import { sendToLLM } from "@/lib/llm";
-import { composeAgentSystemPrompt, type Mode } from "@/data/appData";
+  createChatToolDefinitions,
+  executeChatToolCall,
+  type ChatToolExecutionResult,
+} from "@/features/chat/toolRuntime";
+import { request, type LLMMessage, type LLMToolCall } from "@/lib/llm";
 import type {
   ActivityItem,
   AgentItem,
@@ -20,28 +19,12 @@ import type {
   SessionItem,
 } from "@/types/chat";
 import {
-  getErrorMessage,
-  normalizePriority,
-  parseJsonObject,
-  type DelegationTask,
-  type SubagentExecutionResult,
-} from "@/features/app/appHelpers";
-import { executeRuntimePlan } from "@/features/runtime/runtimeOrchestrator";
-
-type OrchestrationAction = "runtime" | "delegate" | "final";
-
-type OrchestrationDecision = {
-  action: OrchestrationAction;
-  reasoning?: string;
-  finalInstruction?: string;
-  tasks?: DelegationTask[];
-};
-
-type OrchestrationNote = {
-  kind: "runtime" | "delegation";
-  title: string;
-  content: string;
-};
+  AGENT_COLOR_VALUES,
+  buildActivity,
+  buildConversationMessages,
+  buildTypingMessage,
+  nowTime,
+} from "@/utils/chat";
 
 type SendMessageDeps = {
   agents: AgentItem[];
@@ -50,9 +33,9 @@ type SendMessageDeps = {
   ensureSession: (text: string) => Promise<SessionItem>;
   inputValue: string;
   messages: Message[];
-  modes: Mode[];
+  modes: string[];
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
-  refreshSessions: (modes: Mode[], nextSessionId: string | null) => Promise<void>;
+  refreshSessions: (modes: string[], nextSessionId: string | null) => Promise<void>;
   resolveProviderSettings: () => Promise<ResolvedLLMSettings>;
   setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
   setInputValue: Dispatch<SetStateAction<string>>;
@@ -61,7 +44,15 @@ type SendMessageDeps = {
   setOpenSelectedModeSignal: Dispatch<SetStateAction<number>>;
   setResourceCost: Dispatch<SetStateAction<number>>;
   setResourceToken: Dispatch<SetStateAction<number>>;
+  maxAgentSteps?: number | null;
 };
+
+type AgentLoopResult = {
+  text: string;
+  totalTokens: number;
+};
+
+const DEFAULT_MAX_AGENT_STEPS = 12;
 
 const replaceTypingMessage = (
   setMessages: Dispatch<SetStateAction<Message[]>>,
@@ -98,399 +89,250 @@ const updateStreamingStatusMessage = (
   );
 };
 
-const appendRuntimeLogMessage = (
-  setMessages: Dispatch<SetStateAction<Message[]>>,
-  id: string,
-  sender: string,
-  text: string,
-  logs: string[],
-  icon = "integration_instructions",
-  iconColor = "#7dd3fc"
-) => {
-  setMessages((prev) => [
-    ...prev,
-    {
-      id,
-      side: "agent",
-      sender,
-      byline: nowTime(),
-      icon,
-      iconColor,
-      type: "search",
-      text,
-      logs,
-    },
-  ]);
-};
-
-const buildAgentCapabilitySummary = (agent: AgentItem) => {
-  const parts = [
-    `name: ${agent.name}`,
-    `role: ${agent.role ?? "sub"}`,
-    `model: ${agent.model || "default"}`,
-    `prompt: ${agent.prompt?.trim() || "none"}`,
-    `tools: ${agent.tools?.join(", ") || "none"}`,
-    `mcp: ${agent.mcpServers?.join(", ") || "none"}`,
-    `skills: ${agent.skills?.join(", ") || "none"}`,
-  ];
-
-  return parts.join("\n");
-};
-
-const buildOrchestrationNotesText = (notes: OrchestrationNote[]) => {
-  if (notes.length === 0) {
-    return "No internal notes yet.";
-  }
-
-  return notes
-    .map((note, index) => [`[${index + 1}] ${note.kind}: ${note.title}`, note.content].join("\n"))
-    .join("\n\n");
-};
-
-const buildWorkingRequestText = (text: string, notes: OrchestrationNote[]) => {
-  if (notes.length === 0) {
-    return text;
-  }
-
-  return [
-    text,
-    "",
-    "Internal working notes gathered so far:",
-    buildOrchestrationNotesText(notes),
-  ].join("\n");
-};
-
-const decideMainAgentNextStep = async (
-  text: string,
-  requestMessages: ReturnType<typeof buildLLMMessages>,
-  mainAgent: AgentItem,
-  availableSubagents: AgentItem[],
-  activeSettings: ResolvedLLMSettings,
-  projectPaths: string[],
-  notes: OrchestrationNote[],
-  iteration: number,
-  maxIterations: number
-): Promise<OrchestrationDecision> => {
-  const subagentText =
-    availableSubagents.length > 0
-      ? availableSubagents.map(buildAgentCapabilitySummary).join("\n\n")
-      : "- none";
-  const projectPathText = projectPaths.length > 0 ? projectPaths.join("\n") : "- none";
-
-  const routingPrompt = [
-    "You are the main orchestration agent.",
-    "Choose exactly one next action for this iteration.",
-    "Available actions:",
-    '- "runtime": inspect the workspace or execute local runtime actions',
-    '- "delegate": assign specialist work to one or more subagents',
-    '- "final": stop iterating and prepare the final user-facing answer',
-    "",
-    "Rules:",
-    "- Prefer runtime when codebase inspection, file reads, search, or shell execution is needed.",
-    "- Prefer delegate when specialist parallel work is useful.",
-    "- Prefer final when enough evidence has been gathered.",
-    "- Return strict JSON only.",
-    "",
-    "Schema:",
-    '{"action":"runtime|delegate|final","reasoning":"string","finalInstruction":"string optional","tasks":[{"agentName":"string","goal":"string","deliverable":"string","priority":"high|medium|low"}]}',
-    "",
-    `Iteration: ${iteration + 1}/${maxIterations}`,
-    `Project paths:\n${projectPathText}`,
-    "",
-    "Available subagents:",
-    subagentText,
-    "",
-    "Internal notes gathered so far:",
-    buildOrchestrationNotesText(notes),
-    "",
-    `Latest user request:\n${text}`,
-  ].join("\n");
-
-  const routingResponse = await sendToLLM({
-    providerId: activeSettings.providerId,
-    providerKind: activeSettings.providerKind,
-    apiBaseUrl: activeSettings.baseUrl,
-    apiKey: activeSettings.apiKey,
-    accessToken: activeSettings.accessToken,
-    accountId: activeSettings.accountId,
-    model: mainAgent.model?.trim() || activeSettings.model,
-    messages: [
-      {
-        role: "system",
-        content: composeAgentSystemPrompt(
-          mainAgent.model?.trim() || activeSettings.model,
-          mainAgent.prompt,
-          "You are deciding the next orchestration action. Return JSON only."
-        ),
-      },
-      ...requestMessages.slice(1),
-      {
-        role: "user",
-        content: routingPrompt,
-      },
-    ],
-    stream: false,
-  });
-
-  const parsed = parseJsonObject<OrchestrationDecision>(routingResponse.text);
-  if (!parsed) {
-    return {
-      action: "final",
-      reasoning: "Failed to parse orchestration decision JSON.",
-    };
-  }
-
-  const allowedNames = new Set(availableSubagents.map((agent) => agent.name));
-  const normalizedTasks = Array.isArray(parsed.tasks)
-    ? parsed.tasks
-        .filter((task) => task && allowedNames.has(task.agentName))
-        .map((task) => ({
-          agentName: task.agentName,
-          goal: task.goal?.trim() || text,
-          deliverable: task.deliverable?.trim() || "Provide specialist findings.",
-          priority: normalizePriority(task.priority),
-        }))
-    : [];
-
-  const action: OrchestrationAction =
-    parsed.action === "runtime" || parsed.action === "delegate" || parsed.action === "final"
-      ? parsed.action
-      : "final";
-
-  if (action === "delegate" && normalizedTasks.length === 0) {
-    return {
-      action: "final",
-      reasoning: parsed.reasoning || "No valid subagent tasks were provided.",
-      finalInstruction: parsed.finalInstruction,
-    };
-  }
-
-  if (action === "runtime" && projectPaths.length === 0) {
-    return {
-      action: "final",
-      reasoning: parsed.reasoning || "Runtime was requested without a project path.",
-      finalInstruction: parsed.finalInstruction,
-    };
-  }
+function createToolLogMessage(agentName: string | undefined, result: ChatToolExecutionResult): Message {
+  const preview =
+    result.content.length > 500 ? `${result.content.slice(0, 500)}\n...` : result.content || "(no output)";
 
   return {
-    action,
-    reasoning: parsed.reasoning,
-    finalInstruction: parsed.finalInstruction,
-    tasks: normalizedTasks,
+    id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    side: "agent",
+    sender: `${agentName ?? "Assistant"} Tool`,
+    byline: nowTime(),
+    icon: "integration_instructions",
+    iconColor: "#7dd3fc",
+    type: "search",
+    text: `${result.toolName}: ${result.title}`,
+    logs: [...result.logs, preview],
   };
-};
+}
 
-const runDelegatedSubagents = async (
-  text: string,
-  selectedTasks: DelegationTask[],
-  availableSubagents: AgentItem[],
-  requestMessages: ReturnType<typeof buildLLMMessages>,
-  activeSettings: ResolvedLLMSettings,
-  notes: OrchestrationNote[],
-  setActivity: Dispatch<SetStateAction<ActivityItem[]>>,
-  onStatus?: (statusText: string) => void
-): Promise<SubagentExecutionResult[]> => {
-  const subagentsByName = new Map(availableSubagents.map((agent) => [agent.name, agent]));
+function createToolErrorMessage(agentName: string | undefined, toolName: string, reason: string): Message {
+  return {
+    id: `tool-error-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    side: "agent",
+    sender: `${agentName ?? "Assistant"} Tool`,
+    byline: nowTime(),
+    icon: "error",
+    iconColor: "#fda4af",
+    type: "search",
+    text: `${toolName} failed`,
+    logs: [reason],
+  };
+}
 
-  return Promise.all(
-    selectedTasks.map(async (task) => {
-      const agent = subagentsByName.get(task.agentName);
-      if (!agent) {
-        return {
-          agentName: task.agentName,
-          status: "failed" as const,
-          summary: "Agent is unavailable.",
-          deliverable: task.deliverable,
-          priority: normalizePriority(task.priority),
-        };
-      }
+function supportsStructuredToolLoop(activeSettings: ResolvedLLMSettings): boolean {
+  const provider = getProviderCatalog(activeSettings.providerId);
+  return provider.protocol === "openai-compatible";
+}
 
-      setActivity((prev) => [...prev, buildActivity(`${agent.name} assigned: ${task.goal}`, agent.name)]);
-      onStatus?.(`Delegating to ${agent.name}: ${task.goal}`);
+function normalizeFinishReason(reason: string | undefined): string {
+  return reason?.trim().toLowerCase() ?? "";
+}
 
-      const subagentPrompt = [
-        "You are a specialist subagent working for the main orchestration agent.",
-        "Complete only your assigned portion of the work.",
-        "Do not address the end user directly.",
-        "Return concise, high-signal findings for the main agent to synthesize.",
-        `Assigned goal: ${task.goal}`,
-        `Required deliverable: ${task.deliverable}`,
-        "",
-        "Existing internal notes from prior iterations:",
-        buildOrchestrationNotesText(notes),
-        "",
-        "Recent conversation context:",
-        requestMessages
-          .slice(1)
-          .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
-          .join("\n\n"),
-        "",
-        `Original latest user request:\n${text}`,
-      ].join("\n");
+function hasToolName(toolCall: LLMToolCall): boolean {
+  return toolCall.name.trim().length > 0;
+}
+
+function getUsableToolCalls(toolCalls: LLMToolCall[] | undefined): LLMToolCall[] {
+  if (!toolCalls?.length) {
+    return [];
+  }
+
+  return toolCalls.filter(hasToolName);
+}
+
+function shouldContinueAgentLoop(input: {
+  toolCalls: LLMToolCall[];
+  finishReason?: string;
+  responseText: string;
+}): boolean {
+  if (input.toolCalls.length > 0) {
+    return true;
+  }
+
+  const finishReason = normalizeFinishReason(input.finishReason);
+  if (finishReason === "tool_calls" || finishReason === "function_call") {
+    return true;
+  }
+
+  if (finishReason === "stop" || finishReason === "end_turn" || finishReason === "completed") {
+    return false;
+  }
+
+  return input.responseText.trim().length === 0;
+}
+
+async function runMainAgentLoop(input: {
+  sessionId: string;
+  projectPaths: string[];
+  mainAgent: AgentItem;
+  activeSettings: ResolvedLLMSettings;
+  baseMessages: LLMMessage[];
+  setMessages: Dispatch<SetStateAction<Message[]>>;
+  setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
+  persistMessage: (sessionId: string, message: Message) => Promise<void>;
+  activeAssistantMessageId: string;
+  maxAgentSteps?: number | null;
+}): Promise<AgentLoopResult> {
+  const toolDefinitions = supportsStructuredToolLoop(input.activeSettings)
+    ? createChatToolDefinitions(input.projectPaths)
+    : [];
+  const systemPrompt = composeChatSystemPrompt({
+    model: input.mainAgent.model?.trim() || input.activeSettings.model,
+    providerId: input.activeSettings.providerId,
+    agentPrompt: input.mainAgent.prompt,
+    projectPaths: input.projectPaths,
+    tools: toolDefinitions,
+  });
+  const workingMessages: LLMMessage[] = [{ role: "system", content: systemPrompt }, ...input.baseMessages];
+
+  let totalTokens = 0;
+  let finalText = "";
+  let step = 0;
+
+  while (true) {
+    if (typeof input.maxAgentSteps === "number" && input.maxAgentSteps > 0 && step >= input.maxAgentSteps) {
+      return {
+        text: finalText || "(응답이 비어 있습니다.)",
+        totalTokens,
+      };
+    }
+
+    step += 1;
+    let streamedText = "";
+    const accumulatedText = finalText;
+
+    updateStreamingStatusMessage(
+      input.setMessages,
+      input.activeAssistantMessageId,
+      accumulatedText || (toolDefinitions.length > 0 ? "Thinking with tools..." : "Thinking...")
+    );
+
+    const response = await request({
+      providerId: input.activeSettings.providerId,
+      providerKind: input.activeSettings.providerKind,
+      apiBaseUrl: input.activeSettings.baseUrl,
+      apiKey: input.activeSettings.apiKey,
+      accessToken: input.activeSettings.accessToken,
+      accountId: input.activeSettings.accountId,
+      model:
+        input.activeSettings.providerKind === "chatgpt_oauth"
+          ? input.activeSettings.model
+          : input.mainAgent.model?.trim() || input.activeSettings.model,
+      messages: workingMessages,
+      tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
+      toolChoice: toolDefinitions.length > 0 ? "auto" : undefined,
+      stream: true,
+      onChunk: (chunk) => {
+        streamedText += chunk;
+        updateStreamingStatusMessage(
+          input.setMessages,
+          input.activeAssistantMessageId,
+          `${accumulatedText}${streamedText}`,
+          "text"
+        );
+      },
+    });
+
+    totalTokens += response.usage?.totalTokens ?? 0;
+
+    const responseText = response.text || streamedText;
+    const usableToolCalls = getUsableToolCalls(response.toolCalls);
+    finalText = `${accumulatedText}${responseText}`;
+
+    workingMessages.push({
+      role: "assistant",
+      content: responseText,
+      ...(usableToolCalls.length > 0 ? { toolCalls: usableToolCalls } : {}),
+    });
+
+    if (
+      !shouldContinueAgentLoop({
+        toolCalls: usableToolCalls,
+        finishReason: response.finishReason,
+        responseText,
+      })
+    ) {
+      return {
+        text: finalText || "(응답이 비어 있습니다.)",
+        totalTokens,
+      };
+    }
+
+    if (usableToolCalls.length === 0) {
+      updateStreamingStatusMessage(
+        input.setMessages,
+        input.activeAssistantMessageId,
+        finalText || "Thinking..."
+      );
+      continue;
+    }
+
+    for (const toolCall of usableToolCalls) {
+      updateStreamingStatusMessage(
+        input.setMessages,
+        input.activeAssistantMessageId,
+        `Running tool: ${toolCall.name}`
+      );
 
       try {
-        const response = await sendToLLM({
-          providerId: activeSettings.providerId,
-          providerKind: activeSettings.providerKind,
-          apiBaseUrl: activeSettings.baseUrl,
-          apiKey: activeSettings.apiKey,
-          accessToken: activeSettings.accessToken,
-          accountId: activeSettings.accountId,
-          model: agent.model?.trim() || activeSettings.model,
-          messages: [
-            {
-              role: "system",
-              content: composeAgentSystemPrompt(
-                agent.model?.trim() || activeSettings.model,
-                agent.prompt,
-                "You are a delegated specialist subagent. Return only your work product."
-              ),
-            },
-            {
-              role: "user",
-              content: subagentPrompt,
-            },
-          ],
-          stream: false,
+        const result = await executeChatToolCall(toolCall, input.projectPaths);
+        const toolMessage = createToolLogMessage(input.mainAgent.name, result);
+        input.setMessages((prev) => [...prev, toolMessage]);
+        await input.persistMessage(input.sessionId, toolMessage);
+        input.setActivity((prev) => [
+          ...prev,
+          buildActivity(`Tool completed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
+        ]);
+
+        workingMessages.push({
+          role: "tool",
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: result.content,
         });
-
-        setActivity((prev) => [...prev, buildActivity(`${agent.name} completed delegated work.`, agent.name)]);
-        onStatus?.(`${agent.name} finished. Synthesizing specialist results...`);
-
-        return {
-          agentName: agent.name,
-          status: "completed" as const,
-          summary: response.text.trim() || "Completed with no textual output.",
-          deliverable: task.deliverable,
-          priority: normalizePriority(task.priority),
-        };
       } catch (error) {
         const reason = getErrorMessage(error);
-        setActivity((prev) => [
+        const toolErrorMessage = createToolErrorMessage(input.mainAgent.name, toolCall.name, reason);
+        input.setMessages((prev) => [...prev, toolErrorMessage]);
+        await input.persistMessage(input.sessionId, toolErrorMessage);
+        input.setActivity((prev) => [
           ...prev,
-          buildActivity(`${agent.name} failed delegated work: ${reason}`, agent.name),
+          buildActivity(`Tool failed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
         ]);
-        onStatus?.(`${agent.name} failed: ${reason}`);
 
-        return {
-          agentName: agent.name,
-          status: "failed" as const,
-          summary: reason,
-          deliverable: task.deliverable,
-          priority: normalizePriority(task.priority),
-        };
+        workingMessages.push({
+          role: "tool",
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: `Tool ${toolCall.name} failed: ${reason}`,
+        });
       }
-    })
-  );
-};
+    }
+  }
+}
 
-const generateMainAgentResponse = async (
-  setMessages: Dispatch<SetStateAction<Message[]>>,
-  typingMessageId: string,
-  requestMessages: ReturnType<typeof buildLLMMessages>,
-  mainAgent: AgentItem,
-  activeSettings: ResolvedLLMSettings
-) => {
-  let streamedText = "";
-  const response = await sendToLLM({
-    providerId: activeSettings.providerId,
-    providerKind: activeSettings.providerKind,
-    apiBaseUrl: activeSettings.baseUrl,
-    apiKey: activeSettings.apiKey,
-    accessToken: activeSettings.accessToken,
-    accountId: activeSettings.accountId,
-    model:
-      activeSettings.providerKind === "chatgpt_oauth"
-        ? activeSettings.model
-        : mainAgent.model?.trim() || activeSettings.model,
-    messages: requestMessages,
-    stream: true,
-    onChunk: (chunk) => {
-      streamedText += chunk;
-      setMessages((prev) => appendChunkToMessage(prev, typingMessageId, streamedText));
-    },
-  });
-
-  return {
-    text: response.text || streamedText || "(응답이 비어 있습니다.)",
-    usage: response.usage,
-  };
-};
-
-const synthesizeMainAgentResponse = async (
-  setMessages: Dispatch<SetStateAction<Message[]>>,
-  text: string,
-  typingMessageId: string,
-  requestMessages: ReturnType<typeof buildLLMMessages>,
-  mainAgent: AgentItem,
-  activeSettings: ResolvedLLMSettings,
-  notes: OrchestrationNote[],
-  finalInstruction?: string
-) => {
-  if (notes.length === 0 && !finalInstruction?.trim()) {
-    return generateMainAgentResponse(
-      setMessages,
-      typingMessageId,
-      requestMessages,
-      mainAgent,
-      activeSettings
-    );
+function updateUsageMetrics(
+  totalTokens: number,
+  setResourceToken: Dispatch<SetStateAction<number>>,
+  setResourceCost: Dispatch<SetStateAction<number>>
+) {
+  if (totalTokens <= 0) {
+    return;
   }
 
-  let streamedText = "";
-  const synthesisInput = [
-    "You are the main agent responding to the user.",
-    "The following internal orchestration notes are not user-facing.",
-    "Use them as working context and produce the final answer.",
-    finalInstruction?.trim() ? `Final instruction:\n${finalInstruction.trim()}` : null,
-    "",
-    `Latest user request:\n${text}`,
-    "",
-    "Internal notes:",
-    buildOrchestrationNotesText(notes),
-  ]
-    .filter((value) => value !== null)
-    .join("\n");
+  setResourceToken((prev) => Math.min(9999, prev + totalTokens));
+  const estimatedCost = totalTokens * 0.000005;
+  setResourceCost((prev) => Number((prev + estimatedCost).toFixed(3)));
+}
 
-  const response = await sendToLLM({
-    providerId: activeSettings.providerId,
-    providerKind: activeSettings.providerKind,
-    apiBaseUrl: activeSettings.baseUrl,
-    apiKey: activeSettings.apiKey,
-    accessToken: activeSettings.accessToken,
-    accountId: activeSettings.accountId,
-    model:
-      activeSettings.providerKind === "chatgpt_oauth"
-        ? activeSettings.model
-        : mainAgent.model?.trim() || activeSettings.model,
-    messages: [
-      {
-        role: "system",
-        content: composeAgentSystemPrompt(
-          mainAgent.model?.trim() || activeSettings.model,
-          mainAgent.prompt,
-          "You are synthesizing internal orchestration notes into a final user-facing answer."
-        ),
-      },
-      ...requestMessages.slice(1),
-      {
-        role: "user",
-        content: synthesisInput,
-      },
-    ],
-    stream: true,
-    onChunk: (chunk) => {
-      streamedText += chunk;
-      setMessages((prev) => appendChunkToMessage(prev, typingMessageId, streamedText));
-    },
-  });
-
+function createAssistantMessage(base: Message, text: string): Message {
   return {
-    text: response.text || streamedText || "(응답이 비어 있습니다.)",
-    usage: response.usage,
+    ...base,
+    type: "text",
+    text,
   };
-};
+}
 
 export function useChatSendMessage({
   agents,
@@ -510,6 +352,7 @@ export function useChatSendMessage({
   setOpenSelectedModeSignal,
   setResourceCost,
   setResourceToken,
+  maxAgentSteps = DEFAULT_MAX_AGENT_STEPS,
 }: SendMessageDeps) {
   const sendMessage = async (): Promise<void> => {
     if (!canSend) {
@@ -541,15 +384,15 @@ export function useChatSendMessage({
       "Thinking...",
       mainAgent?.name,
       mainAgent?.icon,
-      mainAgent?.color ? (AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac") : undefined
+      mainAgent?.color ? AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac" : undefined
     );
-    let activeAssistantMessage = typingMessage;
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
     setInputValue("");
     setIsLoading(true);
 
     let activeSessionId = currentSessionId;
+    let activeAssistantMessage: Message = typingMessage;
 
     try {
       const session = await ensureSession(text);
@@ -559,22 +402,7 @@ export function useChatSendMessage({
       const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
         sessionId: session.id,
       });
-      updateStreamingStatusMessage(setMessages, typingMessage.id, "생각 중...");
       const activeSettings = await resolveProviderSettings();
-      const resolvedMainModel =
-        activeSettings.providerKind === "chatgpt_oauth"
-          ? activeSettings.model
-          : mainAgent?.model?.trim() || activeSettings.model;
-      const requestMessages = buildLLMMessages(
-        sessionDetail.messages,
-        mainAgent?.prompt ?? undefined,
-        resolvedMainModel
-      );
-      const projectPaths = sessionDetail.session.projectPaths || [];
-      const activeAgents = agents.filter((agent) => agent.active);
-      const availableSubagents = activeAgents.filter(
-        (agent) => agent.role !== "main" && agent.name !== mainAgent?.name
-      );
 
       if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
         const loginMessage: Message = {
@@ -599,196 +427,41 @@ export function useChatSendMessage({
         await refreshSessions(modes, session.id);
         setActivity((prev) => [
           ...prev,
-          buildActivity(
-            "API 키가 없어 LLM 요청을 시작하지 못했습니다.",
-            mainAgent?.name ?? "Assistant"
-          ),
+          buildActivity("API 키가 없어 LLM 요청을 시작하지 못했습니다.", mainAgent?.name ?? "Assistant"),
         ]);
         return;
       }
 
-      let response: { text: string; usage?: { totalTokens?: number } };
-      const orchestrationNotes: OrchestrationNote[] = [];
-      const maxOrchestrationIterations = 4;
-
-      while (true) {
-        const orchestrationDecision = await decideMainAgentNextStep(
-          text,
-          requestMessages,
-          mainAgent,
-          availableSubagents,
-          activeSettings,
-          projectPaths,
-          orchestrationNotes,
-          orchestrationNotes.length,
-          maxOrchestrationIterations
-        );
-
-        const shouldContinue =
-          orchestrationDecision.action !== "final" &&
-          orchestrationNotes.length < maxOrchestrationIterations - 1;
-
-        if (orchestrationDecision.action === "runtime" && shouldContinue) {
-          updateStreamingStatusMessage(setMessages, typingMessage.id, "Running runtime investigation...");
-          const runtimeResult = await executeRuntimePlan({
-            text: buildWorkingRequestText(text, orchestrationNotes),
-            mainAgent,
-            requestMessages,
-            activeSettings,
-            projectPaths,
-            onStatus: (statusText) =>
-              updateStreamingStatusMessage(setMessages, typingMessage.id, statusText),
-          });
-
-          if (!runtimeResult) {
-            orchestrationNotes.push({
-              kind: "runtime",
-              title: "Runtime planner skipped execution",
-              content: orchestrationDecision.reasoning || "Runtime produced no executable plan.",
-            });
-          } else {
-            const runtimeMessageId = `runtime-${Date.now().toString(36)}-${Math.random()
-              .toString(36)
-              .slice(2, 6)}`;
-            const runtimeMessage: Message = {
-              id: runtimeMessageId,
-              side: "agent",
-              sender: `${mainAgent?.name ?? "Assistant"} Runtime`,
-              byline: nowTime(),
-              icon: "integration_instructions",
-              iconColor: "#7dd3fc",
-              type: "search",
-              text: "Runtime actions executed.",
-              logs: runtimeResult.logs,
-            };
-
-            appendRuntimeLogMessage(
-              setMessages,
-              runtimeMessageId,
-              runtimeMessage.sender ?? "Assistant Runtime",
-              runtimeMessage.text ?? "Runtime actions executed.",
-              runtimeResult.logs,
-              runtimeMessage.icon,
-              runtimeMessage.iconColor
-            );
-            await persistMessage(session.id, runtimeMessage);
-
-            orchestrationNotes.push({
-              kind: "runtime",
-              title: runtimeResult.plan.summary?.trim() || "Runtime execution",
-              content: [
-                orchestrationDecision.reasoning
-                  ? `Decision reasoning: ${orchestrationDecision.reasoning}`
-                  : null,
-                "Logs:",
-                runtimeResult.logs.join("\n") || "No logs.",
-                "",
-                "Artifacts:",
-                runtimeResult.artifacts
-                  .map((artifact) => `[${artifact.kind}] ${artifact.title}\n${artifact.content}`)
-                  .join("\n\n") || "No artifacts.",
-              ]
-                .filter((value) => value !== null)
-                .join("\n"),
-            });
-          }
-
-          continue;
-        }
-
-        if (
-          orchestrationDecision.action === "delegate" &&
-          shouldContinue &&
-          Array.isArray(orchestrationDecision.tasks) &&
-          orchestrationDecision.tasks.length > 0
-        ) {
-          updateStreamingStatusMessage(
-            setMessages,
-            typingMessage.id,
-            `Planning parallel work for ${orchestrationDecision.tasks.length} specialist agent(s)...`
-          );
-          setActivity((prev) => [
-            ...prev,
-            buildActivity(
-              `${mainAgent?.name ?? "Main agent"} delegated ${orchestrationDecision.tasks.length} task(s).`,
-              mainAgent?.name ?? "Main agent"
-            ),
-          ]);
-
-          const subagentResults = await runDelegatedSubagents(
-            text,
-            orchestrationDecision.tasks,
-            availableSubagents,
-            requestMessages,
-            activeSettings,
-            orchestrationNotes,
-            setActivity,
-            (statusText) => updateStreamingStatusMessage(setMessages, typingMessage.id, statusText)
-          );
-
-          orchestrationNotes.push({
-            kind: "delegation",
-            title: orchestrationDecision.reasoning?.trim() || "Delegated specialist work",
-            content: subagentResults
-              .map((result) =>
-                [
-                  `Agent: ${result.agentName}`,
-                  `Status: ${result.status}`,
-                  `Priority: ${result.priority}`,
-                  `Deliverable: ${result.deliverable}`,
-                  `Output:\n${result.summary}`,
-                ].join("\n")
-              )
-              .join("\n\n"),
-          });
-
-          continue;
-        }
-
-        updateStreamingStatusMessage(setMessages, typingMessage.id, "Streaming response...");
-        activeAssistantMessage = {
-          ...typingMessage,
-          id: `assistant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-          type: "text",
-          text: "",
-        };
-        moveMessageToBottom(setMessages, typingMessage.id, activeAssistantMessage);
-        response = await synthesizeMainAgentResponse(
-          setMessages,
-          text,
-          activeAssistantMessage.id,
-          requestMessages,
-          mainAgent,
-          activeSettings,
-          orchestrationNotes,
-          orchestrationDecision.finalInstruction
-        );
-        break;
-      }
-
-      const assistantMessage: Message = {
-        ...activeAssistantMessage,
+      activeAssistantMessage = {
+        ...typingMessage,
+        id: `assistant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         type: "text",
-        text: response.text,
+        text: "",
       };
 
+      moveMessageToBottom(setMessages, typingMessage.id, activeAssistantMessage);
+
+      const response = await runMainAgentLoop({
+        sessionId: session.id,
+        projectPaths: sessionDetail.session.projectPaths || [],
+        mainAgent,
+        activeSettings,
+        baseMessages: buildConversationMessages(sessionDetail.messages),
+        setMessages,
+        setActivity,
+        persistMessage,
+        activeAssistantMessageId: activeAssistantMessage.id,
+        maxAgentSteps,
+      });
+
+      const assistantMessage = createAssistantMessage(activeAssistantMessage, response.text);
       replaceTypingMessage(setMessages, activeAssistantMessage.id, assistantMessage);
+
       await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
+      updateUsageMetrics(response.totalTokens, setResourceToken, setResourceCost);
 
-      const totalTokens = response.usage?.totalTokens;
-      if (typeof totalTokens === "number") {
-        setResourceToken((prev) => Math.min(9999, prev + totalTokens));
-      }
-
-      const estimatedCost = response.usage?.totalTokens ? response.usage.totalTokens * 0.000005 : 0;
-      if (estimatedCost > 0) {
-        setResourceCost((prev) => Number((prev + estimatedCost).toFixed(3)));
-      }
-
-      const usageText = response.usage?.totalTokens
-        ? ` Tokens used: ${response.usage.totalTokens}`
-        : "";
+      const usageText = response.totalTokens > 0 ? ` Tokens used: ${response.totalTokens}` : "";
       setActivity((prev) => [
         ...prev,
         buildActivity(`Agent response completed.${usageText}`.trim(), mainAgent?.name ?? "Assistant"),
@@ -807,7 +480,7 @@ export function useChatSendMessage({
           await persistMessage(activeSessionId, errorMessage);
           await refreshSessions(modes, activeSessionId);
         } catch {
-          // 에러 메시지 저장이 실패해도 사용자 응답은 막지 않도록 무시한다.
+          // 오류 메시지 저장 실패가 원래 응답보다 우선되지는 않도록 무시합니다.
         }
       }
 

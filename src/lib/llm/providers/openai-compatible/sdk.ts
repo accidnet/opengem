@@ -38,6 +38,7 @@ export async function sendWithOpenAICompatibleSdk(
     return {
       text,
       usage: mapSdkUsage(await Promise.resolve(result.usage as unknown).catch(() => undefined)),
+      finishReason: "stop",
     };
   }
 
@@ -50,6 +51,7 @@ export async function sendWithOpenAICompatibleSdk(
   return {
     text: result.text,
     usage: mapSdkUsage(result.usage),
+    finishReason: "stop",
   };
 }
 

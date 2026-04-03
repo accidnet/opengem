@@ -1,0 +1,7 @@
+Runs a shell command in the local workspace environment and returns its output.
+
+- Use this for terminal actions such as git, package manager commands, process inspection, and targeted local verification.
+- Prefer dedicated workspace tools for file listing, text search, and file reading before reaching for shell.
+- Always pass `cwd` when the command should run inside a specific project path instead of embedding `cd` into the command.
+- Keep commands scoped and non-destructive unless the user explicitly asked for a riskier action.
+- On Windows, write commands for PowerShell semantics when possible.
