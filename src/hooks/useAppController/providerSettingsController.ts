@@ -38,7 +38,7 @@ export function createProviderSettingsController({
     try {
       const next = await invoke<LLMSettings>("get_llm_settings");
       setSettings(normalizeLlmSettings(next));
-      const changed = await syncProviderCatalogWithModelsDev().catch(() => false);
+      const changed = syncProviderCatalogWithModelsDev();
       if (changed) {
         setSettings((current) => normalizeLlmSettings({ ...current }));
       }

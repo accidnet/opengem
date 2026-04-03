@@ -1,5 +1,5 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
-import { fetchModelsDevCatalog } from "./modelsDevCatalog";
+import { getModelsDevCatalog } from "./modelsDevCatalog";
 
 import PROMPT_ANTHROPIC from "@/features/chat/prompts/anthropic.txt?raw";
 import PROMPT_CODEX from "@/features/chat/prompts/codex.txt?raw";
@@ -194,8 +194,8 @@ function applyModelsDevProviderCatalog(providerId: ProviderId, models: ModelCata
   return next;
 }
 
-export async function syncProviderCatalogWithModelsDev() {
-  const payload = await fetchModelsDevCatalog();
+export function syncProviderCatalogWithModelsDev() {
+  const payload = getModelsDevCatalog();
   let changed = false;
 
   for (const [externalId, provider] of Object.entries(payload)) {
