@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
-import { getProviderCatalog } from "@/data/llmCatalog";
+import { getProviderCatalog } from "@/lib/llm/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
 import {

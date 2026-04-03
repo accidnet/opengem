@@ -1,4 +1,4 @@
-import { applyModelSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/data/llmCatalog";
+import { applyModelSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/lib/llm/catalog";
 import type { LLMSettings } from "@/types/chat";
 
 type PanelModalProps = {

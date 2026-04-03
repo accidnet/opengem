@@ -1,4 +1,4 @@
-import type { ProviderProtocol } from "@/data/llmCatalog";
+import type { ProviderProtocol } from "@/lib/llm/catalog";
 
 import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMToolCall, LLMUsage } from "./types";
 import { safeJsonParse } from "./json";

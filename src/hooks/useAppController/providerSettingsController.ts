@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
-import { LLM_CONFIG } from "@/data/appData";
-import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/data/llmCatalog";
+import { LLM_CONFIG } from "@/features/app/config/appData";
+import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/lib/llm/catalog";
 import type { LLMSettings } from "@/types/chat";
 
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";

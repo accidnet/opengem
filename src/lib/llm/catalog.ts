@@ -31,7 +31,6 @@ export type ProviderCatalogEntry = {
   baseUrl: string;
   modelDefault: string;
   authLabel: string;
-  sdkTarget?: "openai" | "openai-compatible" | "native-fetch";
   modelsSource?: "static" | "models.dev";
   models: ModelCatalogEntry[];
 };
@@ -60,7 +59,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
     authLabel: "API Key",
-    sdkTarget: "openai",
     modelsSource: "static",
     models: [
       { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
@@ -82,7 +80,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: CHATGPT_BASE_URL,
     modelDefault: "gpt-5.2",
     authLabel: "ChatGPT Login",
-    sdkTarget: "openai",
     modelsSource: "static",
     models: [
       { id: "gpt-5.2", label: "GPT-5.2", promptProfile: "gpt" },
@@ -100,7 +97,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_ANTHROPIC_BASE_URL,
     modelDefault: "claude-3-5-sonnet-latest",
     authLabel: "API Key",
-    sdkTarget: "native-fetch",
     modelsSource: "static",
     models: [
       { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet", promptProfile: "anthropic" },
@@ -117,7 +113,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_GEMINI_BASE_URL,
     modelDefault: "gemini-2.5-pro",
     authLabel: "API Key",
-    sdkTarget: "native-fetch",
     modelsSource: "static",
     models: [
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", promptProfile: "gemini" },
@@ -134,7 +129,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENROUTER_BASE_URL,
     modelDefault: "openai/gpt-4o-mini",
     authLabel: "API Key",
-    sdkTarget: "openai-compatible",
     modelsSource: "static",
     models: [
       { id: "openai/gpt-4o-mini", label: "OpenAI GPT-4o Mini", promptProfile: "gpt" },
@@ -152,7 +146,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
     authLabel: "API Key",
-    sdkTarget: "openai-compatible",
     modelsSource: "static",
     models: [],
   },

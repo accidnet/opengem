@@ -1,5 +1,5 @@
 import { formatSessionTime } from "@/utils/chat";
-import type { Mode } from "@/data/appData";
+import type { Mode } from "@/features/app/config/appData";
 import type { SessionItem } from "@/types/chat";
 
 type ModeSectionProps = {

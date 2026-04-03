@@ -1,6 +1,6 @@
 import type { LLMMessage } from "@/lib/llm";
 
-import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/data/appData";
+import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/features/app/config/appData";
 import type { ActivityItem, Message } from "@/types/chat";
 
 const SESSION_TITLE_MAX_LENGTH = 40;

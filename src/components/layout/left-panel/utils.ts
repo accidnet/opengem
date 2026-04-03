@@ -1,4 +1,4 @@
-import type { ModeIcon } from "@/data/appData";
+import type { ModeIcon } from "@/features/app/config/appData";
 
 import { MODE_ICON_LABELS } from "./constants";
 

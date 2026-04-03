@@ -1,5 +1,5 @@
 import type { AgentColor } from "@/types/chat";
-import type { ModeIcon } from "@/data/appData";
+import type { ModeIcon } from "@/features/app/config/appData";
 
 import type { AgentIconOption } from "./types";
 

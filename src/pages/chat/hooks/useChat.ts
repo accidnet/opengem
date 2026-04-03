@@ -10,8 +10,8 @@ import {
   SESSION_MESSAGES,
   type Mode,
   type ModeIcon,
-} from "@/data/appData";
-import { normalizeLlmSettings } from "@/data/llmCatalog";
+} from "@/features/app/config/appData";
+import { normalizeLlmSettings } from "@/lib/llm/catalog";
 import { buildSessionTitle } from "@/utils/chat";
 import type {
   ActivityItem,

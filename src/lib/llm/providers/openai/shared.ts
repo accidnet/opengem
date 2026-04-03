@@ -1,4 +1,4 @@
-import { normalizeBaseUrl } from "@/data/llmCatalog";
+import { normalizeBaseUrl } from "@/lib/llm/catalog";
 
 import { DEFAULT_API_BASE_URL } from "../../constants";
 

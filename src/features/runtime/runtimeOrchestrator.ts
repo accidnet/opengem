@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { composeAgentSystemPrompt } from "@/data/appData";
+import { composeAgentSystemPrompt } from "@/features/app/config/appData";
 import { request, type LLMMessage } from "@/lib/llm";
 import type { AgentItem, ResolvedLLMSettings } from "@/types/chat";
 import { parseJsonObject } from "@/features/app/appHelpers";

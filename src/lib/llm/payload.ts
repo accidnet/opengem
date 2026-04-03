@@ -1,4 +1,4 @@
-import type { ProviderProtocol } from "@/data/llmCatalog";
+import type { ProviderProtocol } from "@/lib/llm/catalog";
 
 import type { GoogleUsage, JsonRecord, LLMToolCall, LLMUsage, OpenAIUsage } from "@/lib/llm/types";
 

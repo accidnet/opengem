@@ -1,4 +1,4 @@
-import { normalizeBaseUrl } from "@/data/llmCatalog";
+import { normalizeBaseUrl } from "@/lib/llm/catalog";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
 import { safeReadText } from "@/lib/llm/http";

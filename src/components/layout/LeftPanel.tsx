@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import type { Mode, ModeIcon } from "@/data/appData";
+import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 
 import { AgentSettingsModal } from "./left-panel/AgentSettingsModal";

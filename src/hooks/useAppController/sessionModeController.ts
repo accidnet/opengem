@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
-import { AGENTS, LLM_CONFIG, MODE_ICON_OPTIONS, MODES, type Mode, type ModeIcon } from "@/data/appData";
+import { AGENTS, LLM_CONFIG, MODE_ICON_OPTIONS, MODES, type Mode, type ModeIcon } from "@/features/app/config/appData";
 import type { AgentItem, LLMSettings, OperationModeState, SessionDetail, SessionItem } from "@/types/chat";
 
 import {

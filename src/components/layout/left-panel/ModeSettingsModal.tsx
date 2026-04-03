@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import type { KeyboardEvent, MutableRefObject } from "react";
 
-import { MODE_ICON_OPTIONS } from "@/data/appData";
-import type { ModeIcon } from "@/data/appData";
+import { MODE_ICON_OPTIONS } from "@/features/app/config/appData";
+import type { ModeIcon } from "@/features/app/config/appData";
 
 import type { DraftModeItem } from "./types";
 import { getModeIconLabel } from "./utils";

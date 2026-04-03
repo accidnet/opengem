@@ -1,4 +1,4 @@
-import { getPromptForModel } from "@/data/llmCatalog";
+import { getPromptForModel } from "@/lib/llm/catalog";
 import type { LLMConfig } from "@/types/chat";
 import type { LLMToolDefinition } from "@/lib/llm";
 

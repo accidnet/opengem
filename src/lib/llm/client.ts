@@ -1,14 +1,12 @@
-import { getProviderCatalog, type ProviderProtocol } from "@/data/llmCatalog";
+import { getProviderCatalog, type ProviderProtocol } from "@/lib/llm/catalog";
 
 import type { LLMRequest, LLMResponse } from "./types";
 import { sendToAnthropic } from "./providers/anthropic/direct";
-import { sendToChatGptOAuth } from "./providers/openai-compatible/chatgpt";
+import { sendToChatGptOAuth } from "./providers/openai/chatgpt";
 import { sendToGemini } from "./providers/google/direct";
-import { sendToOpenAICompatible } from "./providers/openai-compatible/direct";
-import { sendWithVercelAiSdk } from "./sdk";
+import { sendToOpenAICompatible } from "./providers/openai/direct";
 
 type LLMTransport =
-  | "vercel-ai-sdk"
   | "chatgpt-oauth-direct"
   | "anthropic-direct"
   | "google-gemini-direct"
@@ -47,12 +45,6 @@ function sendWithDirectTransport(input: LLMRequest, transport: LLMTransport): Pr
 
 export async function request(input: LLMRequest): Promise<LLMResponse> {
   const provider = getProviderCatalog(input.providerId);
-  const fallbackTransport = resolveDirectTransport(input, provider.protocol);
-
-  try {
-    return await sendWithVercelAiSdk(input, provider.sdkTarget);
-  } catch (error) {
-    console.warn("Vercel AI SDK path failed, falling back to direct fetch transport.", error);
-    return sendWithDirectTransport(input, fallbackTransport);
-  }
+  const transport = resolveDirectTransport(input, provider.protocol);
+  return sendWithDirectTransport(input, transport);
 }

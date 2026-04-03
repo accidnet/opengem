@@ -1,5 +1,5 @@
 import type { AgentColor, AgentItem } from "@/types/chat";
-import type { Mode, ModeIcon } from "@/data/appData";
+import type { Mode, ModeIcon } from "@/features/app/config/appData";
 
 export type DraftModeItem = {
   id: string;

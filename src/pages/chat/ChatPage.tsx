@@ -4,7 +4,7 @@ import { ChatPanel } from "./layout/ChatPanel";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { PanelModal } from "../../components/layout/PanelModal";
 import { RightPanel } from "../../components/layout/RightPanel";
-import { TOOLS } from "../../data/appData";
+import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
 import { useChatController } from "./hooks/useChat";
 
