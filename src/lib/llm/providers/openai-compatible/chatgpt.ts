@@ -1,7 +1,7 @@
-import { CHATGPT_API_BASE_URL } from "../../constants";
-import type { LLMRequest, LLMResponse } from "../../types";
-import { safeReadText } from "../../shared/http";
-import { parseSSEStream } from "../../shared/stream";
+import { CHATGPT_API_BASE_URL } from "@/lib/llm/constants";
+import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
+import { safeReadText } from "@/lib/llm/http";
+import { parseSSEStream } from "@/lib/llm/stream";
 
 export async function sendToChatGptOAuth(input: LLMRequest): Promise<LLMResponse> {
   const response = await fetch(`${CHATGPT_API_BASE_URL}/responses`, {

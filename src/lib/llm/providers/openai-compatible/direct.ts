@@ -1,7 +1,12 @@
-import type { LLMRequest, LLMResponse } from "../../types";
-import { safeReadText } from "../../shared/http";
-import { extractFinishReason, extractTextChunk, extractToolCalls, extractUsage } from "../../shared/payload";
-import { parseSSEStream } from "../../shared/stream";
+import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
+import { safeReadText } from "@/lib/llm/http";
+import {
+  extractFinishReason,
+  extractTextChunk,
+  extractToolCalls,
+  extractUsage,
+} from "@/lib/llm/payload";
+import { parseSSEStream } from "@/lib/llm/stream";
 import { resolveOpenAICompatibleUrl, buildOpenAIHeaders } from "./shared";
 
 export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {

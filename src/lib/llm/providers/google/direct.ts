@@ -1,10 +1,10 @@
 import { normalizeBaseUrl } from "@/data/llmCatalog";
 
-import type { LLMRequest, LLMResponse } from "../../types";
-import { safeReadText } from "../../shared/http";
-import { splitSystemMessages } from "../../shared/messages";
-import { extractFinishReason, extractTextChunk, extractUsage } from "../../shared/payload";
-import { parseSSEStream } from "../../shared/stream";
+import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
+import { safeReadText } from "@/lib/llm/http";
+import { splitSystemMessages } from "@/lib/llm/messages";
+import { extractFinishReason, extractTextChunk, extractUsage } from "@/lib/llm/payload";
+import { parseSSEStream } from "@/lib/llm/stream";
 
 export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
   const shouldStream = input.stream ?? true;

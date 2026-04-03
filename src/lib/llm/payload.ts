@@ -1,6 +1,6 @@
 import type { ProviderProtocol } from "@/data/llmCatalog";
 
-import type { GoogleUsage, JsonRecord, LLMToolCall, LLMUsage, OpenAIUsage } from "../types";
+import type { GoogleUsage, JsonRecord, LLMToolCall, LLMUsage, OpenAIUsage } from "@/lib/llm/types";
 
 type ToolCallDelta = {
   index: number;

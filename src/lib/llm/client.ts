@@ -5,7 +5,7 @@ import { sendToAnthropic } from "./providers/anthropic/direct";
 import { sendToChatGptOAuth } from "./providers/openai-compatible/chatgpt";
 import { sendToGemini } from "./providers/google/direct";
 import { sendToOpenAICompatible } from "./providers/openai-compatible/direct";
-import { sendWithOpenAICompatibleSdk } from "./providers/openai-compatible/sdk";
+import { sendWithVercelAiSdk } from "./sdk";
 
 type LLMTransport =
   | "vercel-ai-sdk"
@@ -13,31 +13,6 @@ type LLMTransport =
   | "anthropic-direct"
   | "google-gemini-direct"
   | "openai-compatible-direct";
-
-function resolvePreferredTransport(
-  input: LLMRequest,
-  protocol: ProviderProtocol,
-  sdkTarget: "openai" | "openai-compatible" | "native-fetch" | undefined
-): LLMTransport {
-  const customTransport = resolveCustomTransport(input, protocol, sdkTarget);
-  if (customTransport) {
-    return customTransport;
-  }
-
-  if (canUseVercelAiSdk(protocol, sdkTarget, input)) {
-    return "vercel-ai-sdk";
-  }
-
-  return resolveDirectTransport(input, protocol);
-}
-
-function resolveCustomTransport(
-  _input: LLMRequest,
-  _protocol: ProviderProtocol,
-  _sdkTarget: "openai" | "openai-compatible" | "native-fetch" | undefined
-): LLMTransport | null {
-  return null;
-}
 
 function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): LLMTransport {
   if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
@@ -70,36 +45,14 @@ function sendWithDirectTransport(input: LLMRequest, transport: LLMTransport): Pr
   }
 }
 
-function canUseVercelAiSdk(
-  protocol: ProviderProtocol,
-  sdkTarget: "openai" | "openai-compatible" | "native-fetch" | undefined,
-  input?: LLMRequest
-): sdkTarget is "openai" | "openai-compatible" {
-  return (
-    protocol === "openai-compatible" &&
-    Boolean(sdkTarget) &&
-    sdkTarget !== "native-fetch" &&
-    !input?.tools?.length &&
-    !input?.messages.some((message) => message.role === "tool" || message.role === "developer")
-  );
-}
-
 export async function request(input: LLMRequest): Promise<LLMResponse> {
   const provider = getProviderCatalog(input.providerId);
-  const preferredTransport = resolvePreferredTransport(
-    input,
-    provider.protocol,
-    provider.sdkTarget
-  );
   const fallbackTransport = resolveDirectTransport(input, provider.protocol);
 
-  if (preferredTransport === "vercel-ai-sdk") {
-    try {
-      return await sendWithOpenAICompatibleSdk(input, provider.sdkTarget);
-    } catch (error) {
-      console.warn("[opengem] AI SDK path failed, falling back to direct fetch transport.", error);
-    }
+  try {
+    return await sendWithVercelAiSdk(input, provider.sdkTarget);
+  } catch (error) {
+    console.warn("Vercel AI SDK path failed, falling back to direct fetch transport.", error);
+    return sendWithDirectTransport(input, fallbackTransport);
   }
-
-  return sendWithDirectTransport(input, fallbackTransport);
 }
