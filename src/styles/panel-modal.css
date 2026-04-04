@@ -287,6 +287,104 @@ select.settings-input option {
   border-color: var(--primary);
 }
 
+.model-select {
+  position: relative;
+  min-width: 0;
+}
+
+.model-select-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.model-select-input,
+.model-select-toggle {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border) 88%);
+  background: color-mix(in srgb, var(--panel) 90%, var(--bg) 10%);
+  color: var(--text-main);
+}
+
+.model-select-input {
+  width: 100%;
+  padding: 0 12px;
+}
+
+.model-select-input:focus {
+  outline: 1px solid var(--primary);
+  border-color: var(--primary);
+}
+
+.model-select-toggle {
+  width: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.model-select-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border) 88%);
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg) 8%);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.32);
+}
+
+.model-select-status {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.model-select-options {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.model-select-option {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.model-select-option:hover,
+.model-select-option.is-highlighted {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border) 76%);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.model-select-option.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border) 60%);
+}
+
+.model-select-option-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.model-select-option-meta {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
 .settings-primary-btn,
 .settings-secondary-btn {
   cursor: pointer;

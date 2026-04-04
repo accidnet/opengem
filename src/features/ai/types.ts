@@ -18,5 +18,6 @@ export type AvailableProviderInfo = {
 };
 
 export type AvailableModelInfo = AvailableProviderInfo & {
+  providerName: string;
   models: AIModel[];
 };

@@ -257,6 +257,29 @@
   background: var(--panel);
 }
 
+.mode-settings-model-select .model-select-control {
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+}
+
+.mode-settings-model-select .model-select-input,
+.mode-settings-model-select .model-select-toggle {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+  height: 36px;
+}
+
+.mode-settings-model-select .model-select-input {
+  padding: 0 10px;
+}
+
+.mode-settings-model-select .model-select-toggle {
+  width: 36px;
+  padding: 0;
+}
+
 .mode-settings-action {
   background: rgba(56, 189, 248, 0.18);
   border-color: rgba(56, 189, 248, 0.38);

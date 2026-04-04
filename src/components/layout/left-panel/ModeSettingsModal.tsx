@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { KeyboardEvent, MutableRefObject } from "react";
 
+import { ModelSelect } from "@/components/ModelSelect";
 import { MODE_ICON_OPTIONS } from "@/features/app/config/appData";
 import type { ModeIcon } from "@/features/app/config/appData";
 
@@ -152,9 +153,7 @@ export function ModeSettingsModal({
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar mode-panel-modal-sidebar" aria-label="모드 설정 안내">
             <p className="panel-modal-sidebar-label">MODES</p>
-            <p className="panel-modal-sidebar-help">
-              모드마다 기본 모델과 프로젝트 폴더를 함께 관리할 수 있어요.
-            </p>
+            <p className="panel-modal-sidebar-help">모드마다 기본 모델과 프로젝트 폴더를 함께 관리할 수 있어요.</p>
 
             <div className="mode-panel-modal-tabs" role="tablist" aria-label="모드 설정 탭">
               <button
@@ -229,16 +228,15 @@ export function ModeSettingsModal({
                       ))}
                     </select>
                   </div>
-                  <input
-                    type="text"
-                    className="mode-settings-input"
-                    placeholder="기본 모델 예: gpt-5.4"
+                  <ModelSelect
+                    className="mode-settings-model-select"
                     value={newModeDefaultModel}
-                    onMouseDown={() => {
+                    placeholder="기본 모델 예: gpt-5.4"
+                    ariaLabel="새 모드 기본 모델"
+                    onChange={onNewModeDefaultModelChange}
+                    onInteract={() => {
                       suppressOverlayCloseRef.current = true;
                     }}
-                    onChange={(event) => onNewModeDefaultModelChange(event.target.value)}
-                    aria-label="새 모드 기본 모델"
                   />
                   <button className="mode-settings-action" type="button" onClick={onCreateMode}>
                     추가
@@ -322,15 +320,15 @@ export function ModeSettingsModal({
                               ))}
                             </select>
                           </div>
-                          <input
-                            className="mode-settings-input"
+                          <ModelSelect
+                            className="mode-settings-model-select"
                             value={mode.defaultModel || ""}
                             placeholder="기본 모델 예: gpt-5.4"
-                            aria-label={`${mode.name || "mode"} 기본 모델 설정`}
-                            onMouseDown={() => {
+                            ariaLabel={`${mode.name || "mode"} 기본 모델 설정`}
+                            onChange={(value) => onDraftModeDefaultModelChange(mode.id, value)}
+                            onInteract={() => {
                               suppressOverlayCloseRef.current = true;
                             }}
-                            onChange={(event) => onDraftModeDefaultModelChange(mode.id, event.target.value)}
                           />
                           <button
                             className="small-icon-btn"

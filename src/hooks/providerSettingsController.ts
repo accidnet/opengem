@@ -9,6 +9,8 @@ import {
   openExternalUrl,
   saveLlmSettings,
 } from "@/features/api";
+import { AIQueryKeys } from "@/hooks/useAI";
+import { queryClient } from "@/lib/queryClient";
 import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/lib/llm/catalog";
 import type { LLMSettings } from "@/types/chat";
 
@@ -35,10 +37,16 @@ export function createProviderSettingsController({
   setPanelModalError,
   setSettings,
 }: ProviderSettingsControllerParams) {
+  const refreshAvailableProviderQueries = async () => {
+    await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableProviders });
+    await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableModels });
+  };
+
   const loadProviderSettings = async () => {
     try {
       const [next] = await Promise.all([getLlmSettings(), getAvailableProviders()]);
       setSettings(normalizeLlmSettings(next));
+      await refreshAvailableProviderQueries();
       const changed = syncProviderCatalogWithModelsDev();
       if (changed) {
         setSettings((current) => normalizeLlmSettings({ ...current }));
@@ -59,6 +67,7 @@ export function createProviderSettingsController({
         apiKey: settings.apiKey,
       });
       setSettings(normalizeLlmSettings(next));
+      await refreshAvailableProviderQueries();
       setPanelModalError("");
       setIsPanelModalOpen(false);
     } catch (error) {
@@ -91,6 +100,7 @@ export function createProviderSettingsController({
         const next = await getLlmSettings();
         setSettings(normalizeLlmSettings(next));
         if (next.loggedIn) {
+          await refreshAvailableProviderQueries();
           setChatGPTLoginUrl("");
           return;
         }
@@ -113,6 +123,7 @@ export function createProviderSettingsController({
     try {
       const next = await logoutChatgpt();
       setSettings(normalizeLlmSettings(next));
+      await refreshAvailableProviderQueries();
       setChatGPTLoginUrl("");
       setPanelModalError("");
     } catch (error) {

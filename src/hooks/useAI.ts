@@ -28,16 +28,20 @@ export function useAvailableModels() {
     queryKey: AIQueryKeys.availableModels,
     queryFn: async () => {
       const providers = await queryClient.ensureQueryData(getAvailableProvidersQueryOptions());
+      const providersWithModels = mapProvidersWithModels(
+        providers.map((provider) => provider.providerId)
+      );
       const providerModelsMap = new Map(
-        mapProvidersWithModels(providers.map((provider) => provider.providerId)).map((provider) => [
-          provider.id,
-          Object.values(provider.models ?? {}),
-        ])
+        providersWithModels.map((provider) => [provider.id, Object.values(provider.models ?? {})])
+      );
+      const providerNameMap = new Map(
+        providersWithModels.map((provider) => [provider.id, provider.name?.trim() || provider.id])
       );
 
       return providers
         .map((provider) => ({
           ...provider,
+          providerName: providerNameMap.get(provider.providerId) ?? provider.providerId,
           models: providerModelsMap.get(provider.providerId) ?? [],
         }))
         .filter((provider) => provider.models.length > 0);
