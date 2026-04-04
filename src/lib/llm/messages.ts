@@ -1,4 +1,4 @@
-import type { LLMMessage } from "../types";
+import type { LLMMessage } from "./types";
 
 export function splitSystemMessages(messages: LLMMessage[]) {
   const system = messages

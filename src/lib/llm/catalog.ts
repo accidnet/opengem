@@ -1,4 +1,5 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
+import { normalizeBaseUrl } from "@/lib/utils";
 import { getModelsDevCatalog } from "./modelsDevCatalog";
 
 import PROMPT_ANTHROPIC from "@/features/chat/prompts/anthropic.txt?raw";
@@ -13,7 +14,8 @@ export type ProviderProtocol =
   | "openai-compatible"
   | "anthropic"
   | "google-gemini"
-  | "chatgpt-responses";
+  | "chatgpt-responses"
+  | "openai-chatgpt";
 export type PromptProfile = "default" | "gpt" | "codex" | "gemini" | "anthropic";
 
 export type ModelCatalogEntry = {
@@ -181,12 +183,17 @@ function toModelsDevEntries(
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function applyModelsDevProviderCatalog(providerId: ProviderId, models: ModelCatalogEntry[]): ProviderCatalogEntry {
+function applyModelsDevProviderCatalog(
+  providerId: ProviderId,
+  models: ModelCatalogEntry[]
+): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
   const next = {
     ...provider,
     models: models.length > 0 ? models : provider.models,
-    modelDefault: models.some((entry) => entry.id === provider.modelDefault) ? provider.modelDefault : models[0]?.id || provider.modelDefault,
+    modelDefault: models.some((entry) => entry.id === provider.modelDefault)
+      ? provider.modelDefault
+      : models[0]?.id || provider.modelDefault,
     modelsSource: models.length > 0 ? "models.dev" : provider.modelsSource,
   } satisfies ProviderCatalogEntry;
 
@@ -238,11 +245,17 @@ export function listProviderModels(providerId?: string | null): ModelCatalogEntr
   return getProviderCatalog(providerId).models;
 }
 
-export function getModelCatalog(providerId: ProviderId, modelId?: string | null): ModelCatalogEntry | undefined {
+export function getModelCatalog(
+  providerId: ProviderId,
+  modelId?: string | null
+): ModelCatalogEntry | undefined {
   return getProviderCatalog(providerId).models.find((model) => model.id === modelId);
 }
 
-export function replaceProviderModels(providerId: ProviderId, models: ModelCatalogEntry[]): ProviderCatalogEntry {
+export function replaceProviderModels(
+  providerId: ProviderId,
+  models: ModelCatalogEntry[]
+): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
   const next = {
     ...provider,
@@ -253,7 +266,10 @@ export function replaceProviderModels(providerId: ProviderId, models: ModelCatal
   return next;
 }
 
-export function upsertProviderModels(providerId: ProviderId, models: ModelCatalogEntry[]): ProviderCatalogEntry {
+export function upsertProviderModels(
+  providerId: ProviderId,
+  models: ModelCatalogEntry[]
+): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
   const merged = new Map(provider.models.map((model) => [model.id, model]));
   models.forEach((model) => {
@@ -280,7 +296,8 @@ export function resolvePromptProfile(model?: string, providerId?: string | null)
   }
 
   if (normalizedModel.includes("codex")) return "codex";
-  if (normalizedModel.includes("claude") || normalizedModel.includes("anthropic")) return "anthropic";
+  if (normalizedModel.includes("claude") || normalizedModel.includes("anthropic"))
+    return "anthropic";
   if (normalizedModel.includes("gemini")) return "gemini";
   if (
     normalizedModel.includes("gpt") ||
@@ -321,7 +338,7 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   return {
     providerId: provider.id,
     providerKind: provider.providerKind,
-    baseUrl: normalizeBaseUrl(input.baseUrl || provider.baseUrl),
+    baseUrl: normalizeBaseUrl(input.baseUrl || provider.baseUrl) ?? DEFAULT_OPENAI_BASE_URL,
     model,
     apiKey: input.apiKey ?? defaults.apiKey,
     chatgptLoggedIn: Boolean(input.chatgptLoggedIn),
@@ -336,7 +353,8 @@ export function applyProviderSelection(
   const provider = getProviderCatalog(providerId);
   const currentProvider = getProviderCatalog(current.providerId);
   const keepsCustomBaseUrl =
-    current.providerId === provider.id && normalizeBaseUrl(current.baseUrl) !== normalizeBaseUrl(provider.baseUrl);
+    current.providerId === provider.id &&
+    normalizeBaseUrl(current.baseUrl) !== normalizeBaseUrl(provider.baseUrl);
 
   return {
     providerId: provider.id,
@@ -370,12 +388,4 @@ export function normalizeModelSelection(providerId: ProviderId, model?: string |
   }
 
   return provider.models.some((entry) => entry.id === trimmed) ? trimmed : provider.modelDefault;
-}
-
-export function normalizeBaseUrl(value?: string | null): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return DEFAULT_OPENAI_BASE_URL;
-  }
-  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }

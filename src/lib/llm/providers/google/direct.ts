@@ -1,7 +1,6 @@
-import { normalizeBaseUrl } from "@/lib/llm/catalog";
+import { normalizeBaseUrl } from "@/lib/utils";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
-import { safeReadText } from "@/lib/llm/http";
 import { splitSystemMessages } from "@/lib/llm/messages";
 import { extractFinishReason, extractTextChunk, extractUsage } from "@/lib/llm/payload";
 import { parseSSEStream } from "@/lib/llm/stream";
@@ -14,30 +13,33 @@ export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
     throw new Error("Gemini API key is missing.");
   }
 
-  const response = await fetch(resolveGeminiUrl(input.apiBaseUrl, input.model, apiKey, shouldStream), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: system
-        ? {
-            parts: [{ text: system }],
-          }
-        : undefined,
-      contents: messages.map((message) => ({
-        role: message.role === "assistant" ? "model" : "user",
-        parts: [{ text: message.content }],
-      })),
-      generationConfig: {
-        temperature: 0.4,
+  const response = await fetch(
+    resolveGeminiUrl(input.apiBaseUrl, input.model, apiKey, shouldStream),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    }),
-    signal: input.signal,
-  });
+      body: JSON.stringify({
+        systemInstruction: system
+          ? {
+              parts: [{ text: system }],
+            }
+          : undefined,
+        contents: messages.map((message) => ({
+          role: message.role === "assistant" ? "model" : "user",
+          parts: [{ text: message.content }],
+        })),
+        generationConfig: {
+          temperature: 0.4,
+        },
+      }),
+      signal: input.signal,
+    }
+  );
 
   if (!response.ok) {
-    const detail = await safeReadText(response);
+    const detail = response.text();
     throw new Error(`Gemini API error (${response.status}): ${detail || response.statusText}`);
   }
 
@@ -60,5 +62,8 @@ export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
 function resolveGeminiUrl(baseUrl: string, model: string, apiKey: string, stream: boolean): string {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const operation = stream ? "streamGenerateContent?alt=sse" : "generateContent";
-  return `${normalizedBaseUrl}/models/${model}:${operation}&key=${apiKey}`.replace(":generateContent&", ":generateContent?");
+  return `${normalizedBaseUrl}/models/${model}:${operation}&key=${apiKey}`.replace(
+    ":generateContent&",
+    ":generateContent?"
+  );
 }

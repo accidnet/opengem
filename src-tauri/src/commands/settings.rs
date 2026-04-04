@@ -1,9 +1,14 @@
 use crate::app_state::AppState;
+use crate::commands::settings_types::{
+    ChatgptRequestInput, ChatgptResponsePayload, IdTokenClaims, LlmSettingsPayload, OAuthCodes,
+    ResolvedLlmSettingsPayload, ResponsesApiResponse, ResponsesInputMessage,
+    ResponsesInputTextItem, SaveLlmSettingsInput, StartChatgptLoginPayload, StoredLlmSettings,
+    TokenResponse, UsagePayload,
+};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
 use reqwest::blocking::Client;
 use rusqlite::{params, OptionalExtension};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     io::{Read, Write},
@@ -26,158 +31,6 @@ const OPENAI_ISSUER: &str = "https://auth.openai.com";
 const OPENAI_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OAUTH_TIMEOUT_SECONDS: u64 = 300;
 const OAUTH_PORT: u16 = 1455;
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmSettingsPayload {
-    provider_id: String,
-    provider_kind: String,
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
-    chatgpt_logged_in: bool,
-    chatgpt_email: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveLlmSettingsInput {
-    provider_id: String,
-    provider_kind: String,
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResolvedLlmSettingsPayload {
-    provider_id: String,
-    provider_kind: String,
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
-    access_token: Option<String>,
-    account_id: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StartChatgptLoginPayload {
-    authorization_url: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatgptMessageInput {
-    role: String,
-    content: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatgptRequestInput {
-    model: String,
-    messages: Vec<ChatgptMessageInput>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UsagePayload {
-    prompt_tokens: Option<i64>,
-    completion_tokens: Option<i64>,
-    total_tokens: Option<i64>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatgptResponsePayload {
-    text: String,
-    usage: Option<UsagePayload>,
-}
-
-#[derive(Default)]
-struct StoredLlmSettings {
-    provider_id: String,
-    provider_kind: String,
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
-    access_token: Option<String>,
-    refresh_token: Option<String>,
-    expires_at: Option<i64>,
-    account_id: Option<String>,
-    chatgpt_email: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    refresh_token: String,
-    expires_in: Option<i64>,
-    id_token: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct IdTokenClaims {
-    chatgpt_account_id: Option<String>,
-    organizations: Option<Vec<OrganizationClaim>>,
-    email: Option<String>,
-    #[serde(rename = "https://api.openai.com/auth")]
-    auth: Option<AuthClaim>,
-}
-
-#[derive(Deserialize)]
-struct OrganizationClaim {
-    id: String,
-}
-
-#[derive(Deserialize)]
-struct AuthClaim {
-    chatgpt_account_id: Option<String>,
-}
-
-struct OAuthCodes {
-    verifier: String,
-    challenge: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ResponsesInputTextItem {
-    r#type: String,
-    text: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ResponsesInputMessage {
-    role: String,
-    content: Vec<ResponsesInputTextItem>,
-}
-
-#[derive(Deserialize)]
-struct ResponsesOutputTextItem {
-    r#type: Option<String>,
-    text: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct ResponsesOutputItem {
-    content: Option<Vec<ResponsesOutputTextItem>>,
-}
-
-#[derive(Deserialize)]
-struct ResponsesUsage {
-    input_tokens: Option<i64>,
-    output_tokens: Option<i64>,
-    total_tokens: Option<i64>,
-}
-
-#[derive(Deserialize)]
-struct ResponsesApiResponse {
-    output_text: Option<String>,
-    output: Option<Vec<ResponsesOutputItem>>,
-    usage: Option<ResponsesUsage>,
-}
 
 #[tauri::command]
 pub fn get_llm_settings(state: State<AppState>) -> Result<LlmSettingsPayload, String> {

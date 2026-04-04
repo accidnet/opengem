@@ -50,6 +50,7 @@ export type LLMRequest = {
   toolChoice?: "auto" | "none" | "required";
   stream?: boolean;
   signal?: AbortSignal;
+  temperature?: number;
   onChunk?: (chunk: string) => void;
   onEvent?: (event: LLMStreamEvent) => void;
 };

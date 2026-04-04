@@ -72,7 +72,14 @@ export type IconBadgeProps = {
 };
 
 export type LLMConfig = {
-  providerId: "openai" | "chatgpt" | "anthropic" | "google" | "openrouter" | "custom_openai";
+  providerId:
+    | "openai"
+    | "chatgpt"
+    | "anthropic"
+    | "google"
+    | "openrouter"
+    | "custom_openai"
+    | "openai-chatgpt";
   providerKind: "api_key" | "chatgpt_oauth";
   baseUrl: string;
   model: string;

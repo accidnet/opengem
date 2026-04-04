@@ -1,5 +1,4 @@
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
-import { safeReadText } from "@/lib/llm/http";
 import {
   extractFinishReason,
   extractTextChunk,
@@ -7,27 +6,81 @@ import {
   extractUsage,
 } from "@/lib/llm/payload";
 import { parseSSEStream } from "@/lib/llm/stream";
-import { resolveOpenAICompatibleUrl, buildOpenAIHeaders } from "./shared";
+import { normalizeBaseUrl } from "@/lib/utils";
 
-export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {
-  const shouldStream = input.stream ?? true;
-  const response = await fetch(resolveOpenAICompatibleUrl(input.apiBaseUrl), {
+function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (authorization) {
+    headers.Authorization = `Bearer ${authorization}`;
+  }
+
+  if (accountId) {
+    headers["ChatGPT-Account-Id"] = accountId;
+  }
+
+  return headers;
+}
+
+function buildMessages(input: LLMRequest) {
+  return input.messages.map((message) => {
+    if (message.role === "assistant") {
+      return {
+        role: "assistant",
+        content: [{ type: "output_text", text: message.content }],
+      };
+    }
+
+    return {
+      role: message.role,
+      content: [{ type: "input_text", text: message.content }],
+    };
+  });
+}
+
+function buildRequestBody(input: LLMRequest) {
+  const firstMessage = input.messages[0];
+  const hasSystemPrompt = firstMessage?.role === "system";
+  return {
+    model: input.model,
+    instructions: hasSystemPrompt ? firstMessage.content : "You are a helpful assistant.",
+    input: buildMessages(input),
+    stream: input.stream,
+    store: false,
+    temperature: input.temperature,
+    ...(input.tools?.length
+      ? {
+          tools: input.tools,
+          tool_choice: input.toolChoice ?? "auto",
+        }
+      : {}),
+  };
+}
+
+async function send(input: LLMRequest): Promise<Response> {
+  const response = await fetch(`${normalizeBaseUrl(input.apiBaseUrl)}/responses`, {
     method: "POST",
-    headers: buildOpenAIHeaders(input.apiKey),
-    body: JSON.stringify(buildRequestBody(input, shouldStream)),
+    headers: buildHeaders(input.apiKey, undefined),
+    body: JSON.stringify(buildRequestBody(input)),
     signal: input.signal,
   });
+  return response;
+}
+
+export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {
+  const response = await send(input);
 
   if (!response.ok) {
-    const detail = await safeReadText(response);
-    throw new Error(`LLM API error (${response.status}): ${detail || response.statusText}`);
+    throw new Error(`${input.apiBaseUrl} error (${response.status}): ${response.text()}`);
   }
 
   if (!response.body) {
-    throw new Error("LLM response body is missing.");
+    throw new Error(`${input.apiBaseUrl} body is missing.`);
   }
 
-  if (shouldStream) {
+  if (input.stream) {
     return parseSSEStream(response, "openai-compatible", input.onChunk, input.onEvent);
   }
 
@@ -41,46 +94,21 @@ export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResp
   };
 }
 
-function buildRequestBody(input: LLMRequest, shouldStream: boolean) {
-  return {
-    model: input.model,
-    messages: input.messages.map((message) => {
-      if (message.role === "tool") {
-        return {
-          role: "tool",
-          content: message.content,
-          tool_call_id: message.toolCallId,
-          name: message.name,
-        };
-      }
+export async function sendToOpenAIOAuth(input: LLMRequest): Promise<LLMResponse> {
+  const response = await send(input);
 
-      if (message.role === "assistant" && message.toolCalls?.length) {
-        return {
-          role: "assistant",
-          content: message.content || "",
-          tool_calls: message.toolCalls.map((toolCall) => ({
-            id: toolCall.id,
-            type: "function",
-            function: {
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          })),
-        };
-      }
+  if (!response.ok) {
+    const detail = response.text();
+    throw new Error(`ChatGPT API error (${response.status}): ${detail || response.statusText}`);
+  }
 
-      return {
-        role: message.role,
-        content: message.content,
-      };
-    }),
-    temperature: 0.4,
-    stream: shouldStream,
-    ...(input.tools?.length
-      ? {
-          tools: input.tools,
-          tool_choice: input.toolChoice ?? "auto",
-        }
-      : {}),
-  };
+  if (!response.body) {
+    throw new Error("ChatGPT response body is missing.");
+  }
+
+  if (input.stream ?? true) {
+    return parseSSEStream(response, "chatgpt-responses", input.onChunk, input.onEvent);
+  }
+
+  return parseSSEStream(response, "chatgpt-responses");
 }

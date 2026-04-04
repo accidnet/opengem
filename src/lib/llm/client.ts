@@ -2,15 +2,15 @@ import { getProviderCatalog, type ProviderProtocol } from "@/lib/llm/catalog";
 
 import type { LLMRequest, LLMResponse } from "./types";
 import { sendToAnthropic } from "./providers/anthropic/direct";
-import { sendToChatGptOAuth } from "./providers/openai/chatgpt";
 import { sendToGemini } from "./providers/google/direct";
-import { sendToOpenAICompatible } from "./providers/openai/direct";
+import { sendToOpenAIOAuth, sendToOpenAICompatible } from "./providers/openai/direct";
 
 type LLMTransport =
   | "chatgpt-oauth-direct"
   | "anthropic-direct"
   | "google-gemini-direct"
-  | "openai-compatible-direct";
+  | "openai-compatible-direct"
+  | "openai-chatgpt";
 
 function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): LLMTransport {
   if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
@@ -28,10 +28,21 @@ function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): 
   return "openai-compatible-direct";
 }
 
-function sendWithDirectTransport(input: LLMRequest, transport: LLMTransport): Promise<LLMResponse> {
+export async function request(input: LLMRequest): Promise<LLMResponse> {
+  const provider = getProviderCatalog(input.providerId);
+  let transport = resolveDirectTransport(input, provider.protocol);
+
+  if (input.providerId && input.providerId === "openai-chatgpt") {
+    transport = "openai-chatgpt";
+  }
+
   switch (transport) {
+    // TODO: 임시 처리
+    case "openai-chatgpt":
+      input.apiBaseUrl = "https://chatgpt.com/backend-api/codex";
+      return sendToOpenAICompatible(input);
     case "chatgpt-oauth-direct":
-      return sendToChatGptOAuth(input);
+      return sendToOpenAIOAuth(input);
     case "anthropic-direct":
       return sendToAnthropic(input);
     case "google-gemini-direct":
@@ -41,10 +52,4 @@ function sendWithDirectTransport(input: LLMRequest, transport: LLMTransport): Pr
     default:
       return sendToOpenAICompatible(input);
   }
-}
-
-export async function request(input: LLMRequest): Promise<LLMResponse> {
-  const provider = getProviderCatalog(input.providerId);
-  const transport = resolveDirectTransport(input, provider.protocol);
-  return sendWithDirectTransport(input, transport);
 }

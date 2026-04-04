@@ -1,7 +1,6 @@
-import { normalizeBaseUrl } from "@/lib/llm/catalog";
+import { normalizeBaseUrl } from "@/lib/utils";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
-import { safeReadText } from "@/lib/llm/http";
 import { splitSystemMessages } from "@/lib/llm/messages";
 import { extractFinishReason, extractTextChunk, extractUsage } from "@/lib/llm/payload";
 import { parseSSEStream } from "@/lib/llm/stream";
@@ -27,7 +26,7 @@ export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
   });
 
   if (!response.ok) {
-    const detail = await safeReadText(response);
+    const detail = await response.text();
     throw new Error(`Anthropic API error (${response.status}): ${detail || response.statusText}`);
   }
 
