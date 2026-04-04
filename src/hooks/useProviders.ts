@@ -2,11 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getAvailableProviders, type AvailableProviderInfo } from "@/features/api";
 
-export const PROVIDERS_QUERY_KEY = ["providers"] as const;
+export const providerQueryKeys = {
+  all: ["providers"] as const,
+  available: ["providers", "available"] as const,
+};
 
-export function useProviders() {
+export function useAvailableProviders() {
   return useQuery<AvailableProviderInfo[]>({
-    queryKey: PROVIDERS_QUERY_KEY,
+    queryKey: providerQueryKeys.available,
     queryFn: getAvailableProviders,
     staleTime: 60_000,
   });

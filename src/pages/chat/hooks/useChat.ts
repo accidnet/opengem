@@ -22,7 +22,7 @@ import type {
   SessionItem,
 } from "@/types/chat";
 import { normalizeAgentsForUi } from "@/features/app/appHelpers";
-import { createSessionModeController } from "@/hooks/useAppController/sessionModeController";
+import { createSessionModeController } from "@/hooks/sessionModeController";
 import { useChatSendMessage } from "./useChatSendMessage";
 
 type UseChatControllerParams = {
