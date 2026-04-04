@@ -11,7 +11,7 @@ import { DEFAULT_AGENT_MODEL } from "./left-panel/constants";
 import { ModeSection } from "./left-panel/ModeSection";
 import { ModeSettingsModal } from "./left-panel/ModeSettingsModal";
 import { ToolsSection } from "./left-panel/ToolsSection";
-import type { AgentSettingsTab, DraftAgentItem, DraftModeItem } from "./left-panel/types";
+import type { AgentIconOption, AgentSettingsTab, DraftAgentItem, DraftModeItem } from "./left-panel/types";
 import { parseConfigList } from "./left-panel/utils";
 
 type QuickEditAgentDraft = {
@@ -83,7 +83,7 @@ export function LeftPanel({
   const [draftModes, setDraftModes] = useState<DraftModeItem[]>([]);
   const [draftAgents, setDraftAgents] = useState<DraftAgentItem[]>([]);
   const [newAgentName, setNewAgentName] = useState("");
-  const [newAgentIcon, setNewAgentIcon] = useState<DraftAgentItem["icon"]>("smart_toy");
+  const [newAgentIcon, setNewAgentIcon] = useState<AgentIconOption>("smart_toy");
   const [newAgentColor, setNewAgentColor] = useState<AgentColor>("indigo");
   const [newAgentModel, setNewAgentModel] = useState(DEFAULT_AGENT_MODEL);
   const [newAgentPrompt, setNewAgentPrompt] = useState("");
@@ -789,7 +789,9 @@ export function LeftPanel({
         onOpenSettings={openAgentSettings}
         quickEditAgentIndex={quickEditAgentIndex}
         quickEditDraft={quickEditAgentDraft}
+        quickEditError={quickEditError}
         onStartQuickEditAgent={handleStartQuickEditAgent}
+        onQuickEditAgentChange={handleQuickEditAgentChange}
       />
       <ToolsSection tools={tools} />
 

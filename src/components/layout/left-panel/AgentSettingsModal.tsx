@@ -313,7 +313,9 @@ export function AgentSettingsModal({
                           <select
                             className="mode-settings-select"
                             value={agent.icon}
-                            onChange={(event) => onDraftAgentChange(agent.id, "icon", event.target.value)}
+                            onChange={(event) =>
+                              onDraftAgentChange(agent.id, "icon", event.target.value as AgentIconOption)
+                            }
                             aria-label={`${agent.name || "agent"} 아이콘 변경`}
                           >
                             {AGENT_ICON_OPTIONS.map((iconName) => (

@@ -6,7 +6,6 @@ import {
   AGENTS,
   DEFAULT_MODE_ICONS,
   INITIAL_ACTIVITY,
-  LLM_CONFIG,
   MODES,
   SESSION_MESSAGES,
   type Mode,
@@ -145,6 +144,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
       return {
         id: currentSessionId,
         title: currentSessionTitle,
+        updatedAt: Date.now(),
+        modeName: selectedMode,
         projectPaths: currentSessionProjectPaths,
       };
     }
@@ -173,7 +174,9 @@ export function useChatController({ settings }: UseChatControllerParams) {
     messages,
     modes,
     persistMessage,
-    refreshSessions,
+    refreshSessions: async (nextModes, nextSessionId) => {
+      await refreshSessions(nextModes, nextSessionId);
+    },
     resolveProviderSettings,
     setActivity,
     setInputValue,

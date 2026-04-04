@@ -177,7 +177,7 @@ function applyModelsDevProviderCatalog(
   models: ModelCatalogEntry[]
 ): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
-  const next = {
+  const next: ProviderCatalogEntry = {
     ...provider,
     models: models.length > 0 ? models : provider.models,
     modelDefault: models.some((entry) => entry.id === provider.modelDefault)
@@ -239,7 +239,7 @@ export function replaceProviderModels(
   models: ModelCatalogEntry[]
 ): ProviderCatalogEntry {
   const provider = getProviderCatalog(providerId);
-  const next = {
+  const next: ProviderCatalogEntry = {
     ...provider,
     models: [...models],
     modelsSource: "static",
@@ -257,7 +257,7 @@ export function upsertProviderModels(
   models.forEach((model) => {
     merged.set(model.id, model);
   });
-  const next = {
+  const next: ProviderCatalogEntry = {
     ...provider,
     models: Array.from(merged.values()),
     modelsSource: "static",

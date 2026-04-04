@@ -134,25 +134,6 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
             </div>
           </>
         ) : null}
-        {message.type === "search" ? (
-          <>
-            {bubbleText ? <MarkdownText className="bubble-text" text={bubbleText} /> : null}
-            <div className="tool-log-box">
-              <div className="tool-log-title">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "14px", color: "#94a3b8" }}
-                >
-                  terminal
-                </span>
-                <span>tool_execution.log</span>
-              </div>
-              <div className="tool-log-body">
-                <pre>{logs.map((line) => `${line}\n`).join("")}</pre>
-              </div>
-            </div>
-          </>
-        ) : null}
         {message.type === "text" && bubbleText ? (
           <MarkdownText className="bubble-text" text={bubbleText} />
         ) : null}

@@ -174,9 +174,10 @@ export function createSessionModeController({
         }, {})
       );
 
+      const loadedModes = next.modes;
       setModeIcons((prev) => {
         const nextIcons = { ...prev };
-        next.modes.forEach((mode, index) => {
+        loadedModes.forEach((mode, index) => {
           if (!nextIcons[mode]) {
             nextIcons[mode] = index === 0 ? "smart_toy" : "tune";
           }
@@ -193,9 +194,15 @@ export function createSessionModeController({
       return;
     }
 
+    if (!next) {
+      return;
+    }
+
+    const loadedState = next;
+
     try {
       const nextAgents = await invoke<PersistedAgent[]>("load_mode_agents", {
-        modeName: next.selectedMode,
+        modeName: loadedState.selectedMode,
       });
       setAgents(normalizeAgentsForUi(nextAgents));
     } catch {
@@ -203,10 +210,10 @@ export function createSessionModeController({
     }
 
     try {
-      await syncModeSessions(next.selectedMode, next.modes, null);
+      await syncModeSessions(loadedState.selectedMode, loadedState.modes, null);
     } catch {
       resetCurrentSession();
-      void refreshSessions(next.modes, null);
+      void refreshSessions(loadedState.modes, null);
     }
   };
 

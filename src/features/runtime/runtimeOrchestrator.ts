@@ -575,9 +575,10 @@ async function executeShellAction(action: Extract<RuntimeAction, { type: "shell"
       command: action.command,
       cwd: action.cwd || null,
     },
-  }).catch((error) => ({
+  }).catch((error): CommandLineResult => ({
     command: action.command,
     cwd: action.cwd || "",
+    shell: "",
     exitCode: null,
     stdout: "",
     stderr: String(error),
@@ -609,10 +610,10 @@ function getStringInput(input: Record<string, unknown> | undefined, key: string)
 
 function renderCommandTemplate(template: string, argumentsText: string): string {
   const trimmedArgs = argumentsText.trim();
-  let rendered = template.replaceAll("$ARGUMENTS", trimmedArgs);
+  let rendered = template.split("$ARGUMENTS").join(trimmedArgs);
   const args = trimmedArgs.length > 0 ? trimmedArgs.split(/\s+/) : [];
 
-  rendered = rendered.replace(/\$(\d+)/g, (_match, rawIndex) => {
+  rendered = rendered.replace(/\$(\d+)/g, (_match: string, rawIndex: string) => {
     const index = Number(rawIndex) - 1;
     return args[index] ?? "";
   });

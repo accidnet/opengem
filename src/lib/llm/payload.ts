@@ -178,7 +178,7 @@ export function extractToolCallDeltas(
         argumentsChunk: typeof fn?.arguments === "string" ? fn.arguments : undefined,
       } satisfies ToolCallDelta;
     })
-    .filter((entry): entry is ToolCallDelta => Boolean(entry));
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 }
 
 function mapResolvedToolCall(entry: unknown): LLMToolCall | null {

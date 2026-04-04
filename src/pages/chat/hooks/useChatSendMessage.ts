@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
+import { hasAvailableProvider } from "@/features/ai/providers/utils";
 import { getChatSession } from "@/features/backend/api";
 import { getProviderCatalog } from "@/lib/llm/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
@@ -62,6 +62,26 @@ const replaceTypingMessage = (
   setMessages((prev) => prev.map((entry) => (entry.id === typingMessageId ? nextMessage : entry)));
 };
 
+async function publishGuardMessage(input: {
+  sessionId: string;
+  typingMessage: Message;
+  text: string;
+  setMessages: Dispatch<SetStateAction<Message[]>>;
+  persistMessage: (sessionId: string, message: Message) => Promise<void>;
+  refreshSessions: (modes: string[], nextSessionId: string | null) => Promise<void>;
+  modes: string[];
+}) {
+  const nextMessage: Message = {
+    ...input.typingMessage,
+    type: "text",
+    text: input.text,
+  };
+
+  replaceTypingMessage(input.setMessages, input.typingMessage.id, nextMessage);
+  await input.persistMessage(input.sessionId, nextMessage);
+  await input.refreshSessions(input.modes, input.sessionId);
+}
+
 const moveMessageToBottom = (
   setMessages: Dispatch<SetStateAction<Message[]>>,
   messageId: string,
@@ -89,9 +109,14 @@ const updateStreamingStatusMessage = (
   );
 };
 
-function createToolLogMessage(agentName: string | undefined, result: ChatToolExecutionResult): Message {
+function createToolLogMessage(
+  agentName: string | undefined,
+  result: ChatToolExecutionResult
+): Message {
   const preview =
-    result.content.length > 500 ? `${result.content.slice(0, 500)}\n...` : result.content || "(no output)";
+    result.content.length > 500
+      ? `${result.content.slice(0, 500)}\n...`
+      : result.content || "(no output)";
 
   return {
     id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -106,7 +131,11 @@ function createToolLogMessage(agentName: string | undefined, result: ChatToolExe
   };
 }
 
-function createToolErrorMessage(agentName: string | undefined, toolName: string, reason: string): Message {
+function createToolErrorMessage(
+  agentName: string | undefined,
+  toolName: string,
+  reason: string
+): Message {
   return {
     id: `tool-error-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     side: "agent",
@@ -187,14 +216,21 @@ async function runMainAgentLoop(input: {
     projectPaths: input.projectPaths,
     tools: toolDefinitions,
   });
-  const workingMessages: LLMMessage[] = [{ role: "system", content: systemPrompt }, ...input.baseMessages];
+  const workingMessages: LLMMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...input.baseMessages,
+  ];
 
   let totalTokens = 0;
   let finalText = "";
   let step = 0;
 
   while (true) {
-    if (typeof input.maxAgentSteps === "number" && input.maxAgentSteps > 0 && step >= input.maxAgentSteps) {
+    if (
+      typeof input.maxAgentSteps === "number" &&
+      input.maxAgentSteps > 0 &&
+      step >= input.maxAgentSteps
+    ) {
       return {
         text: finalText || "(응답이 비어 있습니다.)",
         totalTokens,
@@ -296,7 +332,11 @@ async function runMainAgentLoop(input: {
         });
       } catch (error) {
         const reason = getErrorMessage(error);
-        const toolErrorMessage = createToolErrorMessage(input.mainAgent.name, toolCall.name, reason);
+        const toolErrorMessage = createToolErrorMessage(
+          input.mainAgent.name,
+          toolCall.name,
+          reason
+        );
         input.setMessages((prev) => [...prev, toolErrorMessage]);
         await input.persistMessage(input.sessionId, toolErrorMessage);
         input.setActivity((prev) => [
@@ -387,7 +427,7 @@ export function useChatSendMessage({
       "Thinking...",
       mainAgent?.name,
       mainAgent?.icon,
-      mainAgent?.color ? AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac" : undefined
+      mainAgent?.color ? (AGENT_COLOR_VALUES[mainAgent.color] ?? "#86efac") : undefined
     );
 
     setMessages((prev) => [...prev, userMessage, typingMessage]);
@@ -405,31 +445,16 @@ export function useChatSendMessage({
       const sessionDetail = await getChatSession(session.id);
       const activeSettings = await resolveProviderSettings();
 
-      if (activeSettings.providerKind === "oauth" && !activeSettings.accessToken) {
-        const loginMessage: Message = {
-          ...typingMessage,
-          type: "text",
-          text: "ChatGPT 로그인이 필요합니다. Provider 메뉴에서 로그인한 뒤 다시 시도해 주세요.",
-        };
-        replaceTypingMessage(setMessages, typingMessage.id, loginMessage);
-        await persistMessage(session.id, loginMessage);
-        await refreshSessions(modes, session.id);
-        return;
-      }
-
-      if (activeSettings.providerKind !== "oauth" && !activeSettings.apiKey) {
-        const missingApiKeyMessage: Message = {
-          ...typingMessage,
-          type: "text",
-          text: "API 키가 설정되지 않았습니다. Provider 설정에서 키를 추가해 주세요.",
-        };
-        replaceTypingMessage(setMessages, typingMessage.id, missingApiKeyMessage);
-        await persistMessage(session.id, missingApiKeyMessage);
-        await refreshSessions(modes, session.id);
-        setActivity((prev) => [
-          ...prev,
-          buildActivity("API 키가 없어 LLM 요청을 시작하지 못했습니다.", mainAgent?.name ?? "Assistant"),
-        ]);
+      if (!hasAvailableProvider()) {
+        await publishGuardMessage({
+          sessionId: session.id,
+          typingMessage,
+          text: "사용 가능한 모델이 없습니다. 우측 상단의 사용자 버튼을 눌러 Provider를 설정하세요.",
+          setMessages,
+          persistMessage,
+          refreshSessions,
+          modes,
+        });
         return;
       }
 
@@ -465,7 +490,10 @@ export function useChatSendMessage({
       const usageText = response.totalTokens > 0 ? ` Tokens used: ${response.totalTokens}` : "";
       setActivity((prev) => [
         ...prev,
-        buildActivity(`Agent response completed.${usageText}`.trim(), mainAgent?.name ?? "Assistant"),
+        buildActivity(
+          `Agent response completed.${usageText}`.trim(),
+          mainAgent?.name ?? "Assistant"
+        ),
       ]);
     } catch (error) {
       const reason = getErrorMessage(error);

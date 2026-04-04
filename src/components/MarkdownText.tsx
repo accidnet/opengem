@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 
 type MarkdownTextProps = {
   text: string;
@@ -199,7 +199,7 @@ export function MarkdownText({ text, className }: MarkdownTextProps) {
 
         switch (block.type) {
           case "heading": {
-            const HeadingTag = `h${block.level}` as keyof JSX.IntrinsicElements;
+            const HeadingTag = `h${block.level}` as ElementType;
             return <HeadingTag key={key}>{parseInline(block.text)}</HeadingTag>;
           }
           case "blockquote":
