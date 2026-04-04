@@ -1,9 +1,9 @@
 import { normalizeBaseUrl } from "@/lib/utils";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
-import { splitSystemMessages } from "@/lib/llm/messages";
-import { extractFinishReason, extractTextChunk, extractUsage } from "@/lib/llm/payload";
-import { parseSSEStream } from "@/lib/llm/stream";
+import { splitSystemMessages } from "@/features/ai/messages";
+import { extractFinishReason, extractTextChunk, extractUsage } from "@/features/ai/payload";
+import { parseSSEStream } from "@/features/ai/stream";
 
 export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
   const shouldStream = input.stream ?? true;

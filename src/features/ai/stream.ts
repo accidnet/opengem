@@ -1,6 +1,6 @@
-import type { ProviderProtocol } from "@/lib/llm/catalog";
+import type { ProviderProtocol } from "@/features/ai/catalog";
 
-import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMToolCall, LLMUsage } from "./types";
+import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMToolCall, LLMUsage } from "../../lib/llm/types";
 import { safeJsonParse } from "./json";
 import { extractFinishReason, extractTextChunk, extractToolCallDeltas, extractToolCalls, extractUsage } from "./payload";
 

@@ -1,4 +1,4 @@
-import { applyProviderKindSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/lib/llm/catalog";
+import { applyProviderKindSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/features/ai/catalog";
 import type { LLMSettings } from "@/types/chat";
 
 type ProvidersSettingModalProps = {

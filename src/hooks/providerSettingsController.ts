@@ -11,7 +11,7 @@ import {
 } from "@/features/backend/api";
 import { AIQueryKeys } from "@/hooks/useAI";
 import { queryClient } from "@/lib/queryClient";
-import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/lib/llm/catalog";
+import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/features/ai/catalog";
 import type { LLMSettings } from "@/types/chat";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;

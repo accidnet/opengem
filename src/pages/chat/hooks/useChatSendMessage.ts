@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
 import { getChatSession } from "@/features/backend/api";
-import { getProviderCatalog } from "@/lib/llm/catalog";
+import { getProviderCatalog } from "@/features/ai/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
 import {
@@ -10,7 +10,7 @@ import {
   executeChatToolCall,
   type ChatToolExecutionResult,
 } from "@/features/chat/toolRuntime";
-import { request, type LLMMessage, type LLMToolCall } from "@/lib/llm";
+import { request, type LLMMessage, type LLMToolCall } from "@/features/ai";
 import type {
   ActivityItem,
   AgentItem,
@@ -25,6 +25,7 @@ import {
   buildTypingMessage,
   nowTime,
 } from "@/pages/chat/utils";
+import { useAvailableProviders } from "@/hooks/useAI";
 
 type SendMessageDeps = {
   agents: AgentItem[];
@@ -397,6 +398,10 @@ export function useChatSendMessage({
   setResourceToken,
   maxAgentSteps = DEFAULT_MAX_AGENT_STEPS,
 }: SendMessageDeps) {
+  // 사용가능한 provider가 있는 지 확인
+  const { data: availableProviders = [] } = useAvailableProviders();
+  const hasProvider = hasAvailableProvider(availableProviders);
+
   const sendMessage = async (): Promise<void> => {
     if (!canSend) {
       return;
@@ -445,7 +450,7 @@ export function useChatSendMessage({
       const sessionDetail = await getChatSession(session.id);
       const activeSettings = await resolveProviderSettings();
 
-      if (!hasAvailableProvider()) {
+      if (!hasProvider) {
         await publishGuardMessage({
           sessionId: session.id,
           typingMessage,

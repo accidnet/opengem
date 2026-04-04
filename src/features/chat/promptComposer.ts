@@ -1,6 +1,6 @@
-import { getPromptForModel } from "@/lib/llm/catalog";
+import { getPromptForModel } from "@/features/ai/catalog";
 import type { LLMConfig } from "@/types/chat";
-import type { LLMToolDefinition } from "@/lib/llm";
+import type { LLMToolDefinition } from "@/features/ai";
 
 import TOOL_USE_POLICY from "@/features/chat/prompts/tool-use-policy.txt?raw";
 

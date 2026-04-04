@@ -1,4 +1,4 @@
-import type { LLMMessage } from "@/lib/llm";
+import type { LLMMessage } from "@/features/ai";
 
 import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/features/app/config/appData";
 import type { ActivityItem, Message } from "@/types/chat";

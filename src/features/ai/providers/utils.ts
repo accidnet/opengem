@@ -1,7 +1,3 @@
-import { useAvailableProviders } from "@/hooks/useAI";
-
-export function hasAvailableProvider() {
-  const { data = [] } = useAvailableProviders();
-
-  return data.length > 0;
+export function hasAvailableProvider(providers?: unknown[]) {
+  return (providers?.length ?? 0) > 0;
 }

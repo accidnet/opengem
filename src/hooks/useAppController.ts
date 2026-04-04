@@ -1,7 +1,7 @@
 import { useEffect, useState, type SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/features/app/config/appData";
-import { normalizeLlmSettings } from "@/lib/llm/catalog";
+import { normalizeLlmSettings } from "@/features/ai/catalog";
 import type { LLMSettings, ThemeMode } from "../types/chat";
 import { createProviderSettingsController } from "./providerSettingsController";
 

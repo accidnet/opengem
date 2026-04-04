@@ -1,5 +1,5 @@
 import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
-import { createDefaultLlmSettings, getPromptForModel } from "@/lib/llm/catalog";
+import { createDefaultLlmSettings, getPromptForModel } from "@/features/ai/catalog";
 
 export const LLM_CONFIG: LLMSettings = createDefaultLlmSettings();
 

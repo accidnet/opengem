@@ -11,7 +11,7 @@ import {
   type Mode,
   type ModeIcon,
 } from "@/features/app/config/appData";
-import { normalizeLlmSettings } from "@/lib/llm/catalog";
+import { normalizeLlmSettings } from "@/features/ai/catalog";
 import { buildSessionTitle } from "@/pages/chat/utils";
 import type {
   ActivityItem,

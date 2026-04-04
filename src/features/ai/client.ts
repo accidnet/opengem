@@ -1,9 +1,9 @@
-import { getProviderCatalog, type ProviderProtocol } from "@/lib/llm/catalog";
+import { getProviderCatalog, type ProviderProtocol } from "@/features/ai/catalog";
 import { sendToAnthropic } from "@/features/ai/providers/anthropic/direct";
 import { sendToGemini } from "@/features/ai/providers/google/direct";
 import { sendToOpenAIOAuth, sendToOpenAICompatible } from "@/features/ai/providers/openai/direct";
 
-import type { LLMRequest, LLMResponse } from "./types";
+import type { LLMRequest, LLMResponse } from "../../lib/llm/types";
 
 type LLMTransport =
   | "chatgpt-oauth-direct"

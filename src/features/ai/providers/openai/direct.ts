@@ -4,8 +4,8 @@ import {
   extractTextChunk,
   extractToolCalls,
   extractUsage,
-} from "@/lib/llm/payload";
-import { parseSSEStream } from "@/lib/llm/stream";
+} from "@/features/ai/payload";
+import { parseSSEStream } from "@/features/ai/stream";
 import { normalizeBaseUrl } from "@/lib/utils";
 
 function buildHeaders(authorization?: string, accountId?: string): HeadersInit {

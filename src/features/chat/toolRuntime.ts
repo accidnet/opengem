@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { LLMToolCall, LLMToolDefinition } from "@/lib/llm";
+import type { LLMToolCall, LLMToolDefinition } from "@/features/ai";
 
 import SHELL_COMMAND_PROMPT from "@/features/chat/tools/prompts/shell-command.txt?raw";
 import WORKSPACE_LIST_FILES_PROMPT from "@/features/chat/tools/prompts/workspace-list-files.txt?raw";
