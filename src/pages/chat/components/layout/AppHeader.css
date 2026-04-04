@@ -81,19 +81,23 @@
   display: none;
   align-items: center;
   gap: 12px;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  width: fit-content;
   max-width: min(100%, clamp(180px, 24vw, 360px));
 }
 
 .session-label-wrap h2 {
-  flex: 1 1 auto;
+  /* 제목은 글자 길이만큼만 차지하고, 최대 폭을 넘으면 말줄임 처리합니다. */
+  flex: 0 1 auto;
+  max-width: min(100%, clamp(120px, 18vw, 280px));
   margin: 0;
   color: var(--text-main);
   font-size: 15px;
   font-weight: 700;
   min-width: 0;
+  width: fit-content;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
