@@ -896,7 +896,7 @@ export function LeftPanel({
               <button
                 className="agent-quick-popover-close"
                 type="button"
-                aria-label="???? ?? ?? ??"
+                aria-label="에이전트 빠른 설정 닫기"
                 onClick={handleCancelQuickEditAgent}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -907,7 +907,7 @@ export function LeftPanel({
 
             <div className="agent-quick-popover-body">
               <label className="agent-quick-edit-field">
-                <span>??</span>
+                <span>이름</span>
                 <input
                   className="mode-settings-input"
                   type="text"
@@ -916,7 +916,7 @@ export function LeftPanel({
                 />
               </label>
               <label className="agent-quick-edit-field">
-                <span>??</span>
+                <span>모델</span>
                 <input
                   className="mode-settings-input"
                   type="text"
@@ -925,7 +925,7 @@ export function LeftPanel({
                 />
               </label>
               <label className="agent-quick-edit-field">
-                <span>??</span>
+                <span>역할</span>
                 <select
                   className="mode-settings-select"
                   value={quickEditAgentDraft.role}
@@ -941,17 +941,17 @@ export function LeftPanel({
                   checked={quickEditAgentDraft.active}
                   onChange={(event) => handleQuickEditAgentChange("active", event.target.checked)}
                 />
-                <span>?? ?? ??</span>
+                <span>활성 상태 유지</span>
               </label>
               {quickEditError && <p className="agent-quick-edit-error">{quickEditError}</p>}
             </div>
 
             <footer className="agent-quick-popover-footer">
               <button className="settings-secondary-btn agent-quick-popover-btn" type="button" onClick={handleCancelQuickEditAgent}>
-                ?띯뫁??
+                취소
               </button>
               <button className="settings-primary-btn agent-quick-popover-btn" type="button" onClick={() => void handleSaveQuickEditAgent()}>
-                ????
+                저장
               </button>
             </footer>
           </section>
