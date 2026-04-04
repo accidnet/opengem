@@ -1,4 +1,4 @@
-import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
+import type { AIRequest, AIResponse } from "@/features/ai/types/common";
 import {
   extractFinishReason,
   extractTextChunk,
@@ -24,7 +24,7 @@ function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
   return headers;
 }
 
-function buildMessages(input: LLMRequest) {
+function buildMessages(input: AIRequest) {
   return input.messages.map((message) => {
     if (message.role === "assistant") {
       return {
@@ -40,7 +40,7 @@ function buildMessages(input: LLMRequest) {
   });
 }
 
-function buildRequestBody(input: LLMRequest) {
+function buildRequestBody(input: AIRequest) {
   const firstMessage = input.messages[0];
   const hasSystemPrompt = firstMessage?.role === "system";
   return {
@@ -59,7 +59,7 @@ function buildRequestBody(input: LLMRequest) {
   };
 }
 
-async function send(input: LLMRequest): Promise<Response> {
+async function send(input: AIRequest): Promise<Response> {
   const response = await fetch(`${normalizeBaseUrl(input.apiBaseUrl)}/responses`, {
     method: "POST",
     headers: buildHeaders(input.apiKey, undefined),
@@ -69,7 +69,7 @@ async function send(input: LLMRequest): Promise<Response> {
   return response;
 }
 
-export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResponse> {
+export async function sendToOpenAICompatible(input: AIRequest): Promise<AIResponse> {
   const response = await send(input);
 
   if (!response.ok) {
@@ -94,7 +94,7 @@ export async function sendToOpenAICompatible(input: LLMRequest): Promise<LLMResp
   };
 }
 
-export async function sendToOpenAIOAuth(input: LLMRequest): Promise<LLMResponse> {
+export async function sendToOpenAIOAuth(input: AIRequest): Promise<AIResponse> {
   const response = await send(input);
 
   if (!response.ok) {

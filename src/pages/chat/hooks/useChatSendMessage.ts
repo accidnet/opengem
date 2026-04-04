@@ -255,10 +255,7 @@ async function runMainAgentLoop(input: {
       apiKey: input.activeSettings.apiKey,
       accessToken: input.activeSettings.accessToken,
       accountId: input.activeSettings.accountId,
-      model:
-        input.activeSettings.providerKind === "oauth"
-          ? input.activeSettings.model
-          : input.mainAgent.model?.trim() || input.activeSettings.model,
+      model: input.mainAgent.model?.trim() ?? "gpt-5.4",
       messages: workingMessages,
       tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
       toolChoice: toolDefinitions.length > 0 ? "auto" : undefined,

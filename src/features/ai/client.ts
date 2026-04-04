@@ -3,7 +3,7 @@ import { sendToAnthropic } from "@/features/ai/providers/anthropic/direct";
 import { sendToGemini } from "@/features/ai/providers/google/direct";
 import { sendToOpenAIOAuth, sendToOpenAICompatible } from "@/features/ai/providers/openai/direct";
 
-import type { LLMRequest, LLMResponse } from "../../lib/llm/types";
+import type { AIRequest, AIResponse } from "./types/common";
 
 type LLMTransport =
   | "chatgpt-oauth-direct"
@@ -11,7 +11,7 @@ type LLMTransport =
   | "google-gemini-direct"
   | "openai-compatible-direct";
 
-function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): LLMTransport {
+function resolveDirectTransport(input: AIRequest, protocol: ProviderProtocol): LLMTransport {
   if (protocol === "chatgpt-responses" || input.providerKind === "oauth") {
     return "chatgpt-oauth-direct";
   }
@@ -27,20 +27,21 @@ function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): 
   return "openai-compatible-direct";
 }
 
-export async function request(input: LLMRequest): Promise<LLMResponse> {
-  const provider = getProviderCatalog(input.providerId);
-  const transport = resolveDirectTransport(input, provider.protocol);
+export async function request(input: AIRequest): Promise<AIResponse> {
+  return sendToOpenAICompatible(input);
+  // const provider = getProviderCatalog(input.providerId);
+  // const transport = resolveDirectTransport(input, provider.protocol);
 
-  switch (transport) {
-    case "chatgpt-oauth-direct":
-      return sendToOpenAIOAuth(input);
-    case "anthropic-direct":
-      return sendToAnthropic(input);
-    case "google-gemini-direct":
-      return sendToGemini(input);
-    case "openai-compatible-direct":
-      return sendToOpenAICompatible(input);
-    default:
-      return sendToOpenAICompatible(input);
-  }
+  // switch (transport) {
+  //   case "chatgpt-oauth-direct":
+  //     return sendToOpenAIOAuth(input);
+  //   case "anthropic-direct":
+  //     return sendToAnthropic(input);
+  //   case "google-gemini-direct":
+  //     return sendToGemini(input);
+  //   case "openai-compatible-direct":
+  //     return sendToOpenAICompatible(input);
+  //   default:
+  //     return sendToOpenAICompatible(input);
+  // }
 }
