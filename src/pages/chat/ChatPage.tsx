@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { AppHeader } from "./layout/AppHeader";
-import { ChatPanel } from "./layout/ChatPanel";
+import { AppHeader } from "./components/layout/AppHeader";
+import { ChatPanel } from "./components/layout/ChatPanel";
 import { ProvidersSettingModal } from "./ProvidersSettingModal";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
-import { useChatController } from "./hooks/useChat";
+import { useChatController } from "./hooks/useChatController";
 
 const MIN_LEFT_PANEL_WIDTH = 180;
 const MAX_LEFT_PANEL_WIDTH = 420;

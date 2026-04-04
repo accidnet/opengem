@@ -1,6 +1,6 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
 import { normalizeBaseUrl } from "@/lib/utils";
-import { getModelsDevCatalog } from "./modelsDevCatalog";
+import { getModelCatalog } from "@/config/loadModels";
 
 import PROMPT_ANTHROPIC from "@/features/chat/prompts/anthropic.txt?raw";
 import PROMPT_CODEX from "@/features/chat/prompts/codex.txt?raw";
@@ -191,7 +191,7 @@ function applyModelsDevProviderCatalog(
 }
 
 export function syncProviderCatalogWithModelsDev() {
-  const payload = getModelsDevCatalog();
+  const payload = getModelCatalog();
   let changed = false;
 
   for (const [externalId, provider] of Object.entries(payload)) {
@@ -232,13 +232,6 @@ export function getProviderCatalog(providerId?: string | null): ProviderCatalogE
 
 export function listProviderModels(providerId?: string | null): ModelCatalogEntry[] {
   return getProviderCatalog(providerId).models;
-}
-
-export function getModelCatalog(
-  providerId: ProviderId,
-  modelId?: string | null
-): ModelCatalogEntry | undefined {
-  return getProviderCatalog(providerId).models.find((model) => model.id === modelId);
 }
 
 export function replaceProviderModels(
@@ -350,7 +343,9 @@ export function applyProviderSelection(
   const provider = getProviderCatalog(providerId);
   const currentProvider = getProviderCatalog(current.providerId);
   const providerKind =
-    provider.id === "openai" && currentProvider.id === "openai" ? current.providerKind : provider.providerKind;
+    provider.id === "openai" && currentProvider.id === "openai"
+      ? current.providerKind
+      : provider.providerKind;
 
   return {
     providerId: provider.id,
@@ -360,7 +355,8 @@ export function applyProviderSelection(
       currentProvider.id === provider.id
         ? normalizeModelSelection(provider.id, current.model)
         : provider.modelDefault,
-    apiKey: currentProvider.id === provider.id && providerKind === "api_key" ? current.apiKey : undefined,
+    apiKey:
+      currentProvider.id === provider.id && providerKind === "api_key" ? current.apiKey : undefined,
   };
 }
 
@@ -372,7 +368,10 @@ export function applyProviderKindSelection(
     current.providerId === "openai" && providerKind === "oauth" ? "oauth" : "api_key";
   return {
     providerKind: nextProviderKind,
-    baseUrl: nextProviderKind === "oauth" ? CHATGPT_BASE_URL : getProviderCatalog(current.providerId).baseUrl,
+    baseUrl:
+      nextProviderKind === "oauth"
+        ? CHATGPT_BASE_URL
+        : getProviderCatalog(current.providerId).baseUrl,
     model: normalizeModelSelection(current.providerId, current.model),
     apiKey: nextProviderKind === "api_key" ? current.apiKey : undefined,
   };

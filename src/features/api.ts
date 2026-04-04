@@ -3,12 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
 import type { LLMSettings } from "@/types/chat";
 
-export type AvailableProviderInfo = {
-  providerId: string;
-  credentialTypes: string[];
-  hasApiKey: boolean;
-  loggedIn: boolean;
-};
+import type { AvailableProviderInfo } from "./ai/types";
 
 export type SaveLlmSettingsParams = {
   providerId: LLMSettings["providerId"];
