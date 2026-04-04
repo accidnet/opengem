@@ -1,5 +1,6 @@
 import type { KeyboardEvent, MutableRefObject } from "react";
 
+import { ModelSelect } from "@/components/ModelSelect";
 import type { AgentColor } from "@/types/chat";
 
 import { AGENT_COLOR_LABELS, AGENT_COLOR_OPTIONS, AGENT_ICON_OPTIONS } from "./constants";
@@ -205,13 +206,14 @@ export function AgentSettingsModal({
 
                   <label className="settings-field settings-field-wide">
                     <span>모델</span>
-                    <input
-                      className="settings-input"
-                      type="text"
-                      placeholder="gpt-5.4"
+                    <ModelSelect
                       value={newAgentModel}
-                      onChange={(event) => onNewAgentModelChange(event.target.value)}
-                      aria-label="새 에이전트 모델"
+                      placeholder="gpt-5.4"
+                      ariaLabel="새 에이전트 모델"
+                      onChange={onNewAgentModelChange}
+                      onInteract={() => {
+                        suppressOverlayCloseRef.current = true;
+                      }}
                     />
                   </label>
                 </section>

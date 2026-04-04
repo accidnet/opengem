@@ -755,7 +755,7 @@
   box-shadow:
     0 14px 30px rgba(15, 23, 42, 0.15),
     0 2px 6px rgba(15, 23, 42, 0.08);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .agent-quick-popover-header {
@@ -816,6 +816,54 @@
   height: 30px;
   font-size: 11px;
   padding: 0 8px;
+}
+
+.agent-quick-model-select .model-select-control {
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 6px;
+}
+
+.agent-quick-model-select .model-select-input,
+.agent-quick-model-select .model-select-toggle {
+  height: 30px;
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+.agent-quick-model-select .model-select-toggle {
+  width: 30px;
+  padding: 0;
+}
+
+.agent-quick-model-select .model-select-popover {
+  min-width: 0;
+  top: calc(100% + 4px);
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.agent-quick-model-select .model-select-status {
+  font-size: 10px;
+}
+
+.agent-quick-model-select .model-select-options {
+  gap: 4px;
+  max-height: 144px;
+}
+
+.agent-quick-model-select .model-select-option {
+  gap: 1px;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+
+.agent-quick-model-select .model-select-option-label {
+  font-size: 11px;
+}
+
+.agent-quick-model-select .model-select-option-meta {
+  font-size: 10px;
 }
 
 .agent-quick-popover-footer {

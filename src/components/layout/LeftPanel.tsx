@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+import { ModelSelect } from "@/components/ModelSelect";
 import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 
@@ -917,11 +918,11 @@ export function LeftPanel({
               </label>
               <label className="agent-quick-edit-field">
                 <span>모델</span>
-                <input
-                  className="mode-settings-input"
-                  type="text"
+                <ModelSelect
+                  className="agent-quick-model-select"
                   value={quickEditAgentDraft.model}
-                  onChange={(event) => handleQuickEditAgentChange("model", event.target.value)}
+                  ariaLabel="에이전트 quick edit 모델"
+                  onChange={(value) => handleQuickEditAgentChange("model", value)}
                 />
               </label>
               <label className="agent-quick-edit-field">
