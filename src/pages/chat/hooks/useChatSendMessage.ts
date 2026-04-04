@@ -121,7 +121,7 @@ function createToolErrorMessage(agentName: string | undefined, toolName: string,
 }
 
 function supportsStructuredToolLoop(activeSettings: ResolvedLLMSettings): boolean {
-  if (activeSettings.providerKind === "chatgpt_oauth") {
+  if (activeSettings.providerKind === "oauth") {
     return false;
   }
   const provider = getProviderCatalog(activeSettings.providerId);
@@ -219,7 +219,7 @@ async function runMainAgentLoop(input: {
       accessToken: input.activeSettings.accessToken,
       accountId: input.activeSettings.accountId,
       model:
-        input.activeSettings.providerKind === "chatgpt_oauth"
+        input.activeSettings.providerKind === "oauth"
           ? input.activeSettings.model
           : input.mainAgent.model?.trim() || input.activeSettings.model,
       messages: workingMessages,
@@ -407,7 +407,7 @@ export function useChatSendMessage({
       });
       const activeSettings = await resolveProviderSettings();
 
-      if (activeSettings.providerKind === "chatgpt_oauth" && !activeSettings.accessToken) {
+      if (activeSettings.providerKind === "oauth" && !activeSettings.accessToken) {
         const loginMessage: Message = {
           ...typingMessage,
           type: "text",
@@ -419,7 +419,7 @@ export function useChatSendMessage({
         return;
       }
 
-      if (activeSettings.providerKind !== "chatgpt_oauth" && !activeSettings.apiKey) {
+      if (activeSettings.providerKind !== "oauth" && !activeSettings.apiKey) {
         const missingApiKeyMessage: Message = {
           ...typingMessage,
           type: "text",

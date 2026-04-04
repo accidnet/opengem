@@ -1,11 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/features/app/config/appData";
+import {
+  beginChatgptLogin,
+  getAvailableProviders,
+  getLlmSettings,
+  logoutChatgpt,
+  openExternalUrl,
+  saveLlmSettings,
+} from "@/features/api";
 import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/lib/llm/catalog";
 import type { LLMSettings } from "@/types/chat";
-
-import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -20,10 +25,6 @@ type ProviderSettingsControllerParams = {
   setSettings: Setter<LLMSettings>;
 };
 
-async function openExternalUrl(url: string): Promise<void> {
-  await invoke("open_external_url", { url });
-}
-
 export function createProviderSettingsController({
   chatGPTLoginUrl,
   settings,
@@ -36,7 +37,7 @@ export function createProviderSettingsController({
 }: ProviderSettingsControllerParams) {
   const loadProviderSettings = async () => {
     try {
-      const next = await invoke<LLMSettings>("get_llm_settings");
+      const [next] = await Promise.all([getLlmSettings(), getAvailableProviders()]);
       setSettings(normalizeLlmSettings(next));
       const changed = syncProviderCatalogWithModelsDev();
       if (changed) {
@@ -51,13 +52,11 @@ export function createProviderSettingsController({
   const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
-      const next = await invoke<LLMSettings>("save_llm_settings", {
-        input: {
-          providerId: settings.providerId,
-          providerKind: settings.providerKind,
-          model: settings.model,
-          apiKey: settings.apiKey,
-        },
+      const next = await saveLlmSettings({
+        providerId: settings.providerId,
+        providerKind: settings.providerKind,
+        model: settings.model,
+        apiKey: settings.apiKey,
       });
       setSettings(normalizeLlmSettings(next));
       setPanelModalError("");
@@ -77,7 +76,7 @@ export function createProviderSettingsController({
 
     setIsChatGPTLoginBusy(true);
     try {
-      const auth = await invoke<StartChatgptLoginPayload>("begin_chatgpt_login");
+      const auth = await beginChatgptLogin();
       setChatGPTLoginUrl(auth.authorizationUrl);
       await openExternalUrl(auth.authorizationUrl);
       setPanelModalError("");
@@ -89,9 +88,9 @@ export function createProviderSettingsController({
           setTimeout(resolve, 1200);
         });
 
-        const next = await invoke<LLMSettings>("get_llm_settings");
+        const next = await getLlmSettings();
         setSettings(normalizeLlmSettings(next));
-        if (next.chatgptLoggedIn) {
+        if (next.loggedIn) {
           setChatGPTLoginUrl("");
           return;
         }
@@ -112,7 +111,7 @@ export function createProviderSettingsController({
   const logoutChatGPT = async () => {
     setIsChatGPTLoginBusy(true);
     try {
-      const next = await invoke<LLMSettings>("logout_chatgpt");
+      const next = await logoutChatgpt();
       setSettings(normalizeLlmSettings(next));
       setChatGPTLoginUrl("");
       setPanelModalError("");

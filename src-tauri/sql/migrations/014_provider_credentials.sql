@@ -44,7 +44,7 @@ INSERT INTO provider_credentials (
 )
 SELECT
   'openai',
-  'chatgpt_oauth',
+  'oauth',
   access_token,
   refresh_token,
   expires_at,

@@ -12,7 +12,7 @@ type LLMTransport =
   | "openai-compatible-direct";
 
 function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): LLMTransport {
-  if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
+  if (protocol === "chatgpt-responses" || input.providerKind === "oauth") {
     return "chatgpt-oauth-direct";
   }
 

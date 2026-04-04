@@ -57,7 +57,7 @@ const providerEntries: ProviderCatalogEntry[] = [
     label: "OpenAI",
     description: "OpenAI API key and ChatGPT login are handled under the same provider.",
     providerKind: "api_key",
-    providerKinds: ["api_key", "chatgpt_oauth"],
+    providerKinds: ["api_key", "oauth"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
@@ -309,17 +309,17 @@ export function createDefaultLlmSettings(env = import.meta.env): LLMSettings {
   const provider = getProviderCatalog(envProviderId);
   const model = env.VITE_LLM_MODEL || provider.modelDefault;
   const providerKind =
-    provider.id === "openai" && env.VITE_LLM_PROVIDER_KIND === "chatgpt_oauth"
-      ? "chatgpt_oauth"
+    provider.id === "openai" && env.VITE_LLM_PROVIDER_KIND === "oauth"
+      ? "oauth"
       : provider.providerKind;
 
   return {
     providerId: provider.id,
     providerKind,
-    baseUrl: providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
+    baseUrl: providerKind === "oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
     model,
     apiKey: env.VITE_LLM_API_KEY,
-    chatgptLoggedIn: false,
+    loggedIn: false,
   };
 }
 
@@ -327,19 +327,19 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   const defaults = createDefaultLlmSettings();
   const provider = getProviderCatalog(input.providerId ?? defaults.providerId);
   const providerKind =
-    provider.id === "openai" && input.providerKind === "chatgpt_oauth" ? "chatgpt_oauth" : "api_key";
+    provider.id === "openai" && input.providerKind === "oauth" ? "oauth" : "api_key";
   const model = normalizeModelSelection(provider.id, input.model ?? defaults.model);
 
   return {
     providerId: provider.id,
     providerKind,
     baseUrl:
-      normalizeBaseUrl(providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl) ??
+      normalizeBaseUrl(providerKind === "oauth" ? CHATGPT_BASE_URL : provider.baseUrl) ??
       DEFAULT_OPENAI_BASE_URL,
     model,
     apiKey: input.apiKey ?? defaults.apiKey,
-    chatgptLoggedIn: Boolean(input.chatgptLoggedIn),
-    chatgptEmail: input.chatgptEmail,
+    loggedIn: Boolean(input.loggedIn),
+    email: input.email,
   };
 }
 
@@ -355,7 +355,7 @@ export function applyProviderSelection(
   return {
     providerId: provider.id,
     providerKind,
-    baseUrl: providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
+    baseUrl: providerKind === "oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
     model:
       currentProvider.id === provider.id
         ? normalizeModelSelection(provider.id, current.model)
@@ -369,10 +369,10 @@ export function applyProviderKindSelection(
   providerKind: ProviderKind
 ): Pick<LLMSettings, "providerKind" | "baseUrl" | "model" | "apiKey"> {
   const nextProviderKind =
-    current.providerId === "openai" && providerKind === "chatgpt_oauth" ? "chatgpt_oauth" : "api_key";
+    current.providerId === "openai" && providerKind === "oauth" ? "oauth" : "api_key";
   return {
     providerKind: nextProviderKind,
-    baseUrl: nextProviderKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : getProviderCatalog(current.providerId).baseUrl,
+    baseUrl: nextProviderKind === "oauth" ? CHATGPT_BASE_URL : getProviderCatalog(current.providerId).baseUrl,
     model: normalizeModelSelection(current.providerId, current.model),
     apiKey: nextProviderKind === "api_key" ? current.apiKey : undefined,
   };

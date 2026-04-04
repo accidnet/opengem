@@ -135,7 +135,7 @@ export function ChatPage() {
     <div className="app-shell">
       <AppHeader
         theme={theme}
-        isLoggedIn={settings.chatgptLoggedIn}
+        isLoggedIn={settings.loggedIn}
         sessionTitle={currentSessionTitle}
         hasActiveSession={Boolean(currentSessionId)}
         onNewChat={startNewChat}

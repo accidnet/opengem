@@ -78,15 +78,15 @@ export type LLMConfig = {
     | "google"
     | "openrouter"
     | "custom_openai";
-  providerKind: "api_key" | "chatgpt_oauth";
+  providerKind: "api_key" | "oauth";
   baseUrl: string;
   model: string;
   apiKey?: string;
 };
 
 export type LLMSettings = LLMConfig & {
-  chatgptLoggedIn: boolean;
-  chatgptEmail?: string;
+  loggedIn: boolean;
+  email?: string;
 };
 
 export type ResolvedLLMSettings = LLMConfig & {

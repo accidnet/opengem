@@ -3,6 +3,7 @@
 mod app_state;
 mod commands;
 mod migrations;
+mod repositories;
 
 use app_state::AppState;
 use dotenvy::from_path_override;
@@ -390,6 +391,7 @@ fn main() {
             commands::session::update_chat_session_project_paths,
             commands::session::open_folder_in_explorer,
             commands::settings::get_llm_settings,
+            commands::settings::get_available_providers,
             commands::settings::save_llm_settings,
             commands::settings::resolve_llm_settings,
             commands::settings::begin_chatgpt_login,

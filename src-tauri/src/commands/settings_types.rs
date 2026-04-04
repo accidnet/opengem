@@ -8,8 +8,8 @@ pub struct LlmSettingsPayload {
     pub base_url: String,
     pub model: String,
     pub api_key: Option<String>,
-    pub chatgpt_logged_in: bool,
-    pub chatgpt_email: Option<String>,
+    pub logged_in: bool,
+    pub email: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +39,16 @@ pub struct StartChatgptLoginPayload {
     pub authorization_url: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableProviderPayload {
+    pub provider_id: String,
+    pub credential_types: Vec<String>,
+    pub has_api_key: bool,
+    pub logged_in: bool,
+    pub email: Option<String>,
+}
+
 #[derive(Default)]
 pub(crate) struct StoredLlmSettings {
     pub provider_id: String,
@@ -50,8 +60,8 @@ pub(crate) struct StoredLlmSettings {
     pub refresh_token: Option<String>,
     pub expires_at: Option<i64>,
     pub account_id: Option<String>,
-    pub chatgpt_logged_in: bool,
-    pub chatgpt_email: Option<String>,
+    pub logged_in: bool,
+    pub email: Option<String>,
 }
 
 #[derive(Default)]

@@ -40,8 +40,8 @@ export function ProvidersSettingModal({
 
   const providers = listProviders();
   const activeProvider = getProviderCatalog(settings.providerId);
-  const supportsChatGPTLogin = activeProvider.providerKinds.includes("chatgpt_oauth");
-  const usesChatGPTLogin = settings.providerId === "openai" && settings.providerKind === "chatgpt_oauth";
+  const supportsChatGPTLogin = activeProvider.providerKinds.includes("oauth");
+  const usesChatGPTLogin = settings.providerId === "openai" && settings.providerKind === "oauth";
 
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
@@ -117,7 +117,7 @@ export function ProvidersSettingModal({
                   <button
                     className={`settings-secondary-btn${usesChatGPTLogin ? " is-active" : ""}`}
                     type="button"
-                    onClick={() => onChange(applyProviderKindSelection(settings, "chatgpt_oauth"))}
+                    onClick={() => onChange(applyProviderKindSelection(settings, "oauth"))}
                   >
                     ChatGPT Login
                   </button>
@@ -125,14 +125,14 @@ export function ProvidersSettingModal({
 
                 <div className="settings-auth-row">
                   <div className="settings-auth-copy">
-                    <strong>{settings.chatgptEmail || "No ChatGPT account connected"}</strong>
+                    <strong>{settings.email || "No ChatGPT account connected"}</strong>
                     <span>
-                      {settings.chatgptLoggedIn
+                      {settings.loggedIn
                         ? "OAuth tokens will be refreshed automatically when needed."
                         : "Login once to use OpenAI through your ChatGPT account session."}
                     </span>
                   </div>
-                  {settings.chatgptLoggedIn ? (
+                  {settings.loggedIn ? (
                     <button className="settings-secondary-btn" type="button" onClick={onLogoutChatGPT} disabled={isLoginBusy}>
                       Log out
                     </button>
@@ -143,7 +143,7 @@ export function ProvidersSettingModal({
                   )}
                 </div>
 
-                {!settings.chatgptLoggedIn && loginUrl && (
+                {!settings.loggedIn && loginUrl && (
                   <p className="settings-oauth-help">
                     If the browser did not open automatically, press the login button again to retry the OAuth flow.
                   </p>
