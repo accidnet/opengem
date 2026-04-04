@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+import { resolveLlmSettings } from "@/features/backend/api";
 import {
   AGENTS,
   DEFAULT_MODE_ICONS,
@@ -12,7 +13,7 @@ import {
   type ModeIcon,
 } from "@/features/app/config/appData";
 import { normalizeLlmSettings } from "@/lib/llm/catalog";
-import { buildSessionTitle } from "@/utils/chat";
+import { buildSessionTitle } from "@/pages/chat/utils";
 import type {
   ActivityItem,
   AgentItem,
@@ -119,7 +120,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   const resolveProviderSettings = async (): Promise<ResolvedLLMSettings> => {
     try {
-      const next = await invoke<ResolvedLLMSettings>("resolve_llm_settings");
+      const next = await resolveLlmSettings();
       return {
         ...normalizeLlmSettings(next),
         accessToken: next.accessToken,

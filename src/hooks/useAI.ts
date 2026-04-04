@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { mapProvidersWithModels } from "@/config/loadModels";
-import { getAvailableProviders } from "@/features/api";
+import { getAvailableProviders } from "@/features/backend/api";
 import type { AvailableModelInfo, AvailableProviderInfo } from "@/features/ai/types";
 
 export const AIQueryKeys = {

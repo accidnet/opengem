@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
+import { getChatSession } from "@/features/backend/api";
 import { getProviderCatalog } from "@/lib/llm/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
@@ -15,7 +16,6 @@ import type {
   AgentItem,
   Message,
   ResolvedLLMSettings,
-  SessionDetail,
   SessionItem,
 } from "@/types/chat";
 import {
@@ -24,7 +24,7 @@ import {
   buildConversationMessages,
   buildTypingMessage,
   nowTime,
-} from "@/utils/chat";
+} from "@/pages/chat/utils";
 
 type SendMessageDeps = {
   agents: AgentItem[];
@@ -402,9 +402,7 @@ export function useChatSendMessage({
       activeSessionId = session.id;
       await persistMessage(session.id, userMessage);
 
-      const sessionDetail = await invoke<SessionDetail>("get_chat_session", {
-        sessionId: session.id,
-      });
+      const sessionDetail = await getChatSession(session.id);
       const activeSettings = await resolveProviderSettings();
 
       if (activeSettings.providerKind === "oauth" && !activeSettings.accessToken) {

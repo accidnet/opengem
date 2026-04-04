@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
-import type { LLMSettings } from "@/types/chat";
+import type { LLMSettings, ResolvedLLMSettings, SessionDetail } from "@/types/chat";
 
-import type { AvailableProviderInfo } from "./ai/types";
+import type { AvailableProviderInfo } from "@/features/ai/types";
 
 export type SaveLlmSettingsParams = {
   providerId: LLMSettings["providerId"];
@@ -18,6 +18,14 @@ export async function getLlmSettings(): Promise<LLMSettings> {
 
 export async function getAvailableProviders(): Promise<AvailableProviderInfo[]> {
   return invoke<AvailableProviderInfo[]>("get_available_providers");
+}
+
+export async function getChatSession(sessionId: string): Promise<SessionDetail> {
+  return invoke<SessionDetail>("get_chat_session", { sessionId });
+}
+
+export async function resolveLlmSettings(): Promise<ResolvedLLMSettings> {
+  return invoke<ResolvedLLMSettings>("resolve_llm_settings");
 }
 
 export async function saveLlmSettings(input: SaveLlmSettingsParams): Promise<LLMSettings> {

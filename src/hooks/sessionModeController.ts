@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
+import { getChatSession } from "@/features/backend/api";
 import { AGENTS, LLM_CONFIG, MODE_ICON_OPTIONS, MODES, type Mode, type ModeIcon } from "@/features/app/config/appData";
 import type { AgentItem, LLMSettings, OperationModeState, SessionDetail, SessionItem } from "@/types/chat";
 
@@ -102,7 +103,7 @@ export function createSessionModeController({
   const loadSession = async (sessionId: string, nextModes: ReadonlyArray<Mode> = modes) => {
     setIsSessionLoading(true);
     try {
-      const detail = await invoke<SessionDetail>("get_chat_session", { sessionId });
+      const detail = await getChatSession(sessionId);
       setCurrentSessionId(detail.session.id);
       setCurrentSessionTitle(detail.session.title);
       setCurrentSessionProjectPaths(detail.session.projectPaths || []);

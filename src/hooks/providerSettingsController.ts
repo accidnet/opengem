@@ -8,7 +8,7 @@ import {
   logoutChatgpt,
   openExternalUrl,
   saveLlmSettings,
-} from "@/features/api";
+} from "@/features/backend/api";
 import { AIQueryKeys } from "@/hooks/useAI";
 import { queryClient } from "@/lib/queryClient";
 import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/lib/llm/catalog";
