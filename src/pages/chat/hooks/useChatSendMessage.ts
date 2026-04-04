@@ -121,6 +121,9 @@ function createToolErrorMessage(agentName: string | undefined, toolName: string,
 }
 
 function supportsStructuredToolLoop(activeSettings: ResolvedLLMSettings): boolean {
+  if (activeSettings.providerKind === "chatgpt_oauth") {
+    return false;
+  }
   const provider = getProviderCatalog(activeSettings.providerId);
   return provider.protocol === "openai-compatible";
 }

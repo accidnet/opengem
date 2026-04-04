@@ -394,7 +394,6 @@ fn main() {
             commands::settings::resolve_llm_settings,
             commands::settings::begin_chatgpt_login,
             commands::settings::open_external_url,
-            commands::settings::send_chatgpt_message,
             commands::settings::logout_chatgpt,
             commands::workspace::list_workspace_files,
             commands::workspace::search_workspace_text,

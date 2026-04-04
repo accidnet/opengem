@@ -51,7 +51,14 @@ export function createProviderSettingsController({
   const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
-      const next = await invoke<LLMSettings>("save_llm_settings", { input: settings });
+      const next = await invoke<LLMSettings>("save_llm_settings", {
+        input: {
+          providerId: settings.providerId,
+          providerKind: settings.providerKind,
+          model: settings.model,
+          apiKey: settings.apiKey,
+        },
+      });
       setSettings(normalizeLlmSettings(next));
       setPanelModalError("");
       setIsPanelModalOpen(false);

@@ -20,7 +20,7 @@ src/
 │  │  ├─ AppHeader.tsx
 │  │  ├─ ChatPanel.tsx
 │  │  ├─ LeftPanel.tsx
-│  │  ├─ PanelModal.tsx
+│  ├─ ProvidersSettingModal.tsx
 │  │  ├─ RightPanel.tsx
 │  │  └─ left-panel/
 │  │     ├─ AgentSettingsModal.tsx

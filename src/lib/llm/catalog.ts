@@ -14,8 +14,7 @@ export type ProviderProtocol =
   | "openai-compatible"
   | "anthropic"
   | "google-gemini"
-  | "chatgpt-responses"
-  | "openai-chatgpt";
+  | "chatgpt-responses";
 export type PromptProfile = "default" | "gpt" | "codex" | "gemini" | "anthropic";
 
 export type ModelCatalogEntry = {
@@ -29,6 +28,7 @@ export type ProviderCatalogEntry = {
   label: string;
   description: string;
   providerKind: ProviderKind;
+  providerKinds: ProviderKind[];
   protocol: ProviderProtocol;
   baseUrl: string;
   modelDefault: string;
@@ -55,14 +55,16 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "openai",
     label: "OpenAI",
-    description: "OpenAI Responses and Chat Completions compatible models.",
+    description: "OpenAI API key and ChatGPT login are handled under the same provider.",
     providerKind: "api_key",
+    providerKinds: ["api_key", "chatgpt_oauth"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
-    authLabel: "API Key",
+    authLabel: "Credential",
     modelsSource: "static",
     models: [
+      { id: "gpt-5.2", label: "GPT-5.2", promptProfile: "gpt" },
       { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
       { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", promptProfile: "gpt" },
       { id: "gpt-4.1", label: "GPT-4.1", promptProfile: "gpt" },
@@ -74,27 +76,11 @@ const providerEntries: ProviderCatalogEntry[] = [
     ],
   },
   {
-    id: "chatgpt",
-    label: "ChatGPT",
-    description: "ChatGPT OAuth-backed models through the Codex backend.",
-    providerKind: "chatgpt_oauth",
-    protocol: "chatgpt-responses",
-    baseUrl: CHATGPT_BASE_URL,
-    modelDefault: "gpt-5.2",
-    authLabel: "ChatGPT Login",
-    modelsSource: "static",
-    models: [
-      { id: "gpt-5.2", label: "GPT-5.2", promptProfile: "gpt" },
-      { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
-      { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", promptProfile: "gpt" },
-      { id: "codex-mini-latest", label: "Codex Mini", promptProfile: "codex" },
-    ],
-  },
-  {
     id: "anthropic",
     label: "Anthropic",
     description: "Claude models using the native Anthropic Messages API.",
     providerKind: "api_key",
+    providerKinds: ["api_key"],
     protocol: "anthropic",
     baseUrl: DEFAULT_ANTHROPIC_BASE_URL,
     modelDefault: "claude-3-5-sonnet-latest",
@@ -111,6 +97,7 @@ const providerEntries: ProviderCatalogEntry[] = [
     label: "Google Gemini",
     description: "Gemini models using the Google Generative Language API.",
     providerKind: "api_key",
+    providerKinds: ["api_key"],
     protocol: "google-gemini",
     baseUrl: DEFAULT_GEMINI_BASE_URL,
     modelDefault: "gemini-2.5-pro",
@@ -127,6 +114,7 @@ const providerEntries: ProviderCatalogEntry[] = [
     label: "OpenRouter",
     description: "OpenRouter using the OpenAI-compatible chat completions interface.",
     providerKind: "api_key",
+    providerKinds: ["api_key"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENROUTER_BASE_URL,
     modelDefault: "openai/gpt-4o-mini",
@@ -144,6 +132,7 @@ const providerEntries: ProviderCatalogEntry[] = [
     label: "Custom OpenAI-Compatible",
     description: "Any custom base URL that implements the OpenAI chat completions shape.",
     providerKind: "api_key",
+    providerKinds: ["api_key"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
@@ -319,11 +308,15 @@ export function createDefaultLlmSettings(env = import.meta.env): LLMSettings {
   const envProviderId = (env.VITE_LLM_PROVIDER_ID as ProviderId | undefined) ?? "openai";
   const provider = getProviderCatalog(envProviderId);
   const model = env.VITE_LLM_MODEL || provider.modelDefault;
+  const providerKind =
+    provider.id === "openai" && env.VITE_LLM_PROVIDER_KIND === "chatgpt_oauth"
+      ? "chatgpt_oauth"
+      : provider.providerKind;
 
   return {
     providerId: provider.id,
-    providerKind: provider.providerKind,
-    baseUrl: env.VITE_LLM_BASE_URL || provider.baseUrl,
+    providerKind,
+    baseUrl: providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
     model,
     apiKey: env.VITE_LLM_API_KEY,
     chatgptLoggedIn: false,
@@ -333,12 +326,16 @@ export function createDefaultLlmSettings(env = import.meta.env): LLMSettings {
 export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   const defaults = createDefaultLlmSettings();
   const provider = getProviderCatalog(input.providerId ?? defaults.providerId);
+  const providerKind =
+    provider.id === "openai" && input.providerKind === "chatgpt_oauth" ? "chatgpt_oauth" : "api_key";
   const model = normalizeModelSelection(provider.id, input.model ?? defaults.model);
 
   return {
     providerId: provider.id,
-    providerKind: provider.providerKind,
-    baseUrl: normalizeBaseUrl(input.baseUrl || provider.baseUrl) ?? DEFAULT_OPENAI_BASE_URL,
+    providerKind,
+    baseUrl:
+      normalizeBaseUrl(providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl) ??
+      DEFAULT_OPENAI_BASE_URL,
     model,
     apiKey: input.apiKey ?? defaults.apiKey,
     chatgptLoggedIn: Boolean(input.chatgptLoggedIn),
@@ -347,23 +344,37 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
 }
 
 export function applyProviderSelection(
-  current: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl" | "model">,
+  current: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl" | "model" | "apiKey">,
   providerId: ProviderId
-): Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl" | "model"> {
+): Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl" | "model" | "apiKey"> {
   const provider = getProviderCatalog(providerId);
   const currentProvider = getProviderCatalog(current.providerId);
-  const keepsCustomBaseUrl =
-    current.providerId === provider.id &&
-    normalizeBaseUrl(current.baseUrl) !== normalizeBaseUrl(provider.baseUrl);
+  const providerKind =
+    provider.id === "openai" && currentProvider.id === "openai" ? current.providerKind : provider.providerKind;
 
   return {
     providerId: provider.id,
-    providerKind: provider.providerKind,
-    baseUrl: keepsCustomBaseUrl ? normalizeBaseUrl(current.baseUrl) : provider.baseUrl,
+    providerKind,
+    baseUrl: providerKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : provider.baseUrl,
     model:
       currentProvider.id === provider.id
         ? normalizeModelSelection(provider.id, current.model)
         : provider.modelDefault,
+    apiKey: currentProvider.id === provider.id && providerKind === "api_key" ? current.apiKey : undefined,
+  };
+}
+
+export function applyProviderKindSelection(
+  current: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl" | "model" | "apiKey">,
+  providerKind: ProviderKind
+): Pick<LLMSettings, "providerKind" | "baseUrl" | "model" | "apiKey"> {
+  const nextProviderKind =
+    current.providerId === "openai" && providerKind === "chatgpt_oauth" ? "chatgpt_oauth" : "api_key";
+  return {
+    providerKind: nextProviderKind,
+    baseUrl: nextProviderKind === "chatgpt_oauth" ? CHATGPT_BASE_URL : getProviderCatalog(current.providerId).baseUrl,
+    model: normalizeModelSelection(current.providerId, current.model),
+    apiKey: nextProviderKind === "api_key" ? current.apiKey : undefined,
   };
 }
 

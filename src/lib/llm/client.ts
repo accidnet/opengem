@@ -9,8 +9,7 @@ type LLMTransport =
   | "chatgpt-oauth-direct"
   | "anthropic-direct"
   | "google-gemini-direct"
-  | "openai-compatible-direct"
-  | "openai-chatgpt";
+  | "openai-compatible-direct";
 
 function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): LLMTransport {
   if (protocol === "chatgpt-responses" || input.providerKind === "chatgpt_oauth") {
@@ -30,17 +29,9 @@ function resolveDirectTransport(input: LLMRequest, protocol: ProviderProtocol): 
 
 export async function request(input: LLMRequest): Promise<LLMResponse> {
   const provider = getProviderCatalog(input.providerId);
-  let transport = resolveDirectTransport(input, provider.protocol);
-
-  if (input.providerId && input.providerId === "openai-chatgpt") {
-    transport = "openai-chatgpt";
-  }
+  const transport = resolveDirectTransport(input, provider.protocol);
 
   switch (transport) {
-    // TODO: 임시 처리
-    case "openai-chatgpt":
-      input.apiBaseUrl = "https://chatgpt.com/backend-api/codex";
-      return sendToOpenAICompatible(input);
     case "chatgpt-oauth-direct":
       return sendToOpenAIOAuth(input);
     case "anthropic-direct":

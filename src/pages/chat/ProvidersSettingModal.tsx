@@ -1,7 +1,7 @@
-import { applyModelSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/lib/llm/catalog";
+import { applyProviderKindSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/lib/llm/catalog";
 import type { LLMSettings } from "@/types/chat";
 
-type PanelModalProps = {
+type ProvidersSettingModalProps = {
   settings: LLMSettings;
   isOpen: boolean;
   isSaving: boolean;
@@ -17,14 +17,13 @@ type PanelModalProps = {
 
 const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   openai: "auto_awesome",
-  chatgpt: "chat",
   anthropic: "psychiatry",
   google: "temp_preferences_custom",
   openrouter: "route",
   custom_openai: "tune",
 };
 
-export function PanelModal({
+export function ProvidersSettingModal({
   settings,
   isOpen,
   isSaving,
@@ -36,20 +35,18 @@ export function PanelModal({
   onSave,
   onLoginChatGPT,
   onLogoutChatGPT,
-}: PanelModalProps) {
-  if (!isOpen) {
-    return null;
-  }
+}: ProvidersSettingModalProps) {
+  if (!isOpen) return null;
 
   const providers = listProviders();
   const activeProvider = getProviderCatalog(settings.providerId);
-  const modelOptions = activeProvider.models;
-  const requiresChatGptLogin = activeProvider.providerKind === "chatgpt_oauth";
+  const supportsChatGPTLogin = activeProvider.providerKinds.includes("chatgpt_oauth");
+  const usesChatGPTLogin = settings.providerId === "openai" && settings.providerKind === "chatgpt_oauth";
 
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
       <section
-        className="panel-modal"
+        className="panel-modal provider"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
@@ -74,8 +71,7 @@ export function PanelModal({
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar" aria-label="Provider list">
             <p className="panel-modal-sidebar-label">PROVIDERS</p>
-            <p className="panel-modal-sidebar-help">Manage model families, prompts, and credentials.</p>
-
+            <p className="panel-modal-sidebar-help">Manage provider selection, auth method, and model.</p>
             {providers.map((provider) => {
               const isActive = provider.id === activeProvider.id;
               return (
@@ -101,42 +97,52 @@ export function PanelModal({
               <p>{activeProvider.description}</p>
             </div>
 
-            {requiresChatGptLogin && (
+            {supportsChatGPTLogin && (
               <section className="settings-card">
-                <div className="settings-card-head">
+                <div className="settings-card-head settings-card-head-column">
                   <div>
-                    <h4>ChatGPT Login</h4>
-                    <p>Use ChatGPT OAuth when you want account-backed access instead of a raw API key.</p>
+                    <h4>Authentication</h4>
+                    <p>OpenAI can use either a saved API key or a ChatGPT login.</p>
                   </div>
-                  <span className={`settings-badge ${settings.chatgptLoggedIn ? "is-connected" : "is-idle"}`}>
-                    {settings.chatgptLoggedIn ? "Status: Connected" : "Status: Not Logged In"}
-                  </span>
                 </div>
+
+                <div className="settings-auth-row">
+                  <button
+                    className={`settings-secondary-btn${!usesChatGPTLogin ? " is-active" : ""}`}
+                    type="button"
+                    onClick={() => onChange(applyProviderKindSelection(settings, "api_key"))}
+                  >
+                    API Key
+                  </button>
+                  <button
+                    className={`settings-secondary-btn${usesChatGPTLogin ? " is-active" : ""}`}
+                    type="button"
+                    onClick={() => onChange(applyProviderKindSelection(settings, "chatgpt_oauth"))}
+                  >
+                    ChatGPT Login
+                  </button>
+                </div>
+
                 <div className="settings-auth-row">
                   <div className="settings-auth-copy">
                     <strong>{settings.chatgptEmail || "No ChatGPT account connected"}</strong>
-                    <span>OAuth tokens are refreshed automatically when the saved session is still valid.</span>
+                    <span>
+                      {settings.chatgptLoggedIn
+                        ? "OAuth tokens will be refreshed automatically when needed."
+                        : "Login once to use OpenAI through your ChatGPT account session."}
+                    </span>
                   </div>
                   {settings.chatgptLoggedIn ? (
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      onClick={onLogoutChatGPT}
-                      disabled={isLoginBusy}
-                    >
+                    <button className="settings-secondary-btn" type="button" onClick={onLogoutChatGPT} disabled={isLoginBusy}>
                       Log out
                     </button>
                   ) : (
-                    <button
-                      className="settings-primary-btn"
-                      type="button"
-                      onClick={onLoginChatGPT}
-                      disabled={isLoginBusy}
-                    >
+                    <button className="settings-primary-btn" type="button" onClick={onLoginChatGPT} disabled={isLoginBusy}>
                       {isLoginBusy ? "Preparing login..." : "Login with ChatGPT"}
                     </button>
                   )}
                 </div>
+
                 {!settings.chatgptLoggedIn && loginUrl && (
                   <p className="settings-oauth-help">
                     If the browser did not open automatically, press the login button again to retry the OAuth flow.
@@ -148,55 +154,14 @@ export function PanelModal({
             <section className="settings-card settings-form-grid">
               <div className="settings-card-head settings-card-head-column">
                 <div>
-                  <h4>Model Defaults</h4>
-                  <p>Model prompt selection is now resolved from the provider/model catalog instead of raw string checks.</p>
+                  <h4>Credentials</h4>
+                  <p>Saved credentials are managed per provider and auth method.</p>
                 </div>
               </div>
 
-              <label className="settings-field">
-                <span>Provider</span>
-                <input className="settings-input" type="text" value={activeProvider.label} readOnly />
-              </label>
-
-              <label className="settings-field">
-                <span>Model</span>
-                {modelOptions.length > 0 ? (
-                  <select
-                    className="settings-input"
-                    value={settings.model}
-                    onChange={(event) => onChange(applyModelSelection(activeProvider.id, event.target.value))}
-                  >
-                    {modelOptions.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    className="settings-input"
-                    type="text"
-                    value={settings.model}
-                    onChange={(event) => onChange({ model: event.target.value })}
-                    placeholder={activeProvider.modelDefault}
-                  />
-                )}
-              </label>
-
-              <label className="settings-field settings-field-wide">
-                <span>Base URL</span>
-                <input
-                  className="settings-input"
-                  type="text"
-                  value={settings.baseUrl}
-                  onChange={(event) => onChange({ baseUrl: event.target.value })}
-                  placeholder={activeProvider.baseUrl}
-                />
-              </label>
-
-              {!requiresChatGptLogin && (
+              {(!supportsChatGPTLogin || !usesChatGPTLogin) && (
                 <label className="settings-field settings-field-wide">
-                  <span>{activeProvider.authLabel}</span>
+                  <span>{activeProvider.id === "openai" ? "API Key" : activeProvider.authLabel}</span>
                   <input
                     className="settings-input"
                     type="password"

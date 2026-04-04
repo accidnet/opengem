@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AppHeader } from "./layout/AppHeader";
 import { ChatPanel } from "./layout/ChatPanel";
+import { ProvidersSettingModal } from "./ProvidersSettingModal";
 import { LeftPanel } from "../../components/layout/LeftPanel";
-import { PanelModal } from "../../components/layout/PanelModal";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
@@ -227,7 +227,7 @@ export function ChatPage() {
         />
       </main>
 
-      <PanelModal
+      <ProvidersSettingModal
         settings={settings}
         isOpen={isPanelModalOpen}
         isSaving={isSavingProvider}
