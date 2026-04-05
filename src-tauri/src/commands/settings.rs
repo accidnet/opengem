@@ -34,6 +34,37 @@ const OPENAI_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OAUTH_TIMEOUT_SECONDS: u64 = 300;
 const OAUTH_PORT: u16 = 1455;
 
+fn normalize_openai_priorities(oauth_priority: i64, api_key_priority: i64) -> (i64, i64) {
+    let oauth_priority = if oauth_priority == 2 { 2 } else { 1 };
+    let api_key_priority = if api_key_priority == 2 { 2 } else { 1 };
+
+    if oauth_priority == api_key_priority {
+        if oauth_priority == 1 {
+            (1, 2)
+        } else {
+            (2, 1)
+        }
+    } else {
+        (oauth_priority, api_key_priority)
+    }
+}
+
+fn resolve_preferred_provider_kind(input: &SaveLlmSettingsInput) -> String {
+    let provider_id = normalize_provider_id(&input.provider_id);
+    if provider_id != DEFAULT_PROVIDER_ID {
+        return normalize_provider_kind(&provider_id, &input.provider_kind);
+    }
+
+    let (oauth_priority, api_key_priority) =
+        normalize_openai_priorities(input.openai_oauth_priority, input.openai_api_key_priority);
+
+    if input.openai_oauth_enabled && (!input.openai_api_key_enabled || oauth_priority < api_key_priority) {
+        "oauth".to_string()
+    } else {
+        "api-key".to_string()
+    }
+}
+
 #[tauri::command]
 pub fn get_llm_settings(state: State<AppState>) -> Result<LlmSettingsPayload, String> {
     let connection = state.open_connection()?;
@@ -82,24 +113,35 @@ pub fn save_llm_settings(
 ) -> Result<LlmSettingsPayload, String> {
     let connection = state.open_connection()?;
     let provider_id = normalize_provider_id(&input.provider_id);
-    let provider_kind = normalize_provider_kind(&provider_id, &input.provider_kind);
+    let provider_kind = resolve_preferred_provider_kind(&input);
     let model =
         normalize_text(&input.model).unwrap_or_else(|| default_model_for(&provider_id).to_string());
     let api_key = normalize_optional_secret(input.api_key);
+    let (openai_oauth_priority, openai_api_key_priority) =
+        normalize_openai_priorities(input.openai_oauth_priority, input.openai_api_key_priority);
 
-    if provider_kind == "api-key" {
+    if provider_id == DEFAULT_PROVIDER_ID || provider_kind == "api-key" {
         save_credential(
             &connection,
             StoredProviderCredential {
                 provider_id: provider_id.clone(),
-                credential_type: provider_kind.clone(),
+                credential_type: "api-key".to_string(),
                 api_key,
                 ..StoredProviderCredential::default()
             },
         )?;
     }
 
-    save_selection(&connection, &provider_id, &provider_kind, &model)?;
+    save_selection(
+        &connection,
+        &provider_id,
+        &provider_kind,
+        &model,
+        input.openai_oauth_enabled,
+        openai_oauth_priority,
+        input.openai_api_key_enabled,
+        openai_api_key_priority,
+    )?;
     info!(
         provider_id = %provider_id,
         provider_kind = %provider_kind,
@@ -135,6 +177,10 @@ pub fn save_provider_settings_command(
             &current.provider_id,
             &current.provider_kind,
             &current.model,
+            current.openai_oauth_enabled,
+            current.openai_oauth_priority,
+            current.openai_api_key_enabled,
+            current.openai_api_key_priority,
         )?;
     }
 
@@ -209,7 +255,16 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
     clear_credential(&connection, DEFAULT_PROVIDER_ID, "oauth")?;
     let current = load_settings(&connection)?;
     if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
-        save_selection(&connection, DEFAULT_PROVIDER_ID, "api-key", &current.model)?;
+        save_selection(
+            &connection,
+            DEFAULT_PROVIDER_ID,
+            "api-key",
+            &current.model,
+            current.openai_oauth_enabled,
+            current.openai_oauth_priority,
+            current.openai_api_key_enabled,
+            current.openai_api_key_priority,
+        )?;
     }
     Ok(to_payload(load_settings(&connection)?))
 }
@@ -295,7 +350,16 @@ fn run_chatgpt_login_flow(
     )?;
 
     if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
-        save_selection(&connection, DEFAULT_PROVIDER_ID, "oauth", &next_model)?;
+        save_selection(
+            &connection,
+            DEFAULT_PROVIDER_ID,
+            "oauth",
+            &next_model,
+            current.openai_oauth_enabled,
+            current.openai_oauth_priority,
+            current.openai_api_key_enabled,
+            current.openai_api_key_priority,
+        )?;
     }
     Ok(())
 }
@@ -437,6 +501,10 @@ fn to_payload(settings: StoredLlmSettings) -> LlmSettingsPayload {
         api_key: settings.api_key,
         logged_in: settings.logged_in,
         email: settings.email,
+        openai_oauth_enabled: settings.openai_oauth_enabled,
+        openai_oauth_priority: settings.openai_oauth_priority,
+        openai_api_key_enabled: settings.openai_api_key_enabled,
+        openai_api_key_priority: settings.openai_api_key_priority,
     }
 }
 

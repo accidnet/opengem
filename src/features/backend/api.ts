@@ -10,6 +10,10 @@ export type SaveLlmSettingsParams = {
   providerKind: LLMSettings["providerKind"];
   model: string;
   apiKey?: string;
+  openaiOauthEnabled: boolean;
+  openaiOauthPriority: number;
+  openaiApiKeyEnabled: boolean;
+  openaiApiKeyPriority: number;
 };
 
 type ProviderSettings = {

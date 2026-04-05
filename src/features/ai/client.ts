@@ -27,6 +27,7 @@ function resolveDirectTransport(input: AIRequest, protocol: ProviderProtocol): L
   return "openai-compatible-direct";
 }
 
+// TODO: 요청을 위해서는 protocol을 입력받고, 그거에 맞춰서 provider의 호출 함수를 부를 수 있도록 할 것.
 export async function request(input: AIRequest): Promise<AIResponse> {
   const provider = getProviderCatalog(input.providerId);
   const transport = resolveDirectTransport(input, provider.protocol);

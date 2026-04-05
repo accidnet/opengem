@@ -40,6 +40,25 @@ export function createProviderSettingsController({
   setSettings,
 }: ProviderSettingsControllerParams) {
   const saveProviderConfiguration = async (nextSettings: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl">) => {
+    if (nextSettings.providerId === "openai") {
+      const oauthUrl = resolveProviderApiUrl("openai", "oauth", nextSettings.baseUrl);
+      const apiKeyUrl = resolveProviderApiUrl("openai", "api-key", nextSettings.baseUrl);
+
+      await Promise.all([
+        saveProviderSettings({
+          providerId: "openai",
+          providerKind: "oauth",
+          apiUrl: oauthUrl,
+        }),
+        saveProviderSettings({
+          providerId: "openai",
+          providerKind: "api-key",
+          apiUrl: apiKeyUrl,
+        }),
+      ]);
+      return;
+    }
+
     const apiUrl = resolveProviderApiUrl(
       nextSettings.providerId,
       nextSettings.providerKind,
@@ -86,6 +105,10 @@ export function createProviderSettingsController({
         providerKind: settings.providerKind,
         model: settings.model,
         apiKey: settings.apiKey,
+        openaiOauthEnabled: settings.openaiOauthEnabled,
+        openaiOauthPriority: settings.openaiOauthPriority,
+        openaiApiKeyEnabled: settings.openaiApiKeyEnabled,
+        openaiApiKeyPriority: settings.openaiApiKeyPriority,
       });
       setSettings(normalizeLlmSettings(next));
       await refreshAvailableProviderQueries();

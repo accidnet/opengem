@@ -43,6 +43,40 @@ const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1bet
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const CHATGPT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 
+function normalizeOpenAIPriority(value?: number | null): 1 | 2 {
+  return value === 2 ? 2 : 1;
+}
+
+function normalizeOpenAIPreferences(input: Partial<LLMSettings>) {
+  const oauthEnabled = input.openaiOauthEnabled ?? true;
+  const apiKeyEnabled = input.openaiApiKeyEnabled ?? true;
+  const oauthPriority = normalizeOpenAIPriority(input.openaiOauthPriority);
+  const apiKeyPriority = normalizeOpenAIPriority(input.openaiApiKeyPriority);
+
+  if (oauthPriority === apiKeyPriority) {
+    return oauthPriority === 1
+      ? {
+          openaiOauthEnabled: oauthEnabled,
+          openaiOauthPriority: 1 as const,
+          openaiApiKeyEnabled: apiKeyEnabled,
+          openaiApiKeyPriority: 2 as const,
+        }
+      : {
+          openaiOauthEnabled: oauthEnabled,
+          openaiOauthPriority: 2 as const,
+          openaiApiKeyEnabled: apiKeyEnabled,
+          openaiApiKeyPriority: 1 as const,
+        };
+  }
+
+  return {
+    openaiOauthEnabled: oauthEnabled,
+    openaiOauthPriority: oauthPriority,
+    openaiApiKeyEnabled: apiKeyEnabled,
+    openaiApiKeyPriority: apiKeyPriority,
+  };
+}
+
 const PROMPTS: Record<PromptProfile, string> = {
   default: PROMPT_DEFAULT.trim(),
   gpt: PROMPT_GPT.trim(),
@@ -55,7 +89,7 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "openai",
     label: "OpenAI",
-    description: "OpenAI API key and ChatGPT login are handled under the same provider.",
+    description: "OpenAI는 ChatGPT 로그인과 API 키를 입력하여 사용할 수 있습니다.",
     providerKind: "api-key",
     providerKinds: ["api-key", "oauth"],
     protocol: "openai-compatible",
@@ -313,6 +347,10 @@ export function createDefaultLlmSettings(env = import.meta.env): LLMSettings {
     model,
     apiKey: env.VITE_LLM_API_KEY,
     loggedIn: false,
+    openaiOauthEnabled: true,
+    openaiOauthPriority: 1,
+    openaiApiKeyEnabled: true,
+    openaiApiKeyPriority: 2,
   };
 }
 
@@ -322,6 +360,7 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   const providerKind =
     provider.id === "openai" && input.providerKind === "oauth" ? "oauth" : "api-key";
   const model = normalizeModelSelection(provider.id, input.model ?? defaults.model);
+  const openaiPreferences = normalizeOpenAIPreferences(input);
 
   return {
     providerId: provider.id,
@@ -333,6 +372,7 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
     apiKey: input.apiKey ?? defaults.apiKey,
     loggedIn: Boolean(input.loggedIn),
     email: input.email,
+    ...openaiPreferences,
   };
 }
 

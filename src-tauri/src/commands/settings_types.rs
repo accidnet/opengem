@@ -11,6 +11,10 @@ pub struct LlmSettingsPayload {
     pub api_key: Option<String>,
     pub logged_in: bool,
     pub email: Option<String>,
+    pub openai_oauth_enabled: bool,
+    pub openai_oauth_priority: i64,
+    pub openai_api_key_enabled: bool,
+    pub openai_api_key_priority: i64,
 }
 
 #[derive(Deserialize)]
@@ -20,6 +24,10 @@ pub struct SaveLlmSettingsInput {
     pub provider_kind: String,
     pub model: String,
     pub api_key: Option<String>,
+    pub openai_oauth_enabled: bool,
+    pub openai_oauth_priority: i64,
+    pub openai_api_key_enabled: bool,
+    pub openai_api_key_priority: i64,
 }
 
 #[derive(Deserialize)]
@@ -109,9 +117,13 @@ pub(crate) struct StoredLlmSettings {
     pub account_id: Option<String>,
     pub logged_in: bool,
     pub email: Option<String>,
+    pub openai_oauth_enabled: bool,
+    pub openai_oauth_priority: i64,
+    pub openai_api_key_enabled: bool,
+    pub openai_api_key_priority: i64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct StoredProviderCredential {
     pub provider_id: String,
     pub credential_type: String,

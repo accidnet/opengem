@@ -228,6 +228,77 @@
   font-size: 14px;
 }
 
+.settings-auth-method-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.settings-auth-method {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 10%, var(--border) 90%);
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg) 6%);
+}
+
+.settings-auth-method.is-disabled {
+  opacity: 0.72;
+}
+
+.settings-auth-method-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-auth-method-head h5 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.settings-auth-method-head p,
+.settings-auth-priority-help {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-auth-method-controls {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.settings-priority-field {
+  min-width: 110px;
+}
+
 .settings-form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -440,4 +511,28 @@ select.settings-input option {
   align-items: center;
   border-top: 1px solid color-mix(in srgb, var(--primary) 8%, var(--border) 92%);
   background: color-mix(in srgb, var(--panel) 88%, var(--bg) 12%);
+}
+
+@media (max-width: 900px) {
+  .panel-modal-body {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-modal-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 8%, var(--border) 92%);
+  }
+
+  .settings-auth-method-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-auth-method {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .settings-auth-method-controls {
+    justify-content: space-between;
+  }
 }

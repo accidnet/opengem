@@ -1,9 +1,5 @@
-import {
-  applyProviderKindSelection,
-  applyProviderSelection,
-  getProviderCatalog,
-} from "@/features/ai/catalog";
-import { useProviders } from "@/hooks/useAI";
+import { applyProviderSelection, getProviderCatalog } from "@/features/ai/catalog";
+import { useAvailableProviders, useProviders } from "@/hooks/useAI";
 import type { LLMSettings } from "@/types/chat";
 
 type ProvidersSettingModalProps = {
@@ -20,6 +16,8 @@ type ProvidersSettingModalProps = {
   onLogoutChatGPT: () => void;
 };
 
+type OpenAICredentialMode = "oauth" | "api-key";
+
 const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   openai: "auto_awesome",
   anthropic: "psychiatry",
@@ -27,6 +25,74 @@ const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   openrouter: "route",
   custom: "tune",
 };
+
+function buildOpenAIPreferencesPatch(
+  settings: LLMSettings,
+  mode: OpenAICredentialMode,
+  input: Partial<
+    Pick<
+      LLMSettings,
+      "openaiOauthEnabled" | "openaiOauthPriority" | "openaiApiKeyEnabled" | "openaiApiKeyPriority"
+    >
+  >
+): Partial<LLMSettings> {
+  const oauthEnabled = input.openaiOauthEnabled ?? settings.openaiOauthEnabled;
+  const apiKeyEnabled = input.openaiApiKeyEnabled ?? settings.openaiApiKeyEnabled;
+
+  if (mode === "oauth" && typeof input.openaiOauthPriority === "number") {
+    const oauthPriority = input.openaiOauthPriority === 2 ? 2 : 1;
+    return {
+      openaiOauthEnabled: oauthEnabled,
+      openaiOauthPriority: oauthPriority,
+      openaiApiKeyEnabled: apiKeyEnabled,
+      openaiApiKeyPriority: oauthPriority === 1 ? 2 : 1,
+    };
+  }
+
+  if (mode === "api-key" && typeof input.openaiApiKeyPriority === "number") {
+    const apiKeyPriority = input.openaiApiKeyPriority === 2 ? 2 : 1;
+    return {
+      openaiOauthEnabled: oauthEnabled,
+      openaiOauthPriority: apiKeyPriority === 1 ? 2 : 1,
+      openaiApiKeyEnabled: apiKeyEnabled,
+      openaiApiKeyPriority: apiKeyPriority,
+    };
+  }
+
+  return {
+    openaiOauthEnabled: oauthEnabled,
+    openaiOauthPriority: settings.openaiOauthPriority,
+    openaiApiKeyEnabled: apiKeyEnabled,
+    openaiApiKeyPriority: settings.openaiApiKeyPriority,
+  };
+}
+
+function resolveOpenAIActiveCredential(input: {
+  settings: LLMSettings;
+  loggedIn: boolean;
+  hasApiKey: boolean;
+}): OpenAICredentialMode | null {
+  const candidates = [
+    {
+      mode: "oauth" as const,
+      enabled: input.settings.openaiOauthEnabled,
+      available: input.loggedIn,
+      priority: input.settings.openaiOauthPriority,
+    },
+    {
+      mode: "api-key" as const,
+      enabled: input.settings.openaiApiKeyEnabled,
+      available: input.hasApiKey,
+      priority: input.settings.openaiApiKeyPriority,
+    },
+  ];
+
+  const active = candidates
+    .filter((candidate) => candidate.enabled && candidate.available)
+    .sort((left, right) => left.priority - right.priority)[0];
+
+  return active?.mode ?? null;
+}
 
 export function ProvidersSettingModal({
   settings,
@@ -42,11 +108,23 @@ export function ProvidersSettingModal({
   onLogoutChatGPT,
 }: ProvidersSettingModalProps) {
   const { data: providers = [] } = useProviders();
+  const { data: availableProviders = [] } = useAvailableProviders();
   const activeProvider = getProviderCatalog(settings.providerId);
   const providerLabelMap = new Map(providers.map((provider) => [provider.key, provider.label]));
   const activeProviderLabel = providerLabelMap.get(activeProvider.id) ?? activeProvider.label;
   const supportsChatGPTLogin = activeProvider.providerKinds.includes("oauth");
-  const usesChatGPTLogin = settings.providerId === "openai" && settings.providerKind === "oauth";
+  const openAIProviderInfo = availableProviders.find(
+    (provider) => provider.providerId === "openai"
+  );
+  const hasSavedOpenAIApiKey = Boolean(openAIProviderInfo?.hasApiKey || settings.apiKey?.trim());
+  const activeOpenAICredential =
+    settings.providerId === "openai"
+      ? resolveOpenAIActiveCredential({
+          settings,
+          loggedIn: settings.loggedIn,
+          hasApiKey: hasSavedOpenAIApiKey,
+        })
+      : null;
 
   if (!isOpen) return null;
 
@@ -83,7 +161,9 @@ export function ProvidersSettingModal({
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar" aria-label="Provider list">
             <p className="panel-modal-sidebar-label">PROVIDERS</p>
-            <p className="panel-modal-sidebar-help">Provider API 키 및 로그인을 관리합니다.</p>
+            <p className="panel-modal-sidebar-help">
+              공급자별 API 키와 로그인 인증 방식을 관리합니다.
+            </p>
             {providers.map((provider) => {
               const isActive = provider.key === activeProvider.id;
               return (
@@ -109,7 +189,7 @@ export function ProvidersSettingModal({
 
           <main className="panel-modal-main">
             <div className="panel-modal-main-copy">
-              <h4>{activeProviderLabel} Configuration</h4>
+              <h4>{activeProviderLabel} 설정</h4>
               <p>{activeProvider.description}</p>
             </div>
 
@@ -117,35 +197,18 @@ export function ProvidersSettingModal({
               <section className="settings-card">
                 <div className="settings-card-head settings-card-head-column">
                   <div>
-                    <h4>Authentication</h4>
-                    <p>OpenAI can use either a saved API key or a ChatGPT login.</p>
+                    <h4>로그인</h4>
+                    <p>ChatGPT 계정 로그인 상태를 관리합니다.</p>
                   </div>
                 </div>
 
                 <div className="settings-auth-row">
-                  <button
-                    className={`settings-secondary-btn${!usesChatGPTLogin ? " is-active" : ""}`}
-                    type="button"
-                    onClick={() => onChange(applyProviderKindSelection(settings, "api-key"))}
-                  >
-                    API Key
-                  </button>
-                  <button
-                    className={`settings-secondary-btn${usesChatGPTLogin ? " is-active" : ""}`}
-                    type="button"
-                    onClick={() => onChange(applyProviderKindSelection(settings, "oauth"))}
-                  >
-                    ChatGPT Login
-                  </button>
-                </div>
-
-                <div className="settings-auth-row">
                   <div className="settings-auth-copy">
-                    <strong>{settings.email || "No ChatGPT account connected"}</strong>
+                    <strong>{settings.email || "연동된 ChatGPT 계정이 없습니다."}</strong>
                     <span>
                       {settings.loggedIn
-                        ? "OAuth tokens will be refreshed automatically when needed."
-                        : "Login once to use OpenAI through your ChatGPT account session."}
+                        ? "로그인 토큰은 필요할 때 자동으로 갱신됩니다."
+                        : "ChatGPT 로그인 버튼을 눌러 계정을 연동해 주세요."}
                     </span>
                   </div>
                   {settings.loggedIn ? (
@@ -155,7 +218,7 @@ export function ProvidersSettingModal({
                       onClick={onLogoutChatGPT}
                       disabled={isLoginBusy}
                     >
-                      Log out
+                      로그아웃
                     </button>
                   ) : (
                     <button
@@ -164,15 +227,14 @@ export function ProvidersSettingModal({
                       onClick={onLoginChatGPT}
                       disabled={isLoginBusy}
                     >
-                      {isLoginBusy ? "Preparing login..." : "Login with ChatGPT"}
+                      {isLoginBusy ? "로그인 준비 중..." : "ChatGPT 로그인"}
                     </button>
                   )}
                 </div>
-
                 {!settings.loggedIn && loginUrl && (
                   <p className="settings-oauth-help">
-                    If the browser did not open automatically, press the login button again to retry
-                    the OAuth flow.
+                    브라우저가 자동으로 열리지 않으면 로그인 버튼을 다시 눌러 OAuth 흐름을
+                    재시도하세요.
                   </p>
                 )}
               </section>
@@ -181,8 +243,8 @@ export function ProvidersSettingModal({
             <section className="settings-card settings-form-grid">
               <div className="settings-card-head settings-card-head-column">
                 <div>
-                  <h4>Credentials</h4>
-                  <p>Saved credentials are managed per provider and auth method.</p>
+                  <h4>API 키</h4>
+                  <p>OpenAI에서 발급받은 API 키를 입력하고 저장합니다.</p>
                 </div>
               </div>
 
@@ -199,21 +261,144 @@ export function ProvidersSettingModal({
                 </label>
               )}
 
-              {(!supportsChatGPTLogin || !usesChatGPTLogin) && (
-                <label className="settings-field settings-field-wide">
-                  <span>
-                    {activeProvider.id === "openai" ? "API Key" : activeProvider.authLabel}
-                  </span>
-                  <input
-                    className="settings-input"
-                    type="password"
-                    value={settings.apiKey || ""}
-                    onChange={(event) => onChange({ apiKey: event.target.value })}
-                    placeholder="Enter provider secret"
-                  />
-                </label>
-              )}
+              <label className="settings-field settings-field-wide">
+                <span>{activeProvider.id === "openai" ? "API Key" : activeProvider.authLabel}</span>
+                <input
+                  className="settings-input"
+                  type="password"
+                  value={settings.apiKey || ""}
+                  onChange={(event) => onChange({ apiKey: event.target.value })}
+                  placeholder="Enter provider secret"
+                />
+              </label>
             </section>
+
+            {activeProvider.id === "openai" && (
+              <section className="settings-card">
+                <div className="settings-card-head settings-card-head-column">
+                  <div>
+                    <h4>권한 설정</h4>
+                    <p>로그인 권한과 API 키 권한을 각각 활성화하고 우선순위를 정합니다.</p>
+                  </div>
+                </div>
+
+                <div className="settings-auth-method-grid">
+                  <section
+                    className={`settings-auth-method ${settings.openaiOauthEnabled ? "" : "is-disabled"}`}
+                    aria-label="ChatGPT 로그인 권한 설정"
+                  >
+                    <div className="settings-auth-method-head">
+                      <div>
+                        <h5>로그인 권한</h5>
+                        <p>ChatGPT 로그인 세션 기반 권한을 켜거나 끌 수 있습니다.</p>
+                      </div>
+                      <span
+                        className={`settings-badge ${settings.loggedIn ? "is-connected" : "is-idle"}`}
+                      >
+                        {activeOpenAICredential === "oauth"
+                          ? "현재 사용"
+                          : settings.loggedIn
+                            ? "연결됨"
+                            : "미연결"}
+                      </span>
+                    </div>
+                    <div className="settings-auth-method-controls">
+                      <label className="settings-toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings.openaiOauthEnabled}
+                          onChange={(event) =>
+                            onChange(
+                              buildOpenAIPreferencesPatch(settings, "oauth", {
+                                openaiOauthEnabled: event.target.checked,
+                              })
+                            )
+                          }
+                        />
+                        <span>활성화</span>
+                      </label>
+                      <label className="settings-field settings-priority-field">
+                        <span>우선순위</span>
+                        <select
+                          className="settings-input"
+                          value={settings.openaiOauthPriority}
+                          disabled={!settings.openaiOauthEnabled}
+                          onChange={(event) =>
+                            onChange(
+                              buildOpenAIPreferencesPatch(settings, "oauth", {
+                                openaiOauthPriority: Number(event.target.value),
+                              })
+                            )
+                          }
+                        >
+                          <option value={1}>1순위</option>
+                          <option value={2}>2순위</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section
+                    className={`settings-auth-method ${settings.openaiApiKeyEnabled ? "" : "is-disabled"}`}
+                    aria-label="API 키 권한 설정"
+                  >
+                    <div className="settings-auth-method-head">
+                      <div>
+                        <h5>API 키 권한</h5>
+                        <p>저장된 OpenAI API 키 기반 권한을 켜거나 끌 수 있습니다.</p>
+                      </div>
+                      <span
+                        className={`settings-badge ${hasSavedOpenAIApiKey ? "is-connected" : "is-idle"}`}
+                      >
+                        {activeOpenAICredential === "api-key"
+                          ? "현재 사용"
+                          : hasSavedOpenAIApiKey
+                            ? "준비됨"
+                            : "미입력"}
+                      </span>
+                    </div>
+                    <div className="settings-auth-method-controls">
+                      <label className="settings-toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings.openaiApiKeyEnabled}
+                          onChange={(event) =>
+                            onChange(
+                              buildOpenAIPreferencesPatch(settings, "api-key", {
+                                openaiApiKeyEnabled: event.target.checked,
+                              })
+                            )
+                          }
+                        />
+                        <span>활성화</span>
+                      </label>
+                      <label className="settings-field settings-priority-field">
+                        <span>우선순위</span>
+                        <select
+                          className="settings-input"
+                          value={settings.openaiApiKeyPriority}
+                          disabled={!settings.openaiApiKeyEnabled}
+                          onChange={(event) =>
+                            onChange(
+                              buildOpenAIPreferencesPatch(settings, "api-key", {
+                                openaiApiKeyPriority: Number(event.target.value),
+                              })
+                            )
+                          }
+                        >
+                          <option value={1}>1순위</option>
+                          <option value={2}>2순위</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+                </div>
+
+                <p className="settings-auth-priority-help">
+                  활성화된 권한 중 실제로 연결 가능한 수단을 우선순위 순서대로 자동 선택합니다.
+                </p>
+              </section>
+            )}
           </main>
         </div>
 
@@ -221,7 +406,7 @@ export function ProvidersSettingModal({
 
         <footer className="settings-footer">
           <button className="settings-secondary-btn" type="button" onClick={onClose}>
-            Cancel
+            취소
           </button>
           <button
             className="settings-primary-btn"

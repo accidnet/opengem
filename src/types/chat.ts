@@ -87,6 +87,10 @@ export type LLMConfig = {
 export type LLMSettings = LLMConfig & {
   loggedIn: boolean;
   email?: string;
+  openaiOauthEnabled: boolean;
+  openaiOauthPriority: number;
+  openaiApiKeyEnabled: boolean;
+  openaiApiKeyPriority: number;
 };
 
 export type ResolvedLLMSettings = LLMConfig & {
