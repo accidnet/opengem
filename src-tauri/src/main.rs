@@ -399,6 +399,7 @@ fn main() {
             commands::settings::get_llm_settings,
             commands::settings::get_available_providers,
             commands::settings::get_providers,
+            commands::settings::get_provider_credential,
             commands::settings::save_llm_settings,
             commands::settings::save_provider_settings_command,
             commands::settings::resolve_llm_settings,

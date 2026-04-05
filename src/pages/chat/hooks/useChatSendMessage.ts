@@ -200,6 +200,7 @@ async function runMainAgentLoop(input: {
   projectPaths: string[];
   mainAgent: AgentItem;
   activeSettings: ResolvedLLMSettings;
+  runtimeApiUrl: string;
   baseMessages: LLMMessage[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
   setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
@@ -251,7 +252,7 @@ async function runMainAgentLoop(input: {
     const response = await request({
       providerId: input.activeSettings.providerId,
       providerKind: input.activeSettings.providerKind,
-      apiBaseUrl: input.activeSettings.baseUrl,
+      apiBaseUrl: input.runtimeApiUrl,
       apiKey: input.activeSettings.apiKey,
       accessToken: input.activeSettings.accessToken,
       accountId: input.activeSettings.accountId,
@@ -375,6 +376,18 @@ function createAssistantMessage(base: Message, text: string): Message {
   };
 }
 
+function resolveRuntimeApiUrl(input: {
+  activeSettings: ResolvedLLMSettings;
+  availableProviders: ReturnType<typeof useAvailableProviders>["data"];
+}): string {
+  const matchedProvider = input.availableProviders?.find(
+    (provider) => provider.providerId === input.activeSettings.providerId
+  );
+  const credentialApiUrl = matchedProvider?.apiUrls?.[input.activeSettings.providerKind];
+
+  return credentialApiUrl || matchedProvider?.apiUrl || input.activeSettings.baseUrl;
+}
+
 export function useChatSendMessage({
   agents,
   canSend,
@@ -446,6 +459,10 @@ export function useChatSendMessage({
 
       const sessionDetail = await getChatSession(session.id);
       const activeSettings = await resolveProviderSettings();
+      const runtimeApiUrl = resolveRuntimeApiUrl({
+        activeSettings,
+        availableProviders,
+      });
 
       if (!hasProvider) {
         await publishGuardMessage({
@@ -480,6 +497,7 @@ export function useChatSendMessage({
         persistMessage,
         activeAssistantMessageId: activeAssistantMessage.id,
         maxAgentSteps,
+        runtimeApiUrl,
       });
 
       const assistantMessage = createAssistantMessage(activeAssistantMessage, response.text);

@@ -1,13 +1,14 @@
 use crate::app_state::AppState;
 use crate::commands::settings_types::{
-    AvailableProviderPayload, IdTokenClaims, LlmSettingsPayload, OAuthCodes, ProviderPayload,
-    ProviderSettingsPayload, ResolvedLlmSettingsPayload, SaveLlmSettingsInput,
-    SaveProviderSettingsInput, StartChatgptLoginPayload, StoredLlmSettings, StoredProvider,
-    StoredProviderCredential, StoredProviderSettings, TokenResponse,
+    AvailableProviderPayload, GetProviderCredentialInput, IdTokenClaims, LlmSettingsPayload,
+    OAuthCodes, ProviderCredentialPayload, ProviderPayload, ProviderSettingsPayload,
+    ResolvedLlmSettingsPayload, SaveLlmSettingsInput, SaveProviderSettingsInput,
+    StartChatgptLoginPayload, StoredLlmSettings, StoredProvider, StoredProviderCredential,
+    StoredProviderSettings, TokenResponse,
 };
 use crate::repositories::settings_repository::{
     clear_credential, load_available_providers, load_providers, load_settings, save_credential,
-    save_provider_settings, save_selection,
+    save_provider_settings, save_selection, load_credential,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
@@ -53,6 +54,25 @@ pub fn get_providers(state: State<AppState>) -> Result<Vec<ProviderPayload>, Str
     let connection = state.open_connection()?;
     let providers = load_providers(&connection)?;
     Ok(providers.into_iter().map(to_provider_payload).collect())
+}
+
+#[tauri::command]
+pub fn get_provider_credential(
+    state: State<AppState>,
+    input: GetProviderCredentialInput,
+) -> Result<ProviderCredentialPayload, String> {
+    let connection = state.open_connection()?;
+    let provider_id = normalize_provider_id(&input.provider_id);
+    let credential_type = normalize_provider_kind(&provider_id, &input.credential_type);
+    let credential = load_credential(&connection, &provider_id, &credential_type)?;
+
+    Ok(ProviderCredentialPayload {
+        provider_id: credential.provider_id,
+        credential_type: credential.credential_type,
+        api_key: credential.api_key,
+        access_token: credential.access_token,
+        account_id: credential.account_id,
+    })
 }
 
 #[tauri::command]

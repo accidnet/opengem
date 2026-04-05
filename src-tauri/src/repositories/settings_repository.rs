@@ -44,6 +44,7 @@ pub fn load_available_providers(
             SELECT
               providers.key,
               provider_credentials.credential_type,
+              provider_settings.api_url,
               provider_credentials.api_key,
               provider_credentials.refresh_token,
               provider_credentials.email
@@ -63,6 +64,7 @@ pub fn load_available_providers(
                 row.get::<_, Option<String>>(2)?,
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
             ))
         })
         .map_err(|error| error.to_string())?;
@@ -70,7 +72,7 @@ pub fn load_available_providers(
     let mut grouped = std::collections::BTreeMap::<String, AvailableProviderPayload>::new();
 
     for row in rows {
-        let (provider_id, credential_type, api_key, refresh_token, email) =
+        let (provider_id, credential_type, api_url, api_key, refresh_token, email) =
             row.map_err(|error| error.to_string())?;
         let entry =
             grouped
@@ -78,6 +80,8 @@ pub fn load_available_providers(
                 .or_insert_with(|| AvailableProviderPayload {
                     provider_id: provider_id.clone(),
                     credential_types: Vec::new(),
+                    api_url: None,
+                    api_urls: std::collections::BTreeMap::new(),
                     has_api_key: false,
                     logged_in: false,
                     email: None,
@@ -96,6 +100,12 @@ pub fn load_available_providers(
 
         if has_api_key || has_refresh_token {
             entry.credential_types.push(credential_type.clone());
+        }
+        if let Some(api_url) = api_url.filter(|value| !value.trim().is_empty()) {
+            if entry.api_url.is_none() {
+                entry.api_url = Some(api_url.clone());
+            }
+            entry.api_urls.insert(credential_type.clone(), api_url);
         }
         if credential_type == "api-key" && has_api_key {
             entry.has_api_key = true;

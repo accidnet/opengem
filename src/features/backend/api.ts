@@ -27,6 +27,26 @@ type SaveProviderSettingsParams = {
   apiUrl: string;
 };
 
+type ProviderCredentialType = "oauth" | "api-key";
+
+type GetProviderCredentialParams = {
+  providerId: string;
+  credentialType: ProviderCredentialType;
+};
+
+export type ProviderCredentialValue =
+  | {
+      providerId: string;
+      credentialType: "oauth";
+      accessToken?: string;
+      accountId?: string;
+    }
+  | {
+      providerId: string;
+      credentialType: "api-key";
+      apiKey?: string;
+    };
+
 export async function getLlmSettings(): Promise<LLMSettings> {
   return invoke<LLMSettings>("get_llm_settings");
 }
@@ -55,6 +75,12 @@ export async function saveProviderSettings(
   input: SaveProviderSettingsParams,
 ): Promise<ProviderSettings> {
   return invoke<ProviderSettings>("save_provider_settings_command", { input });
+}
+
+export async function getProviderCredential(
+  input: GetProviderCredentialParams,
+): Promise<ProviderCredentialValue> {
+  return invoke<ProviderCredentialValue>("get_provider_credential", { input });
 }
 
 export async function beginChatgptLogin(): Promise<StartChatgptLoginPayload> {

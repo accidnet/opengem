@@ -7,6 +7,8 @@ import {
 } from "@/features/ai/payload";
 import { parseSSEStream } from "@/features/ai/stream";
 import { normalizeBaseUrl } from "@/lib/utils";
+import { resolveProviderApiUrl } from "@/config/loadModels";
+import { resolveProviderCredential } from "../credentials";
 
 function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
   const headers: Record<string, string> = {
@@ -59,21 +61,27 @@ function buildRequestBody(input: AIRequest) {
   };
 }
 
-async function send(input: AIRequest): Promise<Response> {
-  const response = await fetch(`${normalizeBaseUrl(input.apiBaseUrl)}/responses`, {
+async function send(
+  input: AIRequest,
+  authorization?: string,
+  accountId?: string
+): Promise<Response> {
+  return fetch(`${normalizeBaseUrl(input.apiBaseUrl)}/responses`, {
     method: "POST",
-    headers: buildHeaders(input.apiKey, undefined),
+    headers: buildHeaders(authorization, accountId),
     body: JSON.stringify(buildRequestBody(input)),
     signal: input.signal,
   });
-  return response;
 }
 
 export async function sendToOpenAICompatible(input: AIRequest): Promise<AIResponse> {
-  const response = await send(input);
+  const response = await send(input, input.apiKey);
 
   if (!response.ok) {
-    throw new Error(`${input.apiBaseUrl} error (${response.status}): ${response.text()}`);
+    const detail = await response.text();
+    throw new Error(
+      `${input.apiBaseUrl} error (${response.status}): ${detail || response.statusText}`
+    );
   }
 
   if (!response.body) {
@@ -95,10 +103,16 @@ export async function sendToOpenAICompatible(input: AIRequest): Promise<AIRespon
 }
 
 export async function sendToOpenAIOAuth(input: AIRequest): Promise<AIResponse> {
-  const response = await send(input);
+  input.apiBaseUrl = resolveProviderApiUrl("openai", "oauth");
+  const credential = await resolveProviderCredential("openai", "oauth");
+  const response = await send(
+    input,
+    credential.credentialType === "oauth" ? credential.accessToken : undefined,
+    credential.credentialType === "oauth" ? credential.accountId : undefined
+  );
 
   if (!response.ok) {
-    const detail = response.text();
+    const detail = await response.text();
     throw new Error(`ChatGPT API error (${response.status}): ${detail || response.statusText}`);
   }
 
@@ -111,4 +125,8 @@ export async function sendToOpenAIOAuth(input: AIRequest): Promise<AIResponse> {
   }
 
   return parseSSEStream(response, "chatgpt-responses");
+}
+
+export async function sendToOpenAIApi(input: AIRequest): Promise<AIResponse> {
+  return sendToOpenAICompatible(input);
 }

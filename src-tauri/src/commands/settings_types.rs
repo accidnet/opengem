@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +29,13 @@ pub struct SaveProviderSettingsInput {
     pub provider_kind: String,
     pub name: Option<String>,
     pub api_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetProviderCredentialInput {
+    pub provider_id: String,
+    pub credential_type: String,
 }
 
 #[derive(Serialize)]
@@ -63,6 +71,8 @@ pub struct StartChatgptLoginPayload {
 pub struct AvailableProviderPayload {
     pub provider_id: String,
     pub credential_types: Vec<String>,
+    pub api_url: Option<String>,
+    pub api_urls: BTreeMap<String, String>,
     pub has_api_key: bool,
     pub logged_in: bool,
     pub email: Option<String>,
@@ -74,6 +84,16 @@ pub struct ProviderPayload {
     pub key: String,
     pub label: String,
     pub protocol: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCredentialPayload {
+    pub provider_id: String,
+    pub credential_type: String,
+    pub api_key: Option<String>,
+    pub access_token: Option<String>,
+    pub account_id: Option<String>,
 }
 
 #[derive(Default)]

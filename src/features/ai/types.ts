@@ -23,6 +23,8 @@ export type ModelCatalog = Record<string, AIProvider>;
 export type AvailableProviderInfo = {
   providerId: string;
   credentialTypes: string[];
+  apiUrl?: string;
+  apiUrls: Partial<Record<"oauth" | "api-key", string>>;
   hasApiKey: boolean;
   loggedIn: boolean;
   email?: string;
