@@ -128,7 +128,7 @@ const providerEntries: ProviderCatalogEntry[] = [
     ],
   },
   {
-    id: "custom_openai",
+    id: "custom",
     label: "Custom OpenAI-Compatible",
     description: "Any custom base URL that implements the OpenAI chat completions shape.",
     providerKind: "api_key",

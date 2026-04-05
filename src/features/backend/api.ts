@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
 import type { LLMSettings, ResolvedLLMSettings, SessionDetail } from "@/types/chat";
 
-import type { AvailableProviderInfo } from "@/features/ai/types";
+import type { AvailableProviderInfo, ProviderInfo } from "@/features/ai/types";
 
 export type SaveLlmSettingsParams = {
   providerId: LLMSettings["providerId"];
@@ -12,12 +12,27 @@ export type SaveLlmSettingsParams = {
   apiKey?: string;
 };
 
+type ProviderSettings = {
+  id: number;
+  providerId: string;
+  apiUrl: string;
+};
+
+type SaveProviderSettingsParams = {
+  providerId: string;
+  apiUrl: string;
+};
+
 export async function getLlmSettings(): Promise<LLMSettings> {
   return invoke<LLMSettings>("get_llm_settings");
 }
 
 export async function getAvailableProviders(): Promise<AvailableProviderInfo[]> {
   return invoke<AvailableProviderInfo[]>("get_available_providers");
+}
+
+export async function getProviders(): Promise<ProviderInfo[]> {
+  return invoke<ProviderInfo[]>("get_providers");
 }
 
 export async function getChatSession(sessionId: string): Promise<SessionDetail> {
@@ -30,6 +45,12 @@ export async function resolveLlmSettings(): Promise<ResolvedLLMSettings> {
 
 export async function saveLlmSettings(input: SaveLlmSettingsParams): Promise<LLMSettings> {
   return invoke<LLMSettings>("save_llm_settings", { input });
+}
+
+export async function saveProviderSettings(
+  input: SaveProviderSettingsParams,
+): Promise<ProviderSettings> {
+  return invoke<ProviderSettings>("save_provider_settings_command", { input });
 }
 
 export async function beginChatgptLogin(): Promise<StartChatgptLoginPayload> {

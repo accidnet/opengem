@@ -206,7 +206,9 @@ pub fn append_chat_message(
         "appending chat message"
     );
     let now = now_millis();
-    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
 
     let exists: Option<String> = transaction
         .query_row(

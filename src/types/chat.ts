@@ -77,7 +77,7 @@ export type LLMConfig = {
     | "anthropic"
     | "google"
     | "openrouter"
-    | "custom_openai";
+    | "custom";
   providerKind: "api_key" | "oauth";
   baseUrl: string;
   model: string;

@@ -1,10 +1,13 @@
 use crate::app_state::AppState;
 use crate::commands::settings_types::{
-    AvailableProviderPayload, IdTokenClaims, LlmSettingsPayload, OAuthCodes, ResolvedLlmSettingsPayload,
-    SaveLlmSettingsInput, StartChatgptLoginPayload, StoredLlmSettings, StoredProviderCredential, TokenResponse,
+    AvailableProviderPayload, IdTokenClaims, LlmSettingsPayload, OAuthCodes, ProviderPayload,
+    ProviderSettingsPayload, ResolvedLlmSettingsPayload, SaveLlmSettingsInput,
+    SaveProviderSettingsInput, StartChatgptLoginPayload, StoredLlmSettings, StoredProvider,
+    StoredProviderCredential, StoredProviderSettings, TokenResponse,
 };
 use crate::repositories::settings_repository::{
-    clear_credential, load_available_providers, load_settings, save_credential, save_selection,
+    clear_credential, load_available_providers, load_providers, load_settings, save_credential,
+    save_provider_settings, save_selection,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
@@ -38,9 +41,18 @@ pub fn get_llm_settings(state: State<AppState>) -> Result<LlmSettingsPayload, St
 }
 
 #[tauri::command]
-pub fn get_available_providers(state: State<AppState>) -> Result<Vec<AvailableProviderPayload>, String> {
+pub fn get_available_providers(
+    state: State<AppState>,
+) -> Result<Vec<AvailableProviderPayload>, String> {
     let connection = state.open_connection()?;
     load_available_providers(&connection)
+}
+
+#[tauri::command]
+pub fn get_providers(state: State<AppState>) -> Result<Vec<ProviderPayload>, String> {
+    let connection = state.open_connection()?;
+    let providers = load_providers(&connection)?;
+    Ok(providers.into_iter().map(to_provider_payload).collect())
 }
 
 #[tauri::command]
@@ -51,7 +63,8 @@ pub fn save_llm_settings(
     let connection = state.open_connection()?;
     let provider_id = normalize_provider_id(&input.provider_id);
     let provider_kind = normalize_provider_kind(&provider_id, &input.provider_kind);
-    let model = normalize_text(&input.model).unwrap_or_else(|| default_model_for(&provider_id).to_string());
+    let model =
+        normalize_text(&input.model).unwrap_or_else(|| default_model_for(&provider_id).to_string());
     let api_key = normalize_optional_secret(input.api_key);
 
     if provider_kind == "api_key" {
@@ -69,6 +82,35 @@ pub fn save_llm_settings(
     save_selection(&connection, &provider_id, &provider_kind, &model)?;
     info!(provider_id = %provider_id, provider_kind = %provider_kind, model = %model, "llm settings saved");
     Ok(to_payload(load_settings(&connection)?))
+}
+
+#[tauri::command]
+pub fn save_provider_settings_command(
+    state: State<AppState>,
+    input: SaveProviderSettingsInput,
+) -> Result<ProviderSettingsPayload, String> {
+    let connection = state.open_connection()?;
+    let provider_id = normalize_provider_id(&input.provider_id);
+    let api_url = normalize_text(&input.api_url)
+        .ok_or_else(|| "api_url은 비워둘 수 없습니다.".to_string())?;
+    let settings = save_provider_settings(&connection, &provider_id, &api_url)?;
+    let current = load_settings(&connection)?;
+
+    if current.provider_id == provider_id && current.provider_kind != "oauth" {
+        save_selection(
+            &connection,
+            &current.provider_id,
+            &current.provider_kind,
+            &current.model,
+        )?;
+    }
+
+    info!(
+        provider_id = %provider_id,
+        "provider settings saved"
+    );
+
+    Ok(to_provider_settings_payload(settings))
 }
 
 #[tauri::command]
@@ -90,7 +132,9 @@ pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSetting
 pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPayload, String> {
     let listener = TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}"))
         .map_err(|error| format!("OAuth 콜백 포트를 열지 못했습니다: {error}"))?;
-    listener.set_nonblocking(true).map_err(|error| error.to_string())?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| error.to_string())?;
 
     let redirect_uri = format!("http://localhost:{OAUTH_PORT}/auth/callback");
     let oauth = generate_oauth_codes();
@@ -100,14 +144,20 @@ pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPa
     let redirect_uri_for_worker = redirect_uri.clone();
 
     thread::spawn(move || {
-        if let Err(error) =
-            run_chatgpt_login_flow(listener, &redirect_uri_for_worker, &oauth, &state_code, db_path)
-        {
+        if let Err(error) = run_chatgpt_login_flow(
+            listener,
+            &redirect_uri_for_worker,
+            &oauth,
+            &state_code,
+            db_path,
+        ) {
             error!("chatgpt oauth flow failed: {error}");
         }
     });
 
-    Ok(StartChatgptLoginPayload { authorization_url: auth_url })
+    Ok(StartChatgptLoginPayload {
+        authorization_url: auth_url,
+    })
 }
 
 #[tauri::command]
@@ -131,19 +181,30 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
 }
 
 fn open_url_with_system_browser(url: &str) -> Result<(), String> {
-    let wsl_powershell_path = Path::new("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe");
+    let wsl_powershell_path =
+        Path::new("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe");
     if wsl_powershell_path.exists() {
         let escaped_url = url.replace('"', "`\"");
         let status = Command::new(wsl_powershell_path)
-            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process \"{escaped_url}\"")])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!("Start-Process \"{escaped_url}\""),
+            ])
             .status()
             .map_err(|error| format!("WSL에서 브라우저를 열지 못했습니다: {error}"))?;
         if status.success() {
             return Ok(());
         }
-        return Err(format!("브라우저 실행이 실패했습니다. 종료 코드: {:?}", status.code()));
+        return Err(format!(
+            "브라우저 실행이 실패했습니다. 종료 코드: {:?}",
+            status.code()
+        ));
     }
-    open::that(url).map(|_| ()).map_err(|error| format!("외부 브라우저를 열지 못했습니다: {error}"))
+    open::that(url)
+        .map(|_| ())
+        .map_err(|error| format!("외부 브라우저를 열지 못했습니다: {error}"))
 }
 
 fn run_chatgpt_login_flow(
@@ -159,23 +220,31 @@ fn run_chatgpt_login_flow(
             return Err("ChatGPT 로그인 시간이 초과되었습니다.".to_string());
         }
         match listener.accept() {
-            Ok((mut stream, _)) => match handle_oauth_connection(&mut stream, redirect_uri, oauth, expected_state) {
-                Ok(tokens) => break tokens,
-                Err(error) => return Err(error),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(150)),
+            Ok((mut stream, _)) => {
+                match handle_oauth_connection(&mut stream, redirect_uri, oauth, expected_state) {
+                    Ok(tokens) => break tokens,
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(150))
+            }
             Err(error) => return Err(error.to_string()),
         }
     };
 
     let connection = rusqlite::Connection::open(db_path).map_err(|error| error.to_string())?;
     let current = load_settings(&connection)?;
-    let claims = extract_claims(tokens.id_token.as_deref(), Some(tokens.access_token.as_str()));
-    let next_model = if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
-        current.model
-    } else {
-        CHATGPT_DEFAULT_MODEL.to_string()
-    };
+    let claims = extract_claims(
+        tokens.id_token.as_deref(),
+        Some(tokens.access_token.as_str()),
+    );
+    let next_model =
+        if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
+            current.model
+        } else {
+            CHATGPT_DEFAULT_MODEL.to_string()
+        };
 
     save_credential(
         &connection,
@@ -203,16 +272,21 @@ fn handle_oauth_connection(
     oauth: &OAuthCodes,
     expected_state: &str,
 ) -> Result<TokenResponse, String> {
-    stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .map_err(|error| error.to_string())?;
     let mut buffer = [0u8; 4096];
-    let read = stream.read(&mut buffer).map_err(|error| error.to_string())?;
+    let read = stream
+        .read(&mut buffer)
+        .map_err(|error| error.to_string())?;
     let request = String::from_utf8_lossy(&buffer[..read]);
     let target = request
         .lines()
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
         .ok_or_else(|| "OAuth 콜백 요청을 해석하지 못했습니다.".to_string())?;
-    let url = Url::parse(&format!("http://localhost{target}")).map_err(|error| error.to_string())?;
+    let url =
+        Url::parse(&format!("http://localhost{target}")).map_err(|error| error.to_string())?;
 
     if let Some(message) = url
         .query_pairs()
@@ -243,7 +317,11 @@ fn handle_oauth_connection(
     Ok(tokens)
 }
 
-fn exchange_code_for_tokens(code: &str, redirect_uri: &str, verifier: &str) -> Result<TokenResponse, String> {
+fn exchange_code_for_tokens(
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+) -> Result<TokenResponse, String> {
     Client::new()
         .post(format!("{OPENAI_ISSUER}/oauth/token"))
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -266,7 +344,11 @@ fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, String> {
     Client::new()
         .post(format!("{OPENAI_ISSUER}/oauth/token"))
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[("grant_type", "refresh_token"), ("refresh_token", refresh_token), ("client_id", OPENAI_CLIENT_ID)])
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("client_id", OPENAI_CLIENT_ID),
+        ])
         .send()
         .map_err(|error| error.to_string())?
         .error_for_status()
@@ -288,7 +370,10 @@ fn resolve_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettin
     let now = now_millis()?;
     if settings.access_token.is_none() || settings.expires_at.unwrap_or(0) <= now + 60_000 {
         let tokens = refresh_access_token(&refresh_token)?;
-        let claims = extract_claims(tokens.id_token.as_deref(), Some(tokens.access_token.as_str()));
+        let claims = extract_claims(
+            tokens.id_token.as_deref(),
+            Some(tokens.access_token.as_str()),
+        );
         save_credential(
             connection,
             StoredProviderCredential {
@@ -298,7 +383,9 @@ fn resolve_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettin
                 refresh_token: Some(tokens.refresh_token),
                 expires_at: Some(now + tokens.expires_in.unwrap_or(3600) * 1000),
                 account_id: extract_account_id(claims.as_ref()).or(settings.account_id.clone()),
-                email: claims.and_then(|item| item.email).or(settings.email.clone()),
+                email: claims
+                    .and_then(|item| item.email)
+                    .or(settings.email.clone()),
                 ..StoredProviderCredential::default()
             },
         )?;
@@ -319,9 +406,26 @@ fn to_payload(settings: StoredLlmSettings) -> LlmSettingsPayload {
     }
 }
 
+fn to_provider_settings_payload(settings: StoredProviderSettings) -> ProviderSettingsPayload {
+    ProviderSettingsPayload {
+        id: settings.id,
+        provider_id: settings.provider_id,
+        api_url: settings.api_url,
+    }
+}
+
+fn to_provider_payload(provider: StoredProvider) -> ProviderPayload {
+    ProviderPayload {
+        key: provider.key,
+        label: provider.label,
+        protocol: provider.protocol,
+    }
+}
+
 fn normalize_provider_id(value: &str) -> String {
     match value.trim() {
-        "anthropic" | "google" | "openrouter" | "custom_openai" => value.trim().to_string(),
+        "anthropic" | "google" | "openrouter" | "custom" => value.trim().to_string(),
+        "custom_openai" => "custom".to_string(),
         "" | "openai" | "chatgpt" => DEFAULT_PROVIDER_ID.to_string(),
         _ => DEFAULT_PROVIDER_ID.to_string(),
     }
@@ -345,7 +449,11 @@ fn default_model_for(provider_id: &str) -> &'static str {
 
 fn normalize_text(value: &str) -> Option<String> {
     let trimmed = value.trim();
-    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 fn normalize_optional_secret(value: Option<String>) -> Option<String> {
@@ -353,9 +461,16 @@ fn normalize_optional_secret(value: Option<String>) -> Option<String> {
 }
 
 fn generate_oauth_codes() -> OAuthCodes {
-    let verifier: String = rand::thread_rng().sample_iter(&Alphanumeric).take(96).map(char::from).collect();
+    let verifier: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(96)
+        .map(char::from)
+        .collect();
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-    OAuthCodes { verifier, challenge }
+    OAuthCodes {
+        verifier,
+        challenge,
+    }
 }
 
 fn generate_state() -> String {
@@ -394,11 +509,21 @@ fn parse_jwt_claims(token: &str) -> Option<IdTokenClaims> {
 
 fn extract_account_id(claims: Option<&IdTokenClaims>) -> Option<String> {
     let claims = claims?;
-    claims.chatgpt_account_id.clone().or_else(|| {
-        claims.auth.as_ref().and_then(|auth| auth.chatgpt_account_id.clone())
-    }).or_else(|| {
-        claims.organizations.as_ref().and_then(|items| items.first().map(|item| item.id.clone()))
-    })
+    claims
+        .chatgpt_account_id
+        .clone()
+        .or_else(|| {
+            claims
+                .auth
+                .as_ref()
+                .and_then(|auth| auth.chatgpt_account_id.clone())
+        })
+        .or_else(|| {
+            claims
+                .organizations
+                .as_ref()
+                .and_then(|items| items.first().map(|item| item.id.clone()))
+        })
 }
 
 fn write_html(stream: &mut std::net::TcpStream, html: &str) -> Result<(), String> {
@@ -407,11 +532,16 @@ fn write_html(stream: &mut std::net::TcpStream, html: &str) -> Result<(), String
         html.len(),
         html
     );
-    stream.write_all(response.as_bytes()).map_err(|error| error.to_string())
+    stream
+        .write_all(response.as_bytes())
+        .map_err(|error| error.to_string())
 }
 
 fn now_millis() -> Result<i64, String> {
-    Ok(SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_millis() as i64)
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis() as i64)
 }
 
 const OAUTH_SUCCESS_HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8" /><title>OpenGem 로그인 완료</title></head><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;"><main style="max-width:420px;padding:32px;border-radius:20px;background:rgba(15,23,42,.9);border:1px solid rgba(148,163,184,.2);text-align:center;"><h1 style="margin:0 0 12px;font-size:24px;">로그인 완료</h1><p style="margin:0;color:#cbd5e1;">이 창을 닫고 OpenGem으로 돌아가면 됩니다.</p></main><script>setTimeout(() => window.close(), 1800)</script></body></html>"#;

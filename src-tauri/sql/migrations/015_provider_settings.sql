@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS provider_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider_id INTEGER NOT NULL,
+  api_url TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE,
+  UNIQUE(provider_id)
+);

@@ -260,7 +260,12 @@ pub fn run_command_line(input: RunCommandLineInput) -> Result<CommandLineResultP
         return Err("실행할 명령어가 비어 있습니다.".to_string());
     }
 
-    let cwd = match input.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    let cwd = match input
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         Some(value) => normalize_existing_path(value)?,
         None => std::env::current_dir().map_err(|error| error.to_string())?,
     };
@@ -395,7 +400,9 @@ fn normalize_project_paths(project_paths: Vec<String>) -> Result<Vec<PathBuf>, S
             continue;
         }
 
-        let canonical = normalized.canonicalize().map_err(|error| error.to_string())?;
+        let canonical = normalized
+            .canonicalize()
+            .map_err(|error| error.to_string())?;
         if canonical.is_dir() {
             roots.push(canonical);
         }
@@ -440,8 +447,7 @@ fn looks_like_text_file(path: &Path) -> bool {
 
     matches!(
         extension.to_ascii_lowercase().as_str(),
-        "ts"
-            | "tsx"
+        "ts" | "tsx"
             | "js"
             | "jsx"
             | "json"
@@ -482,7 +488,9 @@ fn collect_workspace_documents(
             };
 
             let matches = if exact_file_name_only {
-                suffixes.iter().any(|suffix| file_name.eq_ignore_ascii_case(suffix))
+                suffixes
+                    .iter()
+                    .any(|suffix| file_name.eq_ignore_ascii_case(suffix))
             } else {
                 suffixes.iter().any(|suffix| file_name.ends_with(suffix))
             };
@@ -508,7 +516,10 @@ fn is_command_document(path: &Path) -> bool {
     })
 }
 
-fn parse_workspace_document(path: &Path, fallback_kind: &str) -> Result<ParsedWorkspaceDocument, String> {
+fn parse_workspace_document(
+    path: &Path,
+    fallback_kind: &str,
+) -> Result<ParsedWorkspaceDocument, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     let file_stem = path
         .file_stem()
@@ -549,7 +560,10 @@ fn parse_frontmatter(content: &str) -> Option<std::collections::HashMap<String, 
         }
 
         let (key, value) = line.split_once(':')?;
-        map.insert(key.trim().to_string(), value.trim().trim_matches('"').to_string());
+        map.insert(
+            key.trim().to_string(),
+            value.trim().trim_matches('"').to_string(),
+        );
     }
 
     None

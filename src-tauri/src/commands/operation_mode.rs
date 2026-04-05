@@ -376,18 +376,25 @@ pub fn save_operation_mode(
         return Err("선택된 operation mode가 비어 있습니다.".to_string());
     }
 
-    if !normalized_modes.iter().any(|mode| mode.name == selected_mode) {
+    if !normalized_modes
+        .iter()
+        .any(|mode| mode.name == selected_mode)
+    {
         return Err("선택된 operation mode가 목록에 없습니다.".to_string());
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
 
     let mut existing_statement = transaction
         .prepare("SELECT id, mode_name FROM operation_modes ORDER BY id ASC")
         .map_err(|error| error.to_string())?;
     let existing_rows = existing_statement
-        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|error| error.to_string())?;
 
     let mut existing_modes = Vec::<(i64, String)>::new();
@@ -429,7 +436,11 @@ pub fn save_operation_mode(
                     params![
                         mode.name,
                         index as i64,
-                        if mode.name == selected_mode { 1_i64 } else { 0_i64 },
+                        if mode.name == selected_mode {
+                            1_i64
+                        } else {
+                            0_i64
+                        },
                         serialized_project_paths,
                         default_model,
                         mode_id
@@ -452,7 +463,11 @@ pub fn save_operation_mode(
                 params![
                     mode.name,
                     index as i64,
-                    if mode.name == selected_mode { 1_i64 } else { 0_i64 },
+                    if mode.name == selected_mode {
+                        1_i64
+                    } else {
+                        0_i64
+                    },
                     serialized_project_paths,
                     default_model
                 ],
@@ -470,10 +485,16 @@ pub fn save_operation_mode(
         }
 
         transaction
-            .execute("DELETE FROM operation_modes WHERE id = ?1", params![mode_id])
+            .execute(
+                "DELETE FROM operation_modes WHERE id = ?1",
+                params![mode_id],
+            )
             .map_err(|error| error.to_string())?;
         transaction
-            .execute("DELETE FROM chat_sessions WHERE mode_name = ?1", params![saved_name])
+            .execute(
+                "DELETE FROM chat_sessions WHERE mode_name = ?1",
+                params![saved_name],
+            )
             .map_err(|error| error.to_string())?;
     }
 
@@ -489,7 +510,9 @@ pub fn select_operation_mode(state: State<AppState>, selected_mode: String) -> R
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
 
     let affected_rows = transaction
         .execute(SQL_UPDATE_SELECTED_OPERATION_MODE, params![selected_mode])
@@ -511,7 +534,9 @@ pub fn delete_operation_mode(state: State<AppState>, mode_name: String) -> Resul
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
 
     let deleted_mode_is_selected: Option<i64> = transaction
         .query_row(
@@ -538,7 +563,10 @@ pub fn delete_operation_mode(state: State<AppState>, mode_name: String) -> Resul
         .execute(SQL_DELETE_OPERATION_MODE, params![&mode_name])
         .map_err(|error| error.to_string())?;
     transaction
-        .execute("DELETE FROM chat_sessions WHERE mode_name = ?1", params![&mode_name])
+        .execute(
+            "DELETE FROM chat_sessions WHERE mode_name = ?1",
+            params![&mode_name],
+        )
         .map_err(|error| error.to_string())?;
 
     if is_selected == 1 {
@@ -683,11 +711,16 @@ pub fn save_mode_agents(
     }
 
     let mut connection = state.open_connection()?;
-    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
     let mode_id = resolve_mode_id(&transaction, &mode_name)?;
 
     transaction
-        .execute("DELETE FROM operation_mode_agents WHERE mode_id = ?1", params![mode_id])
+        .execute(
+            "DELETE FROM operation_mode_agents WHERE mode_id = ?1",
+            params![mode_id],
+        )
         .map_err(|error| error.to_string())?;
 
     for (index, agent) in normalized_agents.iter().enumerate() {

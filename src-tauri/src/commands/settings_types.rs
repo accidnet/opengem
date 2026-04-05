@@ -21,6 +21,21 @@ pub struct SaveLlmSettingsInput {
     pub api_key: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveProviderSettingsInput {
+    pub provider_id: String,
+    pub api_url: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSettingsPayload {
+    pub id: i64,
+    pub provider_id: String,
+    pub api_url: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedLlmSettingsPayload {
@@ -49,6 +64,14 @@ pub struct AvailableProviderPayload {
     pub email: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPayload {
+    pub key: String,
+    pub label: String,
+    pub protocol: String,
+}
+
 #[derive(Default)]
 pub(crate) struct StoredLlmSettings {
     pub provider_id: String,
@@ -74,6 +97,18 @@ pub(crate) struct StoredProviderCredential {
     pub expires_at: Option<i64>,
     pub account_id: Option<String>,
     pub email: Option<String>,
+}
+
+pub(crate) struct StoredProviderSettings {
+    pub id: i64,
+    pub provider_id: String,
+    pub api_url: String,
+}
+
+pub(crate) struct StoredProvider {
+    pub key: String,
+    pub label: String,
+    pub protocol: String,
 }
 
 #[derive(Deserialize)]

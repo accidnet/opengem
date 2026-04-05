@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const MIGRATIONS: [(&str, &str); 14] = [
+const MIGRATIONS: [(&str, &str); 15] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -54,6 +54,10 @@ const MIGRATIONS: [(&str, &str); 14] = [
         "014_provider_credentials",
         include_str!("../sql/migrations/014_provider_credentials.sql"),
     ),
+    (
+        "015_provider_settings",
+        include_str!("../sql/migrations/015_provider_settings.sql"),
+    ),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
@@ -82,7 +86,9 @@ pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
             continue;
         }
 
-        let transaction = connection.transaction().map_err(|error| error.to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
 
         transaction
             .execute_batch(sql)
@@ -94,37 +100,6 @@ pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
 
         transaction.commit().map_err(|error| error.to_string())?;
     }
-
-    ensure_llm_settings_provider_id_column(connection)?;
-
-    Ok(())
-}
-
-fn ensure_llm_settings_provider_id_column(connection: &Connection) -> Result<(), String> {
-    let has_provider_id = connection
-        .prepare("PRAGMA table_info(llm_settings)")
-        .map_err(|error| error.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .any(|column_name| column_name == "provider_id");
-
-    if has_provider_id {
-        return Ok(());
-    }
-
-    connection
-        .execute_batch(include_str!("../sql/migrations/003_llm_provider_id.sql"))
-        .map_err(|error| error.to_string())?;
-
-    connection
-        .execute(
-            "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?1)",
-            ["012_llm_provider_id"],
-        )
-        .map_err(|error| error.to_string())?;
 
     Ok(())
 }

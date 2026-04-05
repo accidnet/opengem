@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { mapProvidersWithModels } from "@/config/loadModels";
-import { getAvailableProviders } from "@/features/backend/api";
-import type { AvailableModelInfo, AvailableProviderInfo } from "@/features/ai/types";
+import { getAvailableProviders, getProviders } from "@/features/backend/api";
+import type { AvailableModelInfo, AvailableProviderInfo, ProviderInfo } from "@/features/ai/types";
 
 export const AIQueryKeys = {
   all: ["ai"] as const,
   availableProviders: ["ai", "available", "providers"] as const,
   availableModels: ["ai", "available", "models"] as const,
+  providers: ["ai", "providers"] as const,
 };
 
 function getAvailableProvidersQueryOptions() {
@@ -20,6 +21,14 @@ function getAvailableProvidersQueryOptions() {
 
 export function useAvailableProviders() {
   return useQuery<AvailableProviderInfo[]>(getAvailableProvidersQueryOptions());
+}
+
+export function useProviders() {
+  return useQuery<ProviderInfo[]>({
+    queryKey: AIQueryKeys.providers,
+    queryFn: getProviders,
+    staleTime: Infinity,
+  });
 }
 
 export function useAvailableModels() {

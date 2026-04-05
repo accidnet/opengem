@@ -1,4 +1,9 @@
-import { applyProviderKindSelection, applyProviderSelection, getProviderCatalog, listProviders } from "@/features/ai/catalog";
+import {
+  applyProviderKindSelection,
+  applyProviderSelection,
+  getProviderCatalog,
+} from "@/features/ai/catalog";
+import { useProviders } from "@/hooks/useAI";
 import type { LLMSettings } from "@/types/chat";
 
 type ProvidersSettingModalProps = {
@@ -20,7 +25,7 @@ const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   anthropic: "psychiatry",
   google: "temp_preferences_custom",
   openrouter: "route",
-  custom_openai: "tune",
+  custom: "tune",
 };
 
 export function ProvidersSettingModal({
@@ -36,12 +41,14 @@ export function ProvidersSettingModal({
   onLoginChatGPT,
   onLogoutChatGPT,
 }: ProvidersSettingModalProps) {
-  if (!isOpen) return null;
-
-  const providers = listProviders();
+  const { data: providers = [] } = useProviders();
   const activeProvider = getProviderCatalog(settings.providerId);
+  const providerLabelMap = new Map(providers.map((provider) => [provider.key, provider.label]));
+  const activeProviderLabel = providerLabelMap.get(activeProvider.id) ?? activeProvider.label;
   const supportsChatGPTLogin = activeProvider.providerKinds.includes("oauth");
   const usesChatGPTLogin = settings.providerId === "openai" && settings.providerKind === "oauth";
+
+  if (!isOpen) return null;
 
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
@@ -61,7 +68,12 @@ export function ProvidersSettingModal({
               Providers
             </h3>
           </div>
-          <button className="panel-modal-close-btn" type="button" aria-label="Close provider dialog" onClick={onClose}>
+          <button
+            className="panel-modal-close-btn"
+            type="button"
+            aria-label="Close provider dialog"
+            onClick={onClose}
+          >
             <span className="material-symbols-outlined" aria-hidden="true">
               close
             </span>
@@ -71,19 +83,23 @@ export function ProvidersSettingModal({
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar" aria-label="Provider list">
             <p className="panel-modal-sidebar-label">PROVIDERS</p>
-            <p className="panel-modal-sidebar-help">Manage provider selection, auth method, and model.</p>
+            <p className="panel-modal-sidebar-help">Provider API 키 및 로그인을 관리합니다.</p>
             {providers.map((provider) => {
-              const isActive = provider.id === activeProvider.id;
+              const isActive = provider.key === activeProvider.id;
               return (
                 <button
-                  key={provider.id}
+                  key={provider.key}
                   className={`panel-modal-nav-item ${isActive ? "is-active" : ""}`}
                   type="button"
                   aria-current={isActive ? "true" : undefined}
-                  onClick={() => onChange(applyProviderSelection(settings, provider.id))}
+                  onClick={() =>
+                    onChange(
+                      applyProviderSelection(settings, provider.key as LLMSettings["providerId"])
+                    )
+                  }
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
-                    {PROVIDER_ICONS[provider.id]}
+                    {PROVIDER_ICONS[provider.key as LLMSettings["providerId"]]}
                   </span>
                   <span>{provider.label}</span>
                 </button>
@@ -93,7 +109,7 @@ export function ProvidersSettingModal({
 
           <main className="panel-modal-main">
             <div className="panel-modal-main-copy">
-              <h4>{activeProvider.label} Configuration</h4>
+              <h4>{activeProviderLabel} Configuration</h4>
               <p>{activeProvider.description}</p>
             </div>
 
@@ -133,11 +149,21 @@ export function ProvidersSettingModal({
                     </span>
                   </div>
                   {settings.loggedIn ? (
-                    <button className="settings-secondary-btn" type="button" onClick={onLogoutChatGPT} disabled={isLoginBusy}>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      onClick={onLogoutChatGPT}
+                      disabled={isLoginBusy}
+                    >
                       Log out
                     </button>
                   ) : (
-                    <button className="settings-primary-btn" type="button" onClick={onLoginChatGPT} disabled={isLoginBusy}>
+                    <button
+                      className="settings-primary-btn"
+                      type="button"
+                      onClick={onLoginChatGPT}
+                      disabled={isLoginBusy}
+                    >
                       {isLoginBusy ? "Preparing login..." : "Login with ChatGPT"}
                     </button>
                   )}
@@ -145,7 +171,8 @@ export function ProvidersSettingModal({
 
                 {!settings.loggedIn && loginUrl && (
                   <p className="settings-oauth-help">
-                    If the browser did not open automatically, press the login button again to retry the OAuth flow.
+                    If the browser did not open automatically, press the login button again to retry
+                    the OAuth flow.
                   </p>
                 )}
               </section>
@@ -161,7 +188,9 @@ export function ProvidersSettingModal({
 
               {(!supportsChatGPTLogin || !usesChatGPTLogin) && (
                 <label className="settings-field settings-field-wide">
-                  <span>{activeProvider.id === "openai" ? "API Key" : activeProvider.authLabel}</span>
+                  <span>
+                    {activeProvider.id === "openai" ? "API Key" : activeProvider.authLabel}
+                  </span>
                   <input
                     className="settings-input"
                     type="password"
@@ -181,7 +210,12 @@ export function ProvidersSettingModal({
           <button className="settings-secondary-btn" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="settings-primary-btn" type="button" onClick={onSave} disabled={isSaving || isLoginBusy}>
+          <button
+            className="settings-primary-btn"
+            type="button"
+            onClick={onSave}
+            disabled={isSaving || isLoginBusy}
+          >
             {isSaving ? "Saving..." : "Done"}
           </button>
         </footer>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ChatPanel } from "./components/layout/ChatPanel";
-import { ProvidersSettingModal } from "./ProvidersSettingModal";
+import { ProvidersSettingModal } from "./components/ProvidersSettingModal";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "@/features/app/config/appData";

@@ -28,20 +28,19 @@ function resolveDirectTransport(input: AIRequest, protocol: ProviderProtocol): L
 }
 
 export async function request(input: AIRequest): Promise<AIResponse> {
-  return sendToOpenAICompatible(input);
-  // const provider = getProviderCatalog(input.providerId);
-  // const transport = resolveDirectTransport(input, provider.protocol);
+  const provider = getProviderCatalog(input.providerId);
+  const transport = resolveDirectTransport(input, provider.protocol);
 
-  // switch (transport) {
-  //   case "chatgpt-oauth-direct":
-  //     return sendToOpenAIOAuth(input);
-  //   case "anthropic-direct":
-  //     return sendToAnthropic(input);
-  //   case "google-gemini-direct":
-  //     return sendToGemini(input);
-  //   case "openai-compatible-direct":
-  //     return sendToOpenAICompatible(input);
-  //   default:
-  //     return sendToOpenAICompatible(input);
-  // }
+  switch (transport) {
+    case "chatgpt-oauth-direct":
+      return sendToOpenAIOAuth(input);
+    case "anthropic-direct":
+      return sendToAnthropic(input);
+    case "google-gemini-direct":
+      return sendToGemini(input);
+    case "openai-compatible-direct":
+      return sendToOpenAICompatible(input);
+    default:
+      return sendToOpenAICompatible(input);
+  }
 }

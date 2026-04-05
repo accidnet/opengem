@@ -1,9 +1,10 @@
 use crate::commands::settings_types::{
-    AvailableProviderPayload, StoredLlmSettings, StoredProviderCredential,
+    AvailableProviderPayload, StoredLlmSettings, StoredProvider, StoredProviderCredential,
+    StoredProviderSettings,
 };
 use rusqlite::{params, OptionalExtension};
 
-const DEFAULT_PROVIDER_ID: &str = "openai";
+const DEFAULT_PROVIDER_KEY: &str = "openai";
 const DEFAULT_MODEL: &str = "gpt-4o-mini";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com/v1";
@@ -12,14 +13,15 @@ const DEFAULT_OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
 const CHATGPT_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 
 pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettings, String> {
-    let (provider_id, provider_kind, model) = load_selection(connection)?;
+    let (provider_id, provider_kind, model, base_url) = load_selection(connection)?;
     let selected = load_credential(connection, &provider_id, &provider_kind)?;
-    let oauth = load_credential(connection, DEFAULT_PROVIDER_ID, "oauth")?;
+    let oauth = load_credential(connection, DEFAULT_PROVIDER_KEY, "oauth")?;
+
     Ok(StoredLlmSettings {
         provider_id: provider_id.clone(),
         provider_kind: provider_kind.clone(),
         model,
-        base_url: resolve_base_url(&provider_id, &provider_kind),
+        base_url,
         api_key: selected.api_key,
         access_token: selected.access_token,
         refresh_token: selected.refresh_token,
@@ -40,13 +42,14 @@ pub fn load_available_providers(
         .prepare(
             "
             SELECT
-              provider_id,
-              credential_type,
-              api_key,
-              refresh_token,
-              email
-            FROM provider_credentials
-            ORDER BY provider_id, credential_type
+              providers.key,
+              provider_credentials.credential_type,
+              provider_credentials.api_key,
+              provider_credentials.refresh_token,
+              provider_credentials.email
+            FROM providers
+            LEFT JOIN provider_credentials ON provider_credentials.provider_id = providers.id
+            ORDER BY providers.id, provider_credentials.credential_type
             ",
         )
         .map_err(|error| error.to_string())?;
@@ -55,7 +58,7 @@ pub fn load_available_providers(
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(1)?,
                 row.get::<_, Option<String>>(2)?,
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
@@ -79,6 +82,10 @@ pub fn load_available_providers(
                     email: None,
                 });
 
+        let Some(credential_type) = credential_type else {
+            continue;
+        };
+
         let has_api_key = api_key
             .as_ref()
             .is_some_and(|value: &String| !value.trim().is_empty());
@@ -94,7 +101,7 @@ pub fn load_available_providers(
         }
         if credential_type == "oauth" && has_refresh_token {
             entry.logged_in = true;
-            entry.email = email.clone();
+            entry.email = email;
         }
     }
 
@@ -104,12 +111,34 @@ pub fn load_available_providers(
         .collect())
 }
 
+pub fn load_providers(connection: &rusqlite::Connection) -> Result<Vec<StoredProvider>, String> {
+    let mut statement = connection
+        .prepare("SELECT key, label, protocol FROM providers ORDER BY id")
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(StoredProvider {
+                key: row.get(0)?,
+                label: row.get(1)?,
+                protocol: row.get(2)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
 pub fn save_selection(
     connection: &rusqlite::Connection,
     provider_id: &str,
     provider_kind: &str,
     model: &str,
 ) -> Result<(), String> {
+    let provider_row_id = resolve_provider_row_id(connection, provider_id)?;
+    let base_url = resolve_base_url(connection, provider_id, provider_kind)?;
+
     connection
         .execute(
             "INSERT INTO llm_settings (id, provider_id, provider_kind, base_url, model, updated_at)
@@ -120,14 +149,10 @@ pub fn save_selection(
                base_url = excluded.base_url,
                model = excluded.model,
                updated_at = CURRENT_TIMESTAMP",
-            params![
-                provider_id,
-                provider_kind,
-                resolve_base_url(provider_id, provider_kind),
-                model
-            ],
+            params![provider_row_id, provider_kind, base_url, model],
         )
         .map_err(|error| error.to_string())?;
+
     Ok(())
 }
 
@@ -138,8 +163,20 @@ pub fn load_credential(
 ) -> Result<StoredProviderCredential, String> {
     connection
         .query_row(
-            "SELECT provider_id, credential_type, api_key, access_token, refresh_token, expires_at, account_id, email
-             FROM provider_credentials WHERE provider_id = ?1 AND credential_type = ?2",
+            "
+            SELECT
+              providers.key,
+              provider_credentials.credential_type,
+              provider_credentials.api_key,
+              provider_credentials.access_token,
+              provider_credentials.refresh_token,
+              provider_credentials.expires_at,
+              provider_credentials.account_id,
+              provider_credentials.email
+            FROM provider_credentials
+            INNER JOIN providers ON providers.id = provider_credentials.provider_id
+            WHERE providers.key = ?1 AND provider_credentials.credential_type = ?2
+            ",
             params![provider_id, credential_type],
             |row| {
                 Ok(StoredProviderCredential {
@@ -166,10 +203,50 @@ pub fn load_credential(
         })
 }
 
+pub fn save_provider_settings(
+    connection: &rusqlite::Connection,
+    provider_id: &str,
+    api_url: &str,
+) -> Result<StoredProviderSettings, String> {
+    let provider_row_id = resolve_provider_row_id(connection, provider_id)?;
+
+    connection
+        .execute(
+            "INSERT INTO provider_settings (provider_id, api_url, updated_at)
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)
+             ON CONFLICT(provider_id) DO UPDATE SET
+               api_url = excluded.api_url,
+               updated_at = CURRENT_TIMESTAMP",
+            params![provider_row_id, api_url],
+        )
+        .map_err(|error| error.to_string())?;
+
+    connection
+        .query_row(
+            "
+            SELECT provider_settings.id, providers.key, provider_settings.api_url
+            FROM provider_settings
+            INNER JOIN providers ON providers.id = provider_settings.provider_id
+            WHERE providers.id = ?1
+            ",
+            [provider_row_id],
+            |row| {
+                Ok(StoredProviderSettings {
+                    id: row.get(0)?,
+                    provider_id: row.get(1)?,
+                    api_url: row.get(2)?,
+                })
+            },
+        )
+        .map_err(|error| error.to_string())
+}
+
 pub fn save_credential(
     connection: &rusqlite::Connection,
     credential: StoredProviderCredential,
 ) -> Result<(), String> {
+    let provider_row_id = resolve_provider_row_id(connection, &credential.provider_id)?;
+
     connection
         .execute(
             "INSERT INTO provider_credentials (
@@ -184,7 +261,7 @@ pub fn save_credential(
                email = excluded.email,
                updated_at = CURRENT_TIMESTAMP",
             params![
-                credential.provider_id,
+                provider_row_id,
                 credential.credential_type,
                 credential.api_key,
                 credential.access_token,
@@ -195,6 +272,7 @@ pub fn save_credential(
             ],
         )
         .map_err(|error| error.to_string())?;
+
     Ok(())
 }
 
@@ -215,10 +293,17 @@ pub fn clear_credential(
     )
 }
 
-fn load_selection(connection: &rusqlite::Connection) -> Result<(String, String, String), String> {
+fn load_selection(
+    connection: &rusqlite::Connection,
+) -> Result<(String, String, String, String), String> {
     connection
         .query_row(
-            "SELECT provider_id, provider_kind, model FROM llm_settings WHERE id = 1",
+            "
+            SELECT providers.key, llm_settings.provider_kind, llm_settings.model
+            FROM llm_settings
+            INNER JOIN providers ON providers.id = llm_settings.provider_id
+            WHERE llm_settings.id = 1
+            ",
             [],
             |row| {
                 Ok((
@@ -235,27 +320,73 @@ fn load_selection(connection: &rusqlite::Connection) -> Result<(String, String, 
             let provider_kind = normalize_provider_kind(&provider_id, &provider_kind);
             let model = normalize_text(&model)
                 .unwrap_or_else(|| default_model_for(&provider_id).to_string());
-            Ok((provider_id, provider_kind, model))
+            let base_url = resolve_base_url(connection, &provider_id, &provider_kind)?;
+            Ok((provider_id, provider_kind, model, base_url))
         })
         .unwrap_or_else(|| {
             Ok((
-                DEFAULT_PROVIDER_ID.to_string(),
+                DEFAULT_PROVIDER_KEY.to_string(),
                 "api_key".to_string(),
                 DEFAULT_MODEL.to_string(),
+                DEFAULT_OPENAI_BASE_URL.to_string(),
             ))
         })
 }
 
+fn resolve_provider_row_id(
+    connection: &rusqlite::Connection,
+    provider_id: &str,
+) -> Result<i64, String> {
+    let provider_key = normalize_provider_id(provider_id);
+
+    connection
+        .query_row(
+            "SELECT id FROM providers WHERE key = ?1",
+            [provider_key],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "provider를 찾을 수 없습니다.".to_string())
+}
+
+fn resolve_base_url(
+    connection: &rusqlite::Connection,
+    provider_id: &str,
+    provider_kind: &str,
+) -> Result<String, String> {
+    if provider_id == DEFAULT_PROVIDER_KEY && provider_kind == "oauth" {
+        return Ok(CHATGPT_BASE_URL.to_string());
+    }
+
+    let saved_api_url = connection
+        .query_row(
+            "
+            SELECT provider_settings.api_url
+            FROM provider_settings
+            INNER JOIN providers ON providers.id = provider_settings.provider_id
+            WHERE providers.key = ?1
+            ",
+            [provider_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    Ok(saved_api_url.unwrap_or_else(|| default_base_url_for(provider_id).to_string()))
+}
+
 fn normalize_provider_id(value: &str) -> String {
     match value.trim() {
-        "anthropic" | "google" | "openrouter" | "custom_openai" => value.trim().to_string(),
-        "" | "openai" | "chatgpt" => DEFAULT_PROVIDER_ID.to_string(),
-        _ => DEFAULT_PROVIDER_ID.to_string(),
+        "anthropic" | "google" | "openrouter" | "custom" => value.trim().to_string(),
+        "custom_openai" => "custom".to_string(),
+        "" | "openai" | "chatgpt" => DEFAULT_PROVIDER_KEY.to_string(),
+        _ => DEFAULT_PROVIDER_KEY.to_string(),
     }
 }
 
 fn normalize_provider_kind(provider_id: &str, value: &str) -> String {
-    if provider_id == DEFAULT_PROVIDER_ID && value == "oauth" {
+    if provider_id == DEFAULT_PROVIDER_KEY && value == "oauth" {
         return "oauth".to_string();
     }
     "api_key".to_string()
@@ -270,15 +401,13 @@ fn default_model_for(provider_id: &str) -> &'static str {
     }
 }
 
-fn resolve_base_url(provider_id: &str, provider_kind: &str) -> String {
-    if provider_id == DEFAULT_PROVIDER_ID && provider_kind == "oauth" {
-        return CHATGPT_BASE_URL.to_string();
-    }
+fn default_base_url_for(provider_id: &str) -> &'static str {
     match provider_id {
-        "anthropic" => DEFAULT_ANTHROPIC_BASE_URL.to_string(),
-        "google" => DEFAULT_GEMINI_BASE_URL.to_string(),
-        "openrouter" => DEFAULT_OPENROUTER_BASE_URL.to_string(),
-        _ => DEFAULT_OPENAI_BASE_URL.to_string(),
+        "anthropic" => DEFAULT_ANTHROPIC_BASE_URL,
+        "google" => DEFAULT_GEMINI_BASE_URL,
+        "openrouter" => DEFAULT_OPENROUTER_BASE_URL,
+        "custom" => DEFAULT_OPENAI_BASE_URL,
+        _ => DEFAULT_OPENAI_BASE_URL,
     }
 }
 

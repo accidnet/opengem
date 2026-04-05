@@ -7,8 +7,8 @@ mod repositories;
 
 use app_state::AppState;
 use dotenvy::from_path_override;
-use rusqlite::{Connection, OptionalExtension, params};
 use migrations::run_migrations;
+use rusqlite::{params, Connection, OptionalExtension};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -297,8 +297,14 @@ fn persist_main_window_state(window: &Window) -> Result<(), String> {
         existing.unwrap_or(StoredWindowState {
             x: None,
             y: None,
-            width: window.inner_size().map_err(|error| error.to_string())?.width,
-            height: window.inner_size().map_err(|error| error.to_string())?.height,
+            width: window
+                .inner_size()
+                .map_err(|error| error.to_string())?
+                .width,
+            height: window
+                .inner_size()
+                .map_err(|error| error.to_string())?
+                .height,
             is_maximized: true,
         })
     } else {
@@ -392,7 +398,9 @@ fn main() {
             commands::session::open_folder_in_explorer,
             commands::settings::get_llm_settings,
             commands::settings::get_available_providers,
+            commands::settings::get_providers,
             commands::settings::save_llm_settings,
+            commands::settings::save_provider_settings_command,
             commands::settings::resolve_llm_settings,
             commands::settings::begin_chatgpt_login,
             commands::settings::open_external_url,

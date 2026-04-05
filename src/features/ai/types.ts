@@ -17,6 +17,12 @@ export type AvailableProviderInfo = {
   email?: string;
 };
 
+export type ProviderInfo = {
+  key: string;
+  label: string;
+  protocol: string;
+};
+
 export type AvailableModelInfo = AvailableProviderInfo & {
   providerName: string;
   models: AIModel[];
