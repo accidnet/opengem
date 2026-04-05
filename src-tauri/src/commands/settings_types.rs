@@ -26,6 +26,7 @@ pub struct SaveLlmSettingsInput {
 pub struct SaveProviderSettingsInput {
     pub provider_id: String,
     pub provider_kind: String,
+    pub name: Option<String>,
     pub api_url: String,
 }
 
@@ -35,6 +36,7 @@ pub struct ProviderSettingsPayload {
     pub id: i64,
     pub provider_id: String,
     pub provider_kind: String,
+    pub name: Option<String>,
     pub api_url: String,
 }
 
@@ -105,6 +107,7 @@ pub(crate) struct StoredProviderSettings {
     pub id: i64,
     pub provider_id: String,
     pub credential_type: String,
+    pub name: Option<String>,
     pub api_url: String,
 }
 

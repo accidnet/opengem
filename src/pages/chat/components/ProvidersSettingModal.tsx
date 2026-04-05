@@ -186,6 +186,19 @@ export function ProvidersSettingModal({
                 </div>
               </div>
 
+              {activeProvider.id === "custom" && (
+                <label className="settings-field settings-field-wide">
+                  <span>API URL</span>
+                  <input
+                    className="settings-input"
+                    type="url"
+                    value={settings.baseUrl}
+                    onChange={(event) => onChange({ baseUrl: event.target.value })}
+                    placeholder="https://your-endpoint.example/v1"
+                  />
+                </label>
+              )}
+
               {(!supportsChatGPTLogin || !usesChatGPTLogin) && (
                 <label className="settings-field settings-field-wide">
                   <span>

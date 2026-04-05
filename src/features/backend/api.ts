@@ -16,12 +16,14 @@ type ProviderSettings = {
   id: number;
   providerId: string;
   providerKind: LLMSettings["providerKind"];
+  name?: string;
   apiUrl: string;
 };
 
 type SaveProviderSettingsParams = {
   providerId: string;
   providerKind: LLMSettings["providerKind"];
+  name?: string;
   apiUrl: string;
 };
 

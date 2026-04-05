@@ -16,15 +16,17 @@ VALUES
 CREATE TABLE IF NOT EXISTS provider_settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   provider_id INTEGER NOT NULL,
+  name TEXT,
   api_url TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
 );
 
-INSERT OR IGNORE INTO provider_settings (id, provider_id, api_url)
+INSERT OR IGNORE INTO provider_settings (id, provider_id, name, api_url)
 VALUES (
   1,
   (SELECT id FROM providers WHERE key = 'openai'),
+  NULL,
   'https://api.openai.com/v1'
 );
 

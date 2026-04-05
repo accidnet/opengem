@@ -209,6 +209,7 @@ pub fn save_provider_settings(
     connection: &rusqlite::Connection,
     provider_id: &str,
     credential_type: &str,
+    name: Option<&str>,
     api_url: &str,
 ) -> Result<StoredProviderSettings, String> {
     let provider_settings_id =
@@ -217,9 +218,9 @@ pub fn save_provider_settings(
     connection
         .execute(
             "UPDATE provider_settings
-             SET api_url = ?1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?2",
-            params![api_url, provider_settings_id],
+             SET name = ?1, api_url = ?2, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?3",
+            params![name, api_url, provider_settings_id],
         )
         .map_err(|error| error.to_string())?;
 
@@ -343,6 +344,7 @@ fn load_provider_settings(
               provider_settings.id,
               providers.key,
               provider_credentials.credential_type,
+              provider_settings.name,
               provider_settings.api_url
             FROM provider_settings
             INNER JOIN providers ON providers.id = provider_settings.provider_id
@@ -357,7 +359,8 @@ fn load_provider_settings(
                     id: row.get(0)?,
                     provider_id: row.get(1)?,
                     credential_type: row.get(2)?,
-                    api_url: row.get(3)?,
+                    name: row.get(3)?,
+                    api_url: row.get(4)?,
                 })
             },
         )

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/features/app/config/appData";
+import { resolveProviderApiUrl } from "@/config/loadModels";
 import {
   beginChatgptLogin,
   getAvailableProviders,
@@ -8,6 +9,7 @@ import {
   logoutChatgpt,
   openExternalUrl,
   saveLlmSettings,
+  saveProviderSettings,
 } from "@/features/backend/api";
 import { AIQueryKeys } from "@/hooks/useAI";
 import { queryClient } from "@/lib/queryClient";
@@ -37,6 +39,24 @@ export function createProviderSettingsController({
   setPanelModalError,
   setSettings,
 }: ProviderSettingsControllerParams) {
+  const saveProviderConfiguration = async (nextSettings: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl">) => {
+    const apiUrl = resolveProviderApiUrl(
+      nextSettings.providerId,
+      nextSettings.providerKind,
+      nextSettings.baseUrl
+    );
+
+    if (!apiUrl) {
+      return;
+    }
+
+    await saveProviderSettings({
+      providerId: nextSettings.providerId,
+      providerKind: nextSettings.providerKind,
+      apiUrl,
+    });
+  };
+
   const refreshAvailableProviderQueries = async () => {
     await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableProviders });
     await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableModels });
@@ -60,6 +80,7 @@ export function createProviderSettingsController({
   const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
+      await saveProviderConfiguration(settings);
       const next = await saveLlmSettings({
         providerId: settings.providerId,
         providerKind: settings.providerKind,
@@ -100,6 +121,11 @@ export function createProviderSettingsController({
         const next = await getLlmSettings();
         setSettings(normalizeLlmSettings(next));
         if (next.loggedIn) {
+          await saveProviderConfiguration({
+            providerId: next.providerId,
+            providerKind: next.providerKind,
+            baseUrl: next.baseUrl,
+          });
           await refreshAvailableProviderQueries();
           setChatGPTLoginUrl("");
           return;

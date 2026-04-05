@@ -97,9 +97,16 @@ pub fn save_provider_settings_command(
     let connection = state.open_connection()?;
     let provider_id = normalize_provider_id(&input.provider_id);
     let provider_kind = normalize_provider_kind(&provider_id, &input.provider_kind);
+    let name = input.name.and_then(|value| normalize_text(&value));
     let api_url = normalize_text(&input.api_url)
         .ok_or_else(|| "api_url은 비워둘 수 없습니다.".to_string())?;
-    let settings = save_provider_settings(&connection, &provider_id, &provider_kind, &api_url)?;
+    let settings = save_provider_settings(
+        &connection,
+        &provider_id,
+        &provider_kind,
+        name.as_deref(),
+        &api_url,
+    )?;
     let current = load_settings(&connection)?;
 
     if current.provider_id == provider_id && current.provider_kind == provider_kind {
@@ -418,6 +425,7 @@ fn to_provider_settings_payload(settings: StoredProviderSettings) -> ProviderSet
         id: settings.id,
         provider_id: settings.provider_id,
         provider_kind: settings.credential_type,
+        name: settings.name,
         api_url: settings.api_url,
     }
 }
