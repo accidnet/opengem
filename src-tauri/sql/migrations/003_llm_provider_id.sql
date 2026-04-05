@@ -1,1 +1,1 @@
--- provider_id is created in 002_llm_settings.sql.
+-- provider_settings_id is created in 002_llm_settings.sql.

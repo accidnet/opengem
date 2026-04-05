@@ -126,7 +126,7 @@ export function ProvidersSettingModal({
                   <button
                     className={`settings-secondary-btn${!usesChatGPTLogin ? " is-active" : ""}`}
                     type="button"
-                    onClick={() => onChange(applyProviderKindSelection(settings, "api_key"))}
+                    onClick={() => onChange(applyProviderKindSelection(settings, "api-key"))}
                   >
                     API Key
                   </button>

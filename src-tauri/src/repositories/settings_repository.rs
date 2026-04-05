@@ -18,8 +18,8 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
     let oauth = load_credential(connection, DEFAULT_PROVIDER_KEY, "oauth")?;
 
     Ok(StoredLlmSettings {
-        provider_id: provider_id.clone(),
-        provider_kind: provider_kind.clone(),
+        provider_id,
+        provider_kind,
         model,
         base_url,
         api_key: selected.api_key,
@@ -48,7 +48,8 @@ pub fn load_available_providers(
               provider_credentials.refresh_token,
               provider_credentials.email
             FROM providers
-            LEFT JOIN provider_credentials ON provider_credentials.provider_id = providers.id
+            LEFT JOIN provider_settings ON provider_settings.provider_id = providers.id
+            LEFT JOIN provider_credentials ON provider_credentials.provider_settings_id = provider_settings.id
             ORDER BY providers.id, provider_credentials.credential_type
             ",
         )
@@ -96,7 +97,7 @@ pub fn load_available_providers(
         if has_api_key || has_refresh_token {
             entry.credential_types.push(credential_type.clone());
         }
-        if credential_type == "api_key" && has_api_key {
+        if credential_type == "api-key" && has_api_key {
             entry.has_api_key = true;
         }
         if credential_type == "oauth" && has_refresh_token {
@@ -133,23 +134,21 @@ pub fn load_providers(connection: &rusqlite::Connection) -> Result<Vec<StoredPro
 pub fn save_selection(
     connection: &rusqlite::Connection,
     provider_id: &str,
-    provider_kind: &str,
+    credential_type: &str,
     model: &str,
 ) -> Result<(), String> {
-    let provider_row_id = resolve_provider_row_id(connection, provider_id)?;
-    let base_url = resolve_base_url(connection, provider_id, provider_kind)?;
+    let provider_settings_id =
+        resolve_or_create_provider_settings_id(connection, provider_id, credential_type)?;
 
     connection
         .execute(
-            "INSERT INTO llm_settings (id, provider_id, provider_kind, base_url, model, updated_at)
-             VALUES (1, ?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
+            "INSERT INTO llm_settings (id, provider_settings_id, model, updated_at)
+             VALUES (1, ?1, ?2, CURRENT_TIMESTAMP)
              ON CONFLICT(id) DO UPDATE SET
-               provider_id = excluded.provider_id,
-               provider_kind = excluded.provider_kind,
-               base_url = excluded.base_url,
+               provider_settings_id = excluded.provider_settings_id,
                model = excluded.model,
                updated_at = CURRENT_TIMESTAMP",
-            params![provider_row_id, provider_kind, base_url, model],
+            params![provider_settings_id, model],
         )
         .map_err(|error| error.to_string())?;
 
@@ -173,9 +172,12 @@ pub fn load_credential(
               provider_credentials.expires_at,
               provider_credentials.account_id,
               provider_credentials.email
-            FROM provider_credentials
-            INNER JOIN providers ON providers.id = provider_credentials.provider_id
+            FROM provider_settings
+            INNER JOIN providers ON providers.id = provider_settings.provider_id
+            INNER JOIN provider_credentials ON provider_credentials.provider_settings_id = provider_settings.id
             WHERE providers.key = ?1 AND provider_credentials.credential_type = ?2
+            ORDER BY provider_settings.id
+            LIMIT 1
             ",
             params![provider_id, credential_type],
             |row| {
@@ -206,53 +208,42 @@ pub fn load_credential(
 pub fn save_provider_settings(
     connection: &rusqlite::Connection,
     provider_id: &str,
+    credential_type: &str,
     api_url: &str,
 ) -> Result<StoredProviderSettings, String> {
-    let provider_row_id = resolve_provider_row_id(connection, provider_id)?;
+    let provider_settings_id =
+        resolve_or_create_provider_settings_id(connection, provider_id, credential_type)?;
 
     connection
         .execute(
-            "INSERT INTO provider_settings (provider_id, api_url, updated_at)
-             VALUES (?1, ?2, CURRENT_TIMESTAMP)
-             ON CONFLICT(provider_id) DO UPDATE SET
-               api_url = excluded.api_url,
-               updated_at = CURRENT_TIMESTAMP",
-            params![provider_row_id, api_url],
+            "UPDATE provider_settings
+             SET api_url = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?2",
+            params![api_url, provider_settings_id],
         )
         .map_err(|error| error.to_string())?;
 
-    connection
-        .query_row(
-            "
-            SELECT provider_settings.id, providers.key, provider_settings.api_url
-            FROM provider_settings
-            INNER JOIN providers ON providers.id = provider_settings.provider_id
-            WHERE providers.id = ?1
-            ",
-            [provider_row_id],
-            |row| {
-                Ok(StoredProviderSettings {
-                    id: row.get(0)?,
-                    provider_id: row.get(1)?,
-                    api_url: row.get(2)?,
-                })
-            },
-        )
-        .map_err(|error| error.to_string())
+    load_provider_settings(connection, provider_id, credential_type)?
+        .ok_or_else(|| "provider settings를 찾을 수 없습니다.".to_string())
 }
 
 pub fn save_credential(
     connection: &rusqlite::Connection,
     credential: StoredProviderCredential,
 ) -> Result<(), String> {
-    let provider_row_id = resolve_provider_row_id(connection, &credential.provider_id)?;
+    let provider_settings_id = resolve_or_create_provider_settings_id(
+        connection,
+        &credential.provider_id,
+        &credential.credential_type,
+    )?;
 
     connection
         .execute(
             "INSERT INTO provider_credentials (
-               provider_id, credential_type, api_key, access_token, refresh_token, expires_at, account_id, email, updated_at
+               provider_settings_id, credential_type, api_key, access_token, refresh_token, expires_at, account_id, email, updated_at
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, CURRENT_TIMESTAMP)
-             ON CONFLICT(provider_id, credential_type) DO UPDATE SET
+             ON CONFLICT(provider_settings_id) DO UPDATE SET
+               credential_type = excluded.credential_type,
                api_key = excluded.api_key,
                access_token = excluded.access_token,
                refresh_token = excluded.refresh_token,
@@ -261,7 +252,7 @@ pub fn save_credential(
                email = excluded.email,
                updated_at = CURRENT_TIMESTAMP",
             params![
-                provider_row_id,
+                provider_settings_id,
                 credential.credential_type,
                 credential.api_key,
                 credential.access_token,
@@ -281,13 +272,11 @@ pub fn clear_credential(
     provider_id: &str,
     credential_type: &str,
 ) -> Result<(), String> {
-    let current = load_credential(connection, provider_id, credential_type)?;
     save_credential(
         connection,
         StoredProviderCredential {
             provider_id: provider_id.to_string(),
             credential_type: credential_type.to_string(),
-            api_key: current.api_key.filter(|_| credential_type == "api_key"),
             ..StoredProviderCredential::default()
         },
     )
@@ -299,9 +288,15 @@ fn load_selection(
     connection
         .query_row(
             "
-            SELECT providers.key, llm_settings.provider_kind, llm_settings.model
+            SELECT
+              providers.key,
+              provider_credentials.credential_type,
+              llm_settings.model,
+              provider_settings.api_url
             FROM llm_settings
-            INNER JOIN providers ON providers.id = llm_settings.provider_id
+            INNER JOIN provider_settings ON provider_settings.id = llm_settings.provider_settings_id
+            INNER JOIN providers ON providers.id = provider_settings.provider_id
+            INNER JOIN provider_credentials ON provider_credentials.provider_settings_id = provider_settings.id
             WHERE llm_settings.id = 1
             ",
             [],
@@ -310,27 +305,64 @@ fn load_selection(
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
                 ))
             },
         )
         .optional()
         .map_err(|error| error.to_string())?
-        .map(|(provider_id, provider_kind, model)| {
+        .map(|(provider_id, credential_type, model, api_url)| {
             let provider_id = normalize_provider_id(&provider_id);
-            let provider_kind = normalize_provider_kind(&provider_id, &provider_kind);
+            let credential_type = normalize_provider_kind(&provider_id, &credential_type);
             let model = normalize_text(&model)
                 .unwrap_or_else(|| default_model_for(&provider_id).to_string());
-            let base_url = resolve_base_url(connection, &provider_id, &provider_kind)?;
-            Ok((provider_id, provider_kind, model, base_url))
+            let base_url = normalize_text(&api_url).unwrap_or_else(|| {
+                default_base_url_for(&provider_id, &credential_type).to_string()
+            });
+            Ok((provider_id, credential_type, model, base_url))
         })
         .unwrap_or_else(|| {
             Ok((
                 DEFAULT_PROVIDER_KEY.to_string(),
-                "api_key".to_string(),
+                "api-key".to_string(),
                 DEFAULT_MODEL.to_string(),
                 DEFAULT_OPENAI_BASE_URL.to_string(),
             ))
         })
+}
+
+fn load_provider_settings(
+    connection: &rusqlite::Connection,
+    provider_id: &str,
+    credential_type: &str,
+) -> Result<Option<StoredProviderSettings>, String> {
+    connection
+        .query_row(
+            "
+            SELECT
+              provider_settings.id,
+              providers.key,
+              provider_credentials.credential_type,
+              provider_settings.api_url
+            FROM provider_settings
+            INNER JOIN providers ON providers.id = provider_settings.provider_id
+            INNER JOIN provider_credentials ON provider_credentials.provider_settings_id = provider_settings.id
+            WHERE providers.key = ?1 AND provider_credentials.credential_type = ?2
+            ORDER BY provider_settings.id
+            LIMIT 1
+            ",
+            params![provider_id, credential_type],
+            |row| {
+                Ok(StoredProviderSettings {
+                    id: row.get(0)?,
+                    provider_id: row.get(1)?,
+                    credential_type: row.get(2)?,
+                    api_url: row.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|error| error.to_string())
 }
 
 fn resolve_provider_row_id(
@@ -350,30 +382,37 @@ fn resolve_provider_row_id(
         .ok_or_else(|| "provider를 찾을 수 없습니다.".to_string())
 }
 
-fn resolve_base_url(
+fn resolve_or_create_provider_settings_id(
     connection: &rusqlite::Connection,
     provider_id: &str,
-    provider_kind: &str,
-) -> Result<String, String> {
-    if provider_id == DEFAULT_PROVIDER_KEY && provider_kind == "oauth" {
-        return Ok(CHATGPT_BASE_URL.to_string());
+    credential_type: &str,
+) -> Result<i64, String> {
+    if let Some(settings) = load_provider_settings(connection, provider_id, credential_type)? {
+        return Ok(settings.id);
     }
 
-    let saved_api_url = connection
-        .query_row(
-            "
-            SELECT provider_settings.api_url
-            FROM provider_settings
-            INNER JOIN providers ON providers.id = provider_settings.provider_id
-            WHERE providers.key = ?1
-            ",
-            [provider_id],
-            |row| row.get::<_, String>(0),
+    let provider_row_id = resolve_provider_row_id(connection, provider_id)?;
+    let default_api_url = default_base_url_for(provider_id, credential_type);
+
+    connection
+        .execute(
+            "INSERT INTO provider_settings (provider_id, api_url, updated_at)
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)",
+            params![provider_row_id, default_api_url],
         )
-        .optional()
         .map_err(|error| error.to_string())?;
 
-    Ok(saved_api_url.unwrap_or_else(|| default_base_url_for(provider_id).to_string()))
+    let provider_settings_id = connection.last_insert_rowid();
+
+    connection
+        .execute(
+            "INSERT INTO provider_credentials (provider_settings_id, credential_type, updated_at)
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)",
+            params![provider_settings_id, credential_type],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(provider_settings_id)
 }
 
 fn normalize_provider_id(value: &str) -> String {
@@ -389,7 +428,7 @@ fn normalize_provider_kind(provider_id: &str, value: &str) -> String {
     if provider_id == DEFAULT_PROVIDER_KEY && value == "oauth" {
         return "oauth".to_string();
     }
-    "api_key".to_string()
+    "api-key".to_string()
 }
 
 fn default_model_for(provider_id: &str) -> &'static str {
@@ -401,7 +440,11 @@ fn default_model_for(provider_id: &str) -> &'static str {
     }
 }
 
-fn default_base_url_for(provider_id: &str) -> &'static str {
+fn default_base_url_for(provider_id: &str, credential_type: &str) -> &'static str {
+    if provider_id == DEFAULT_PROVIDER_KEY && credential_type == "oauth" {
+        return CHATGPT_BASE_URL;
+    }
+
     match provider_id {
         "anthropic" => DEFAULT_ANTHROPIC_BASE_URL,
         "google" => DEFAULT_GEMINI_BASE_URL,

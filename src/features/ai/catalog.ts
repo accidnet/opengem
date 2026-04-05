@@ -56,8 +56,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     id: "openai",
     label: "OpenAI",
     description: "OpenAI API key and ChatGPT login are handled under the same provider.",
-    providerKind: "api_key",
-    providerKinds: ["api_key", "oauth"],
+    providerKind: "api-key",
+    providerKinds: ["api-key", "oauth"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
@@ -79,8 +79,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     id: "anthropic",
     label: "Anthropic",
     description: "Claude models using the native Anthropic Messages API.",
-    providerKind: "api_key",
-    providerKinds: ["api_key"],
+    providerKind: "api-key",
+    providerKinds: ["api-key"],
     protocol: "anthropic",
     baseUrl: DEFAULT_ANTHROPIC_BASE_URL,
     modelDefault: "claude-3-5-sonnet-latest",
@@ -96,8 +96,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     id: "google",
     label: "Google Gemini",
     description: "Gemini models using the Google Generative Language API.",
-    providerKind: "api_key",
-    providerKinds: ["api_key"],
+    providerKind: "api-key",
+    providerKinds: ["api-key"],
     protocol: "google-gemini",
     baseUrl: DEFAULT_GEMINI_BASE_URL,
     modelDefault: "gemini-2.5-pro",
@@ -113,8 +113,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     id: "openrouter",
     label: "OpenRouter",
     description: "OpenRouter using the OpenAI-compatible chat completions interface.",
-    providerKind: "api_key",
-    providerKinds: ["api_key"],
+    providerKind: "api-key",
+    providerKinds: ["api-key"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENROUTER_BASE_URL,
     modelDefault: "openai/gpt-4o-mini",
@@ -131,8 +131,8 @@ const providerEntries: ProviderCatalogEntry[] = [
     id: "custom",
     label: "Custom OpenAI-Compatible",
     description: "Any custom base URL that implements the OpenAI chat completions shape.",
-    providerKind: "api_key",
-    providerKinds: ["api_key"],
+    providerKind: "api-key",
+    providerKinds: ["api-key"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
@@ -320,7 +320,7 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   const defaults = createDefaultLlmSettings();
   const provider = getProviderCatalog(input.providerId ?? defaults.providerId);
   const providerKind =
-    provider.id === "openai" && input.providerKind === "oauth" ? "oauth" : "api_key";
+    provider.id === "openai" && input.providerKind === "oauth" ? "oauth" : "api-key";
   const model = normalizeModelSelection(provider.id, input.model ?? defaults.model);
 
   return {
@@ -356,7 +356,7 @@ export function applyProviderSelection(
         ? normalizeModelSelection(provider.id, current.model)
         : provider.modelDefault,
     apiKey:
-      currentProvider.id === provider.id && providerKind === "api_key" ? current.apiKey : undefined,
+      currentProvider.id === provider.id && providerKind === "api-key" ? current.apiKey : undefined,
   };
 }
 
@@ -365,7 +365,7 @@ export function applyProviderKindSelection(
   providerKind: ProviderKind
 ): Pick<LLMSettings, "providerKind" | "baseUrl" | "model" | "apiKey"> {
   const nextProviderKind =
-    current.providerId === "openai" && providerKind === "oauth" ? "oauth" : "api_key";
+    current.providerId === "openai" && providerKind === "oauth" ? "oauth" : "api-key";
   return {
     providerKind: nextProviderKind,
     baseUrl:
@@ -373,7 +373,7 @@ export function applyProviderKindSelection(
         ? CHATGPT_BASE_URL
         : getProviderCatalog(current.providerId).baseUrl,
     model: normalizeModelSelection(current.providerId, current.model),
-    apiKey: nextProviderKind === "api_key" ? current.apiKey : undefined,
+    apiKey: nextProviderKind === "api-key" ? current.apiKey : undefined,
   };
 }
 

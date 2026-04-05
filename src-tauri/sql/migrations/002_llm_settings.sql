@@ -13,21 +13,36 @@ VALUES
   ('openrouter', 'OpenRouter', 'openrouter'),
   ('custom', 'Custom', 'openai-compatible');
 
-CREATE TABLE IF NOT EXISTS llm_settings (
-  id INTEGER PRIMARY KEY CHECK(id = 1),
+CREATE TABLE IF NOT EXISTS provider_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   provider_id INTEGER NOT NULL,
-  provider_kind TEXT NOT NULL DEFAULT 'api_key',
-  base_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
-  model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  api_url TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(provider_id) REFERENCES providers(id)
+  FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
 );
 
-INSERT OR IGNORE INTO llm_settings (id, provider_id, provider_kind, base_url, model)
+INSERT OR IGNORE INTO provider_settings (id, provider_id, api_url)
 VALUES (
   1,
   (SELECT id FROM providers WHERE key = 'openai'),
-  'api_key',
-  'https://api.openai.com/v1',
+  'https://api.openai.com/v1'
+);
+
+CREATE TABLE IF NOT EXISTS llm_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  provider_settings_id INTEGER NOT NULL,
+  model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(provider_settings_id) REFERENCES provider_settings(id)
+);
+
+INSERT OR IGNORE INTO llm_settings (id, provider_settings_id, model)
+VALUES (
+  1,
+  (
+    SELECT id
+    FROM provider_settings
+    WHERE id = 1
+  ),
   'gpt-4o-mini'
 );

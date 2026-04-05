@@ -78,7 +78,7 @@ export type LLMConfig = {
     | "google"
     | "openrouter"
     | "custom";
-  providerKind: "api_key" | "oauth";
+  providerKind: "api-key" | "oauth";
   baseUrl: string;
   model: string;
   apiKey?: string;

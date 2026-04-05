@@ -67,7 +67,7 @@ pub fn save_llm_settings(
         normalize_text(&input.model).unwrap_or_else(|| default_model_for(&provider_id).to_string());
     let api_key = normalize_optional_secret(input.api_key);
 
-    if provider_kind == "api_key" {
+    if provider_kind == "api-key" {
         save_credential(
             &connection,
             StoredProviderCredential {
@@ -80,7 +80,12 @@ pub fn save_llm_settings(
     }
 
     save_selection(&connection, &provider_id, &provider_kind, &model)?;
-    info!(provider_id = %provider_id, provider_kind = %provider_kind, model = %model, "llm settings saved");
+    info!(
+        provider_id = %provider_id,
+        provider_kind = %provider_kind,
+        model = %model,
+        "llm settings saved"
+    );
     Ok(to_payload(load_settings(&connection)?))
 }
 
@@ -91,12 +96,13 @@ pub fn save_provider_settings_command(
 ) -> Result<ProviderSettingsPayload, String> {
     let connection = state.open_connection()?;
     let provider_id = normalize_provider_id(&input.provider_id);
+    let provider_kind = normalize_provider_kind(&provider_id, &input.provider_kind);
     let api_url = normalize_text(&input.api_url)
         .ok_or_else(|| "api_url은 비워둘 수 없습니다.".to_string())?;
-    let settings = save_provider_settings(&connection, &provider_id, &api_url)?;
+    let settings = save_provider_settings(&connection, &provider_id, &provider_kind, &api_url)?;
     let current = load_settings(&connection)?;
 
-    if current.provider_id == provider_id && current.provider_kind != "oauth" {
+    if current.provider_id == provider_id && current.provider_kind == provider_kind {
         save_selection(
             &connection,
             &current.provider_id,
@@ -107,6 +113,7 @@ pub fn save_provider_settings_command(
 
     info!(
         provider_id = %provider_id,
+        provider_kind = %provider_kind,
         "provider settings saved"
     );
 
@@ -175,7 +182,7 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
     clear_credential(&connection, DEFAULT_PROVIDER_ID, "oauth")?;
     let current = load_settings(&connection)?;
     if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
-        save_selection(&connection, DEFAULT_PROVIDER_ID, "api_key", &current.model)?;
+        save_selection(&connection, DEFAULT_PROVIDER_ID, "api-key", &current.model)?;
     }
     Ok(to_payload(load_settings(&connection)?))
 }
@@ -410,6 +417,7 @@ fn to_provider_settings_payload(settings: StoredProviderSettings) -> ProviderSet
     ProviderSettingsPayload {
         id: settings.id,
         provider_id: settings.provider_id,
+        provider_kind: settings.credential_type,
         api_url: settings.api_url,
     }
 }
@@ -435,7 +443,7 @@ fn normalize_provider_kind(provider_id: &str, value: &str) -> String {
     if provider_id == DEFAULT_PROVIDER_ID && value == "oauth" {
         return "oauth".to_string();
     }
-    "api_key".to_string()
+    "api-key".to_string()
 }
 
 fn default_model_for(provider_id: &str) -> &'static str {

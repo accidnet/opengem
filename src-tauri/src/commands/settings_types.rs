@@ -25,6 +25,7 @@ pub struct SaveLlmSettingsInput {
 #[serde(rename_all = "camelCase")]
 pub struct SaveProviderSettingsInput {
     pub provider_id: String,
+    pub provider_kind: String,
     pub api_url: String,
 }
 
@@ -33,6 +34,7 @@ pub struct SaveProviderSettingsInput {
 pub struct ProviderSettingsPayload {
     pub id: i64,
     pub provider_id: String,
+    pub provider_kind: String,
     pub api_url: String,
 }
 
@@ -102,6 +104,7 @@ pub(crate) struct StoredProviderCredential {
 pub(crate) struct StoredProviderSettings {
     pub id: i64,
     pub provider_id: String,
+    pub credential_type: String,
     pub api_url: String,
 }
 

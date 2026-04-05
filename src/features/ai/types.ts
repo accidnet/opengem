@@ -3,11 +3,22 @@ export type AIModel = {
   name?: string;
 };
 
+type ApiEndpoint = {
+  url?: string;
+  credentialType?: "oauth" | "api-key";
+  description?: string;
+  priority?: number;
+};
+
 export type AIProvider = {
   id?: string;
   name?: string;
+  api?: string;
+  apis?: ApiEndpoint[];
   models?: Record<string, AIModel>;
 };
+
+export type ModelCatalog = Record<string, AIProvider>;
 
 export type AvailableProviderInfo = {
   providerId: string;

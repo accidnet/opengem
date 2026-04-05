@@ -1,11 +1,29 @@
-import modelCatalog from "@/config/models.json";
+import modelsJson from "@/config/models.json";
 
-import type { AIProvider } from "@/features/ai/types";
+import type { AIProvider, ModelCatalog } from "@/features/ai/types";
 
-export type ModelCatalogResponse = Record<string, AIProvider>;
+export function getModelCatalog(): ModelCatalog {
+  const catalog = modelsJson as ModelCatalog;
+  const openaiProvider = catalog.openai;
 
-export function getModelCatalog(): ModelCatalogResponse {
-  return modelCatalog as ModelCatalogResponse;
+  if (openaiProvider) {
+    openaiProvider.apis = [
+      {
+        url: "https://chatgpt.com/backend-api/codex",
+        credentialType: "oauth",
+        description: "OpenAI OAuth (ChatGPT Pro/Plus Account)",
+        priority: 1,
+      },
+      {
+        url: "https://api.openai.com/v1",
+        credentialType: "api-key",
+        description: "OpenAI API",
+        priority: 2,
+      },
+    ];
+  }
+
+  return catalog;
 }
 
 export function mapProvidersWithModels(providerIds: string[]): AIProvider[] {
