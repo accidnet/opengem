@@ -12,7 +12,6 @@ import {
 } from "@/features/chat/toolRuntime";
 import { request, type LLMMessage, type LLMToolCall } from "@/features/ai";
 import type {
-  ActivityItem,
   AgentItem,
   Message,
   ResolvedLLMSettings,
@@ -20,7 +19,6 @@ import type {
 } from "@/types/chat";
 import {
   AGENT_COLOR_VALUES,
-  buildActivity,
   buildConversationMessages,
   buildTypingMessage,
   nowTime,
@@ -38,7 +36,6 @@ type SendMessageDeps = {
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   refreshSessions: (modes: string[], nextSessionId: string | null) => Promise<void>;
   resolveProviderSettings: () => Promise<ResolvedLLMSettings>;
-  setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
   setInputValue: Dispatch<SetStateAction<string>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
@@ -203,7 +200,6 @@ async function runMainAgentLoop(input: {
   runtimeApiUrl: string;
   baseMessages: LLMMessage[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   activeAssistantMessageId: string;
   maxAgentSteps?: number | null;
@@ -318,10 +314,6 @@ async function runMainAgentLoop(input: {
         const toolMessage = createToolLogMessage(input.mainAgent.name, result);
         input.setMessages((prev) => [...prev, toolMessage]);
         await input.persistMessage(input.sessionId, toolMessage);
-        input.setActivity((prev) => [
-          ...prev,
-          buildActivity(`Tool completed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
-        ]);
 
         workingMessages.push({
           role: "tool",
@@ -338,10 +330,6 @@ async function runMainAgentLoop(input: {
         );
         input.setMessages((prev) => [...prev, toolErrorMessage]);
         await input.persistMessage(input.sessionId, toolErrorMessage);
-        input.setActivity((prev) => [
-          ...prev,
-          buildActivity(`Tool failed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
-        ]);
 
         workingMessages.push({
           role: "tool",
@@ -399,7 +387,6 @@ export function useChatSendMessage({
   persistMessage,
   refreshSessions,
   resolveProviderSettings,
-  setActivity,
   setInputValue,
   setIsLoading,
   setMessages,
@@ -493,7 +480,6 @@ export function useChatSendMessage({
         activeSettings,
         baseMessages: buildConversationMessages(sessionDetail.messages),
         setMessages,
-        setActivity,
         persistMessage,
         activeAssistantMessageId: activeAssistantMessage.id,
         maxAgentSteps,
@@ -506,15 +492,6 @@ export function useChatSendMessage({
       await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
       updateUsageMetrics(response.totalTokens, setResourceToken, setResourceCost);
-
-      const usageText = response.totalTokens > 0 ? ` Tokens used: ${response.totalTokens}` : "";
-      setActivity((prev) => [
-        ...prev,
-        buildActivity(
-          `Agent response completed.${usageText}`.trim(),
-          mainAgent?.name ?? "Assistant"
-        ),
-      ]);
     } catch (error) {
       const reason = getErrorMessage(error);
       const errorMessage: Message = {
@@ -533,10 +510,6 @@ export function useChatSendMessage({
         }
       }
 
-      setActivity((prev) => [
-        ...prev,
-        buildActivity("LLM 응답을 받는 중 오류가 발생했습니다.", "System"),
-      ]);
     } finally {
       setIsLoading(false);
     }

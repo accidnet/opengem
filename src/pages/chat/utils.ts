@@ -1,7 +1,7 @@
 import type { LLMMessage } from "@/features/ai";
 
 import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/features/app/config/appData";
-import type { ActivityItem, Message } from "@/types/chat";
+import type { ActivityItem, ActivityState, Message } from "@/types/chat";
 
 const SESSION_TITLE_MAX_LENGTH = 40;
 
@@ -186,12 +186,79 @@ export function buildReplyMessage(input: string): Message {
   };
 }
 
-export function buildActivity(statusText: string, source: string): ActivityItem {
-  return {
-    id: `act-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    source,
-    byline: nowTime(),
-    text: statusText,
-    state: "working",
-  };
+function normalizeActivitySource(message: Message): string {
+  const sender = message.sender?.trim();
+  if (!sender) {
+    return "Assistant";
+  }
+
+  return sender.replace(/\s+Tool$/, "");
+}
+
+function compactActivityText(text: string): string {
+  const normalized = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  if (normalized.length <= 360) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 360)}...`;
+}
+
+function buildToolActivityText(message: Message): string {
+  const lines = [message.text, ...(message.logs ?? [])]
+    .map((line) => line?.trim())
+    .filter((line): line is string => Boolean(line));
+
+  return compactActivityText(lines.join("\n"));
+}
+
+function resolveActivityState(message: Message): ActivityState {
+  if (message.type === "typing") {
+    return "working";
+  }
+
+  if (message.icon === "error" || message.text?.startsWith("Request failed:")) {
+    return "active";
+  }
+
+  return "done";
+}
+
+/**
+ * 현재 채팅 메시지에서 우측 Activity Log에 보여줄 에이전트 동작만 추출한다.
+ */
+export function buildActivityFromMessages(messages: Message[]): ActivityItem[] {
+  return messages.reduce<ActivityItem[]>((items, message) => {
+    if (message.side !== "agent") {
+      return items;
+    }
+
+    const isToolLog = message.type === "search" || Boolean(message.logs?.length);
+    const text = isToolLog
+      ? buildToolActivityText(message)
+      : message.type === "typing"
+        ? message.text || "Agent is working..."
+        : message.text?.startsWith("Request failed:")
+          ? message.text
+          : "Agent response completed.";
+
+    if (!text.trim()) {
+      return items;
+    }
+
+    items.push({
+      id: `activity-${message.id}`,
+      source: normalizeActivitySource(message),
+      byline: message.byline,
+      text: compactActivityText(text),
+      state: resolveActivityState(message),
+    });
+
+    return items;
+  }, []);
 }

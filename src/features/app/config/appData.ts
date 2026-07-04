@@ -1,4 +1,4 @@
-import type { ActivityItem, AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
+import type { AgentItem, LLMSettings, Message, MessageType } from "@/types/chat";
 import { createDefaultLlmSettings, getPromptForModel } from "@/features/ai/catalog";
 
 export const LLM_CONFIG: LLMSettings = createDefaultLlmSettings();
@@ -39,39 +39,6 @@ export const composeAgentSystemPrompt = (model: string | undefined, ...sections:
 };
 
 export const SESSION_MESSAGES: Message[] = [];
-
-export const INITIAL_ACTIVITY: ActivityItem[] = [
-  {
-    id: "act-1",
-    source: "Orchestrator",
-    byline: "10:24:05",
-    text: 'Workflow "Market Analysis" started with 2 agents assigned.',
-    state: "done",
-  },
-  {
-    id: "act-2",
-    source: "Planner",
-    byline: "10:24:12",
-    text: "Execution plan created.",
-    state: "active",
-    progress: ["done", "pending", "pending"],
-  },
-  {
-    id: "act-3",
-    source: "Researcher",
-    byline: "",
-    text: "Google Search API\nCollecting URL 1...",
-    state: "working",
-  },
-  {
-    id: "act-4",
-    source: "Analyst",
-    byline: "Queue",
-    text: "Waiting for research data...",
-    state: "pending",
-    faded: true,
-  },
-];
 
 export type Mode = string;
 
