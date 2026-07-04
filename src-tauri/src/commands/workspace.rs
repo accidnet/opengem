@@ -70,10 +70,11 @@ pub struct RunCommandLineInput {
 #[tauri::command]
 pub fn list_workspace_files(
     project_paths: Vec<String>,
+    root_path: Option<String>,
     query: Option<String>,
     limit: Option<usize>,
 ) -> Result<Vec<String>, String> {
-    let roots = normalize_project_paths(project_paths)?;
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let lowered_query = query
         .as_deref()
         .map(str::trim)
@@ -115,6 +116,7 @@ pub fn list_workspace_files(
 #[tauri::command]
 pub fn search_workspace_text(
     project_paths: Vec<String>,
+    root_path: Option<String>,
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<WorkspaceFileMatchPayload>, String> {
@@ -123,7 +125,7 @@ pub fn search_workspace_text(
         return Ok(Vec::new());
     }
 
-    let roots = normalize_project_paths(project_paths)?;
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let normalized_query = trimmed_query.to_lowercase();
     let max_items = limit.unwrap_or(DEFAULT_MATCH_LIMIT).max(1);
     let mut matches = Vec::new();
@@ -171,8 +173,8 @@ pub fn search_workspace_text(
 }
 
 #[tauri::command]
-pub fn read_workspace_file(path: String) -> Result<String, String> {
-    let normalized = normalize_existing_path(&path)?;
+pub fn read_workspace_file(path: String, root_path: Option<String>) -> Result<String, String> {
+    let normalized = normalize_workspace_file_path(&path, root_path.as_deref())?;
     let metadata = fs::metadata(&normalized).map_err(|error| error.to_string())?;
     if metadata.len() as usize > MAX_FILE_SIZE_BYTES {
         return Err("파일이 너무 커서 한 번에 읽을 수 없습니다.".to_string());
@@ -415,6 +417,31 @@ fn normalize_project_paths(project_paths: Vec<String>) -> Result<Vec<PathBuf>, S
     Ok(roots)
 }
 
+fn normalize_workspace_roots(
+    project_paths: Vec<String>,
+    root_path: Option<&str>,
+) -> Result<Vec<PathBuf>, String> {
+    let mut roots = Vec::new();
+
+    if let Some(root_path) = root_path.map(str::trim).filter(|value| !value.is_empty()) {
+        let root = normalize_existing_path(root_path)?;
+        if !root.is_dir() {
+            return Err(format!("폴더 경로가 아닙니다: {root_path}"));
+        }
+        roots.push(root);
+    }
+
+    roots.extend(normalize_project_paths(project_paths).unwrap_or_default());
+
+    if roots.is_empty() {
+        return Err("탐색할 프로젝트 경로가 없습니다.".to_string());
+    }
+
+    roots.sort();
+    roots.dedup();
+    Ok(roots)
+}
+
 fn normalize_existing_path(path: &str) -> Result<PathBuf, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
@@ -427,6 +454,37 @@ fn normalize_existing_path(path: &str) -> Result<PathBuf, String> {
     }
 
     normalized.canonicalize().map_err(|error| error.to_string())
+}
+
+fn normalize_workspace_file_path(path: &str, root_path: Option<&str>) -> Result<PathBuf, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("경로가 비어 있습니다.".to_string());
+    }
+
+    let path_buf = PathBuf::from(trimmed);
+    if path_buf.is_absolute() {
+        return normalize_existing_path(trimmed);
+    }
+
+    let Some(root_path) = root_path.map(str::trim).filter(|value| !value.is_empty()) else {
+        return normalize_existing_path(trimmed);
+    };
+
+    let root = normalize_existing_path(root_path)?;
+    if !root.is_dir() {
+        return Err(format!("폴더 경로가 아닙니다: {root_path}"));
+    }
+
+    let candidate = root.join(&path_buf);
+    let canonical = candidate
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    if !canonical.starts_with(&root) {
+        return Err("루트 폴더 밖의 파일은 읽을 수 없습니다.".to_string());
+    }
+
+    Ok(canonical)
 }
 
 fn should_skip_entry(path: &Path) -> bool {

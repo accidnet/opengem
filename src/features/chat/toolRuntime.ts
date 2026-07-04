@@ -38,14 +38,17 @@ type ShellCommandArgs = {
 
 type WorkspaceSearchArgs = {
   query: string;
+  rootPath?: string;
   limit?: number;
 };
 
 type WorkspaceReadFileArgs = {
   path: string;
+  rootPath?: string;
 };
 
 type WorkspaceListFilesArgs = {
+  rootPath?: string;
   query?: string;
   limit?: number;
 };
@@ -81,7 +84,7 @@ function formatSearchMatches(matches: WorkspaceFileMatch[]) {
   return matches.map((match) => `${match.path}:${match.lineNumber}\n${match.line}`).join("\n\n");
 }
 
-export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefinition[] {
+export function createChatToolDefinitions(): LLMToolDefinition[] {
   const definitions: LLMToolDefinition[] = [
     {
       type: "function",
@@ -105,10 +108,6 @@ export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefini
     },
   ];
 
-  if (projectPaths.length === 0) {
-    return definitions;
-  }
-
   definitions.push(
     {
       type: "function",
@@ -120,6 +119,11 @@ export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefini
             query: {
               type: "string",
               description: "Text or symbol query to search for.",
+            },
+            rootPath: {
+              type: "string",
+              description:
+                "Optional folder path to search when the user provides a directory that is not attached to the session.",
             },
             limit: {
               type: "number",
@@ -139,7 +143,11 @@ export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefini
           {
             path: {
               type: "string",
-              description: "Absolute or workspace-relative file path to read.",
+              description: "Absolute file path or a path relative to rootPath.",
+            },
+            rootPath: {
+              type: "string",
+              description: "Optional folder path used to resolve relative file paths.",
             },
           },
           ["path"]
@@ -153,6 +161,11 @@ export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefini
         description: WORKSPACE_LIST_FILES_PROMPT.trim(),
         parameters: createObjectSchema(
           {
+            rootPath: {
+              type: "string",
+              description:
+                "Optional folder path to list when the user provides a directory that is not attached to the session.",
+            },
             query: {
               type: "string",
               description: "Optional filename/path filter.",
@@ -200,6 +213,7 @@ export async function executeChatToolCall(
       const args = parseArguments<WorkspaceSearchArgs>(toolCall.arguments);
       const matches = await invoke<WorkspaceFileMatch[]>("search_workspace_text", {
         projectPaths,
+        rootPath: args.rootPath || null,
         query: args.query,
         limit: args.limit ?? DEFAULT_SEARCH_LIMIT,
       });
@@ -215,6 +229,7 @@ export async function executeChatToolCall(
       const args = parseArguments<WorkspaceReadFileArgs>(toolCall.arguments);
       const content = await invoke<string>("read_workspace_file", {
         path: args.path,
+        rootPath: args.rootPath || null,
       });
 
       return {
@@ -228,6 +243,7 @@ export async function executeChatToolCall(
       const args = parseArguments<WorkspaceListFilesArgs>(toolCall.arguments);
       const files = await invoke<string[]>("list_workspace_files", {
         projectPaths,
+        rootPath: args.rootPath || null,
         query: args.query || null,
         limit: args.limit ?? DEFAULT_FILE_LIMIT,
       });

@@ -209,7 +209,7 @@ async function runMainAgentLoop(input: {
   maxAgentSteps?: number | null;
 }): Promise<AgentLoopResult> {
   const toolDefinitions = supportsStructuredToolLoop(input.activeSettings)
-    ? createChatToolDefinitions(input.projectPaths)
+    ? createChatToolDefinitions()
     : [];
   const systemPrompt = composeChatSystemPrompt({
     model: input.mainAgent.model?.trim() || input.activeSettings.model,
