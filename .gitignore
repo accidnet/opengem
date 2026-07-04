@@ -12,3 +12,9 @@ temp*
 .env.local
 .env.production
 /data/
+
+# Tauri updater signing keys
+.tauri/
+*.key
+*.key.pub
+*.key.password

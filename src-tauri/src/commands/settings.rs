@@ -7,8 +7,8 @@ use crate::commands::settings_types::{
     StoredProviderSettings, TokenResponse,
 };
 use crate::repositories::settings_repository::{
-    clear_credential, load_available_providers, load_providers, load_settings, save_credential,
-    save_provider_settings, save_selection, load_credential,
+    clear_credential, load_available_providers, load_credential, load_providers, load_settings,
+    save_credential, save_provider_settings, save_selection,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
@@ -58,7 +58,9 @@ fn resolve_preferred_provider_kind(input: &SaveLlmSettingsInput) -> String {
     let (oauth_priority, api_key_priority) =
         normalize_openai_priorities(input.openai_oauth_priority, input.openai_api_key_priority);
 
-    if input.openai_oauth_enabled && (!input.openai_api_key_enabled || oauth_priority < api_key_priority) {
+    if input.openai_oauth_enabled
+        && (!input.openai_api_key_enabled || oauth_priority < api_key_priority)
+    {
         "oauth".to_string()
     } else {
         "api-key".to_string()

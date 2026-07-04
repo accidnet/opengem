@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "opengem",
   "version": "0.1.0",
-  "identifier": "com.opengem.app",
+  "identifier": "com.opengem.desktop",
   "build": {
     "beforeDevCommand": "pnpm run dev",
     "beforeBuildCommand": "pnpm run build",
@@ -21,6 +21,19 @@
     ]
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlBOTU3RUM2MkI5MkUzNkYKUldSdjQ1SXJ4bjZWbXVHd0Job0ZzWTBsRkNiUlFpcU5FNWdXcVRkOENFNjNicjJsblJVeDFLMCsK",
+      "endpoints": [
+        "https://github.com/accidnet/opengem/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

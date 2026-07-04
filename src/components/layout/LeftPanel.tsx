@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ModelSelect } from "@/components/ModelSelect";
 import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
+import type { useAppUpdater } from "@/hooks/useAppUpdater";
 
 import { AgentSettingsModal } from "./left-panel/AgentSettingsModal";
 import { AgentsSection } from "./left-panel/AgentsSection";
@@ -11,7 +12,12 @@ import { DEFAULT_AGENT_MODEL } from "./left-panel/constants";
 import { ModeSection } from "./left-panel/ModeSection";
 import { ModeSettingsModal } from "./left-panel/ModeSettingsModal";
 import { ToolsSection } from "./left-panel/ToolsSection";
-import type { AgentIconOption, AgentSettingsTab, DraftAgentItem, DraftModeItem } from "./left-panel/types";
+import type {
+  AgentIconOption,
+  AgentSettingsTab,
+  DraftAgentItem,
+  DraftModeItem,
+} from "./left-panel/types";
 import { parseConfigList } from "./left-panel/utils";
 
 type QuickEditAgentDraft = {
@@ -41,7 +47,12 @@ type LeftPanelProps = {
     nextModes: Mode[],
     nextModeIcons: Record<Mode, ModeIcon>,
     nextSelectedMode: Mode,
-    modeItems: Array<{ name: Mode; originalName?: Mode; projectPaths?: string[]; defaultModel?: string }>
+    modeItems: Array<{
+      name: Mode;
+      originalName?: Mode;
+      projectPaths?: string[];
+      defaultModel?: string;
+    }>
   ) => void | Promise<void>;
   onSaveAgents: (nextAgents: AgentItem[]) => void | Promise<void>;
   getModeIcon: (mode: Mode) => ModeIcon;
@@ -52,6 +63,7 @@ type LeftPanelProps = {
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
   onSessionDelete: (session: SessionItem) => void | Promise<void>;
   tools: string[];
+  updater: ReturnType<typeof useAppUpdater>;
 };
 
 export function LeftPanel({
@@ -69,6 +81,7 @@ export function LeftPanel({
   onSessionSelect,
   onSessionDelete,
   tools,
+  updater,
 }: LeftPanelProps) {
   const [openModes, setOpenModes] = useState<Record<Mode, boolean>>({});
   const [isModeSettingsOpen, setIsModeSettingsOpen] = useState(false);
@@ -93,8 +106,10 @@ export function LeftPanel({
   const [agentNameError, setAgentNameError] = useState("");
   const [quickEditAgentIndex, setQuickEditAgentIndex] = useState<number | null>(null);
   const [quickEditAgentDraft, setQuickEditAgentDraft] = useState<QuickEditAgentDraft | null>(null);
-  const [quickEditPopoverPosition, setQuickEditPopoverPosition] = useState<QuickEditPopoverPosition | null>(null);
-  const [quickEditPopoverAnchor, setQuickEditPopoverAnchor] = useState<QuickEditPopoverAnchor | null>(null);
+  const [quickEditPopoverPosition, setQuickEditPopoverPosition] =
+    useState<QuickEditPopoverPosition | null>(null);
+  const [quickEditPopoverAnchor, setQuickEditPopoverAnchor] =
+    useState<QuickEditPopoverAnchor | null>(null);
   const [quickEditError, setQuickEditError] = useState("");
   const suppressOverlayCloseRef = useRef(false);
   const quickEditPopoverRef = useRef<HTMLElement | null>(null);
@@ -365,7 +380,9 @@ export function LeftPanel({
     }
 
     setNewModeProjectPaths((prev) => {
-      const exists = prev.some((projectPath) => projectPath.toLowerCase() === normalizedPath.toLowerCase());
+      const exists = prev.some(
+        (projectPath) => projectPath.toLowerCase() === normalizedPath.toLowerCase()
+      );
       if (exists) {
         return prev;
       }
@@ -411,7 +428,9 @@ export function LeftPanel({
     }
 
     setNewModeProjectPaths((prev) => {
-      const exists = prev.some((projectPath) => projectPath.toLowerCase() === selectedPath.toLowerCase());
+      const exists = prev.some(
+        (projectPath) => projectPath.toLowerCase() === selectedPath.toLowerCase()
+      );
       if (exists) {
         return prev;
       }
@@ -491,7 +510,9 @@ export function LeftPanel({
             return false;
           }
 
-          return items.findIndex((item) => item.toLowerCase() === projectPath.toLowerCase()) === index;
+          return (
+            items.findIndex((item) => item.toLowerCase() === projectPath.toLowerCase()) === index
+          );
         }),
     }));
 
@@ -732,7 +753,9 @@ export function LeftPanel({
     }
 
     const duplicateName = agents.some(
-      (agent, index) => index !== quickEditAgentIndex && agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
+      (agent, index) =>
+        index !== quickEditAgentIndex &&
+        agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (duplicateName) {
       setQuickEditError("?? ??? ????? ?? ???.");
@@ -771,6 +794,10 @@ export function LeftPanel({
     handleCancelQuickEditAgent();
   };
 
+  const handleCheckUpdate = async () => {
+    await updater.checkForUpdate({ install: updater.isUpdateAvailable });
+  };
+
   return (
     <aside className="left-panel">
       <ModeSection
@@ -794,6 +821,24 @@ export function LeftPanel({
         onQuickEditAgentChange={handleQuickEditAgentChange}
       />
       <ToolsSection tools={tools} />
+      <section className="panel-block app-update-block">
+        <div className="app-update-copy">
+          <h3 className="section-title">App Update</h3>
+          <span>{updater.message}</span>
+        </div>
+        <button
+          className="app-update-btn"
+          type="button"
+          disabled={!updater.canCheck || updater.isBusy}
+          title={updater.message}
+          onClick={() => void handleCheckUpdate()}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            {updater.isUpdateAvailable ? "system_update_alt" : "sync"}
+          </span>
+          <span>{updater.isUpdateAvailable ? "설치" : "확인"}</span>
+        </button>
+      </section>
 
       <ModeSettingsModal
         isOpen={isModeSettingsOpen}
@@ -825,7 +870,9 @@ export function LeftPanel({
         onDraftModeNameChange={handleDraftModeNameChange}
         onDraftModeIconChange={handleDraftModeIconChange}
         onDraftModeDefaultModelChange={(id, value) => {
-          setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, defaultModel: value } : mode)));
+          setDraftModes((prev) =>
+            prev.map((mode) => (mode.id === id ? { ...mode, defaultModel: value } : mode))
+          );
         }}
         onAddDraftModeProjectPath={handleAddDraftModeProjectPath}
         onPickDraftModeProjectPath={handlePickDraftModeProjectPath}
@@ -876,7 +923,11 @@ export function LeftPanel({
       />
 
       {quickEditAgentIndex !== null && quickEditAgentDraft && quickEditPopoverPosition && (
-        <div className="agent-quick-popover-backdrop" role="presentation" onClick={handleCancelQuickEditAgent}>
+        <div
+          className="agent-quick-popover-backdrop"
+          role="presentation"
+          onClick={handleCancelQuickEditAgent}
+        >
           <section
             className="agent-quick-popover"
             ref={quickEditPopoverRef}
@@ -932,7 +983,9 @@ export function LeftPanel({
                 <select
                   className="mode-settings-select"
                   value={quickEditAgentDraft.role}
-                  onChange={(event) => handleQuickEditAgentChange("role", event.target.value as AgentRole)}
+                  onChange={(event) =>
+                    handleQuickEditAgentChange("role", event.target.value as AgentRole)
+                  }
                 >
                   <option value="main">main</option>
                   <option value="sub">sub</option>
@@ -950,10 +1003,18 @@ export function LeftPanel({
             </div>
 
             <footer className="agent-quick-popover-footer">
-              <button className="settings-secondary-btn agent-quick-popover-btn" type="button" onClick={handleCancelQuickEditAgent}>
+              <button
+                className="settings-secondary-btn agent-quick-popover-btn"
+                type="button"
+                onClick={handleCancelQuickEditAgent}
+              >
                 취소
               </button>
-              <button className="settings-primary-btn agent-quick-popover-btn" type="button" onClick={() => void handleSaveQuickEditAgent()}>
+              <button
+                className="settings-primary-btn agent-quick-popover-btn"
+                type="button"
+                onClick={() => void handleSaveQuickEditAgent()}
+              >
                 저장
               </button>
             </footer>

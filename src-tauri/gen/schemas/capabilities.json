@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"기본 데스크톱 창 권한","local":true,"windows":["main"],"permissions":["core:default","updater:default","process:default"]}}

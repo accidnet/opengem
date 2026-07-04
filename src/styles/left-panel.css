@@ -177,6 +177,57 @@
   color: #fda4af;
 }
 
+.app-update-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-update-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.app-update-copy span {
+  color: var(--text-soft);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-update-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 66px;
+  height: 32px;
+  padding: 0 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-update-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--panel-lift);
+}
+
+.app-update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-update-btn .material-symbols-outlined {
+  font-size: 17px;
+}
+
 .mode-settings-modal {
   width: min(860px, 100%);
   border-radius: 14px;

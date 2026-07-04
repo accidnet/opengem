@@ -30,7 +30,8 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
         let api_key = load_credential(connection, DEFAULT_PROVIDER_KEY, "api-key")?;
         resolve_active_provider_credential(&selection, &oauth, &api_key)
     } else {
-        let provider_kind = normalize_provider_kind(&selection.provider_id, &selection.provider_kind);
+        let provider_kind =
+            normalize_provider_kind(&selection.provider_id, &selection.provider_kind);
         let selected = load_credential(connection, &selection.provider_id, &provider_kind)?;
         (provider_kind, selected)
     };
@@ -100,17 +101,18 @@ pub fn load_available_providers(
     for row in rows {
         let (provider_id, credential_type, api_url, api_key, refresh_token, email) =
             row.map_err(|error| error.to_string())?;
-        let entry = grouped
-            .entry(provider_id.clone())
-            .or_insert_with(|| AvailableProviderPayload {
-                provider_id: provider_id.clone(),
-                credential_types: Vec::new(),
-                api_url: None,
-                api_urls: std::collections::BTreeMap::new(),
-                has_api_key: false,
-                logged_in: false,
-                email: None,
-            });
+        let entry =
+            grouped
+                .entry(provider_id.clone())
+                .or_insert_with(|| AvailableProviderPayload {
+                    provider_id: provider_id.clone(),
+                    credential_types: Vec::new(),
+                    api_url: None,
+                    api_urls: std::collections::BTreeMap::new(),
+                    has_api_key: false,
+                    logged_in: false,
+                    email: None,
+                });
 
         let Some(credential_type) = credential_type else {
             continue;

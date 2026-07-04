@@ -6,6 +6,7 @@ import { LeftPanel } from "../../components/layout/LeftPanel";
 import { RightPanel } from "../../components/layout/RightPanel";
 import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
+import { useAppUpdater } from "../../hooks/useAppUpdater";
 import { useChatController } from "./hooks/useChatController";
 
 const MIN_LEFT_PANEL_WIDTH = 180;
@@ -19,6 +20,7 @@ export function ChatPage() {
   const [rightPanelWidth, setRightPanelWidth] = useState(270);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
+  const appUpdater = useAppUpdater();
 
   const {
     chatGPTLoginUrl,
@@ -87,13 +89,19 @@ export function ChatPage() {
 
       if (isResizingLeftPanel && window.innerWidth > 980) {
         const nextWidth = event.clientX - gridBounds.left;
-        const clampedWidth = Math.min(Math.max(nextWidth, MIN_LEFT_PANEL_WIDTH), MAX_LEFT_PANEL_WIDTH);
+        const clampedWidth = Math.min(
+          Math.max(nextWidth, MIN_LEFT_PANEL_WIDTH),
+          MAX_LEFT_PANEL_WIDTH
+        );
         setLeftPanelWidth(clampedWidth);
       }
 
       if (isResizingRightPanel && window.innerWidth > 1280) {
         const nextWidth = gridBounds.right - event.clientX;
-        const clampedWidth = Math.min(Math.max(nextWidth, MIN_RIGHT_PANEL_WIDTH), MAX_RIGHT_PANEL_WIDTH);
+        const clampedWidth = Math.min(
+          Math.max(nextWidth, MIN_RIGHT_PANEL_WIDTH),
+          MAX_RIGHT_PANEL_WIDTH
+        );
         setRightPanelWidth(clampedWidth);
       }
     };
@@ -170,6 +178,7 @@ export function ChatPage() {
           onSessionSelect={handleSessionSelect}
           onSessionDelete={handleSessionDelete}
           tools={TOOLS}
+          updater={appUpdater}
         />
 
         <div
