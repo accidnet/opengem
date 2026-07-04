@@ -11,7 +11,6 @@
 ## 빠른 개발 시작
 
 - 자세한 개발 환경 설정 가이드는 다음 [링크](docs/development-setup.md)를 참고하세요.
-
 - 개발 시에는 기본적으로 `pnpm`을 활용합니다.
 
 ### 1. 사전 설치
@@ -64,3 +63,7 @@ pnpm run tauri:dev
 ### 메인 화면 2 (개발 모드)
 
 ![OpenGem UI 좌측 패널](docs/uiux2.PNG)
+
+## 배포
+
+- 릴리즈와 자동 업데이트 절차는 다음 [링크](docs/release.md)를 참고하세요.
