@@ -40,7 +40,7 @@ export async function request(input: AIRequest): Promise<AIResponse> {
     case "google-gemini-direct":
       return sendToGemini(input);
     case "openai-compatible-direct":
-      return sendToOpenAIOAuth(input);
+      return sendToOpenAICompatible(input);
     default:
       return sendToOpenAIOAuth(input);
   }

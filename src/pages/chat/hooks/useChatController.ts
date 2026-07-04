@@ -96,6 +96,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   useEffect(() => {
     void loadOperationModes();
+    // 컨트롤러 팩토리가 매 렌더마다 함수를 생성하므로 초기 로드만 실행합니다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
