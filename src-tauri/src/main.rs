@@ -409,6 +409,7 @@ fn main() {
             commands::settings::open_external_url,
             commands::settings::logout_chatgpt,
             commands::workspace::list_workspace_files,
+            commands::workspace::list_workspace_directory,
             commands::workspace::search_workspace_text,
             commands::workspace::read_workspace_file,
             commands::workspace::list_workspace_skills,

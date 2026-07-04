@@ -1,4 +1,5 @@
 Reads a workspace file and returns its contents.
 
 - Use this after locating a relevant file through search or when the user references a known path.
+- Paths are resolved inside the attached project paths; prefer workspace-relative paths when available.
 - Prefer reading only the files that matter to the current step.

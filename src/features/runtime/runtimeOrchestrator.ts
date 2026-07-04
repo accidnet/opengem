@@ -11,6 +11,12 @@ type WorkspaceFileMatch = {
   line: string;
 };
 
+type WorkspaceDirectoryEntry = {
+  path: string;
+  name: string;
+  kind: "directory" | "file" | "other";
+};
+
 type WorkspaceDocument = {
   name: string;
   description: string;
@@ -45,14 +51,18 @@ type CommandLineResult = {
 type RuntimeAction =
   | {
       type: "tool";
-      toolName: "workspace_search" | "workspace_read_file" | "workspace_list_files";
+      toolName:
+        | "workspace_search"
+        | "workspace_read_file"
+        | "workspace_list_files"
+        | "workspace_list_directory";
       input?: Record<string, unknown>;
       reason?: string;
     }
   | {
       type: "mcp";
       server: "workspace";
-      operation: "search_text" | "read_file" | "list_files";
+      operation: "search_text" | "read_file" | "list_files" | "list_directory";
       input?: Record<string, unknown>;
       reason?: string;
     }
@@ -112,15 +122,17 @@ type ExecuteRuntimeInput = {
 };
 
 const BUILTIN_TOOL_LINES = [
-  "- workspace_search: 프로젝트 경로 안에서 텍스트를 검색한다. 입력 예시: {\"query\":\"tool registry\"}",
-  "- workspace_read_file: 파일 내용을 읽는다. 입력 예시: {\"path\":\"C:/repo/src/App.tsx\"}",
-  "- workspace_list_files: 파일 경로 목록을 나열한다. 입력 예시: {\"query\":\"prompt\"}",
+  '- workspace_search: 프로젝트 경로 안에서 텍스트를 검색한다. 입력 예시: {"query":"tool registry"}',
+  '- workspace_read_file: 파일 내용을 읽는다. 입력 예시: {"path":"C:/repo/src/App.tsx"}',
+  '- workspace_list_files: 파일 경로 목록을 나열한다. 입력 예시: {"query":"prompt"}',
+  '- workspace_list_directory: 특정 폴더의 바로 아래 항목을 나열한다. 입력 예시: {"path":"src"}',
 ];
 
 const MCP_LINES = [
   "- workspace.search_text: 워크스페이스 텍스트 검색",
   "- workspace.read_file: 워크스페이스 파일 읽기",
   "- workspace.list_files: 워크스페이스 파일 목록 조회",
+  "- workspace.list_directory: 워크스페이스 폴더 항목 조회",
 ];
 
 export async function executeRuntimePlan(
@@ -239,9 +251,7 @@ async function decideRuntimePlan(input: {
 }): Promise<RuntimePlan | null> {
   const skillsText =
     input.catalog.skills.length > 0
-      ? input.catalog.skills
-          .map((skill) => `- ${skill.name}: ${skill.description}`)
-          .join("\n")
+      ? input.catalog.skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")
       : "- none";
   const commandsText =
     input.catalog.commands.length > 0
@@ -265,8 +275,8 @@ async function decideRuntimePlan(input: {
     '{"shouldUseRuntime":boolean,"summary":"string","actions":[{"type":"tool|mcp|skill|command|shell","reason":"string", "...":"fields depending on type"}]}',
     "",
     "Tool fields:",
-    '- tool => {"type":"tool","toolName":"workspace_search|workspace_read_file|workspace_list_files","input":{...}}',
-    '- mcp => {"type":"mcp","server":"workspace","operation":"search_text|read_file|list_files","input":{...}}',
+    '- tool => {"type":"tool","toolName":"workspace_search|workspace_read_file|workspace_list_files|workspace_list_directory","input":{...}}',
+    '- mcp => {"type":"mcp","server":"workspace","operation":"search_text|read_file|list_files|list_directory","input":{...}}',
     '- skill => {"type":"skill","name":"skill name"}',
     '- command => {"type":"command","name":"command name","arguments":"free text args"}',
     '- shell => {"type":"shell","command":"actual shell command","cwd":"optional path"}',
@@ -406,7 +416,9 @@ async function executeToolAction(
   if (action.toolName === "workspace_read_file") {
     const path = getStringInput(action.input, "path");
     const content = path
-      ? await invoke<string>("read_workspace_file", { path }).catch((error) => String(error))
+      ? await invoke<string>("read_workspace_file", { projectPaths, path }).catch((error) =>
+          String(error)
+        )
       : "path missing";
     return {
       logs: [
@@ -420,6 +432,33 @@ async function executeToolAction(
           kind: "tool",
           title: path || "workspace_read_file",
           content,
+        },
+      ],
+    };
+  }
+
+  if (action.toolName === "workspace_list_directory") {
+    const path = getStringInput(action.input, "path");
+    const entries = await invoke<WorkspaceDirectoryEntry[]>("list_workspace_directory", {
+      projectPaths,
+      path: path || null,
+      limit: 100,
+    }).catch(() => []);
+
+    return {
+      logs: [
+        {
+          title: `tool: ${action.toolName}`,
+          detail: `${entries.length} entries listed`,
+        },
+      ],
+      artifacts: [
+        {
+          kind: "tool",
+          title: path || "workspace_list_directory",
+          content: entries
+            .map((entry) => `[${entry.kind}] ${entry.name}\n${entry.path}`)
+            .join("\n\n"),
         },
       ],
     };
@@ -465,11 +504,17 @@ async function executeMcpAction(
             toolName: "workspace_read_file",
             input: action.input,
           } as const)
-        : ({
-            type: "tool",
-            toolName: "workspace_list_files",
-            input: action.input,
-          } as const);
+        : action.operation === "list_directory"
+          ? ({
+              type: "tool",
+              toolName: "workspace_list_directory",
+              input: action.input,
+            } as const)
+          : ({
+              type: "tool",
+              toolName: "workspace_list_files",
+              input: action.input,
+            } as const);
 
   const result = await executeToolAction(translated, projectPaths);
   return {
@@ -575,16 +620,18 @@ async function executeShellAction(action: Extract<RuntimeAction, { type: "shell"
       command: action.command,
       cwd: action.cwd || null,
     },
-  }).catch((error): CommandLineResult => ({
-    command: action.command,
-    cwd: action.cwd || "",
-    shell: "",
-    exitCode: null,
-    stdout: "",
-    stderr: String(error),
-    combinedOutput: String(error),
-    success: false,
-  }));
+  }).catch(
+    (error): CommandLineResult => ({
+      command: action.command,
+      cwd: action.cwd || "",
+      shell: "",
+      exitCode: null,
+      stdout: "",
+      stderr: String(error),
+      combinedOutput: String(error),
+      success: false,
+    })
+  );
 
   return {
     logs: [

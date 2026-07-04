@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { LLMToolCall, LLMToolDefinition } from "@/features/ai";
 
 import SHELL_COMMAND_PROMPT from "@/features/chat/tools/prompts/shell-command.txt?raw";
+import WORKSPACE_LIST_DIRECTORY_PROMPT from "@/features/chat/tools/prompts/workspace-list-directory.txt?raw";
 import WORKSPACE_LIST_FILES_PROMPT from "@/features/chat/tools/prompts/workspace-list-files.txt?raw";
 import WORKSPACE_READ_FILE_PROMPT from "@/features/chat/tools/prompts/workspace-read-file.txt?raw";
 import WORKSPACE_SEARCH_PROMPT from "@/features/chat/tools/prompts/workspace-search.txt?raw";
@@ -11,6 +12,12 @@ type WorkspaceFileMatch = {
   path: string;
   lineNumber: number;
   line: string;
+};
+
+type WorkspaceDirectoryEntry = {
+  path: string;
+  name: string;
+  kind: "directory" | "file" | "other";
 };
 
 type CommandLineResult = {
@@ -50,6 +57,11 @@ type WorkspaceListFilesArgs = {
   limit?: number;
 };
 
+type WorkspaceListDirectoryArgs = {
+  path?: string;
+  limit?: number;
+};
+
 const DEFAULT_FILE_LIMIT = 100;
 const DEFAULT_SEARCH_LIMIT = 20;
 
@@ -79,6 +91,14 @@ function formatSearchMatches(matches: WorkspaceFileMatch[]) {
   }
 
   return matches.map((match) => `${match.path}:${match.lineNumber}\n${match.line}`).join("\n\n");
+}
+
+function formatDirectoryEntries(entries: WorkspaceDirectoryEntry[]) {
+  if (entries.length === 0) {
+    return "No entries found.";
+  }
+
+  return entries.map((entry) => `[${entry.kind}] ${entry.name}\n${entry.path}`).join("\n\n");
 }
 
 export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefinition[] {
@@ -165,6 +185,26 @@ export function createChatToolDefinitions(projectPaths: string[]): LLMToolDefini
           []
         ),
       },
+    },
+    {
+      type: "function",
+      function: {
+        name: "workspace_list_directory",
+        description: WORKSPACE_LIST_DIRECTORY_PROMPT.trim(),
+        parameters: createObjectSchema(
+          {
+            path: {
+              type: "string",
+              description: "Optional absolute or workspace-relative directory path to list.",
+            },
+            limit: {
+              type: "number",
+              description: "Optional maximum number of directory entries to return.",
+            },
+          },
+          []
+        ),
+      },
     }
   );
 
@@ -214,6 +254,7 @@ export async function executeChatToolCall(
     case "workspace_read_file": {
       const args = parseArguments<WorkspaceReadFileArgs>(toolCall.arguments);
       const content = await invoke<string>("read_workspace_file", {
+        projectPaths,
         path: args.path,
       });
 
@@ -222,6 +263,21 @@ export async function executeChatToolCall(
         title: args.path,
         content,
         logs: ["file read completed"],
+      };
+    }
+    case "workspace_list_directory": {
+      const args = parseArguments<WorkspaceListDirectoryArgs>(toolCall.arguments);
+      const entries = await invoke<WorkspaceDirectoryEntry[]>("list_workspace_directory", {
+        projectPaths,
+        path: args.path || null,
+        limit: args.limit ?? DEFAULT_FILE_LIMIT,
+      });
+
+      return {
+        toolName: toolCall.name,
+        title: args.path?.trim() || "workspace_list_directory",
+        content: formatDirectoryEntries(entries),
+        logs: [`entries=${entries.length}`],
       };
     }
     case "workspace_list_files": {
