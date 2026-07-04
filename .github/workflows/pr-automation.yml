@@ -1,0 +1,139 @@
+name: PR Automation
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  label-pr:
+    name: Label PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply PR labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pull = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+
+            const changedFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pull.number,
+              per_page: 100,
+            });
+
+            const labels = new Set();
+            const fileNames = changedFiles.map((file) => file.filename);
+            const additions = changedFiles.reduce((sum, file) => sum + file.additions, 0);
+            const deletions = changedFiles.reduce((sum, file) => sum + file.deletions, 0);
+            const changedLines = additions + deletions;
+
+            const pathRules = [
+              { label: "area: frontend", color: "1d76db", description: "React, UI, 스타일 영역", test: (file) => file.startsWith("src/") },
+              { label: "area: tauri", color: "5319e7", description: "Tauri 또는 Rust 백엔드 영역", test: (file) => file.startsWith("src-tauri/") },
+              { label: "area: docs", color: "0075ca", description: "문서 영역", test: (file) => file.startsWith("docs/") || file.toLowerCase().endsWith(".md") },
+              { label: "area: config", color: "fbca04", description: "설정 또는 빌드 구성 영역", test: (file) => /(^|\/)(package\.json|pnpm-lock\.yaml|vite\.config\.js|tsconfig|eslint|prettier|tauri\.conf\.json)/.test(file) },
+              { label: "area: ci", color: "0e8a16", description: "GitHub Actions 또는 CI 영역", test: (file) => file.startsWith(".github/") },
+            ];
+
+            for (const rule of pathRules) {
+              if (fileNames.some(rule.test)) {
+                labels.add(rule.label);
+              }
+            }
+
+            if (changedLines < 50) {
+              labels.add("size: XS");
+            } else if (changedLines < 200) {
+              labels.add("size: S");
+            } else if (changedLines < 500) {
+              labels.add("size: M");
+            } else {
+              labels.add("size: L");
+            }
+
+            const allLabels = [
+              ...pathRules.map(({ label, color, description }) => ({ label, color, description })),
+              { label: "size: XS", color: "c2e0c6", description: "변경 줄 수 50줄 미만" },
+              { label: "size: S", color: "bfdadc", description: "변경 줄 수 200줄 미만" },
+              { label: "size: M", color: "bfd4f2", description: "변경 줄 수 500줄 미만" },
+              { label: "size: L", color: "d93f0b", description: "변경 줄 수 500줄 이상" },
+              { label: "needs issue", color: "ededed", description: "연결 이슈 확인 필요" },
+            ];
+
+            // 라벨이 없는 저장소에서도 첫 실행부터 동작하도록 필요한 라벨을 생성합니다.
+            for (const item of allLabels) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: item.label });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: item.label,
+                  color: item.color,
+                  description: item.description,
+                });
+              }
+            }
+
+            const linkedIssuePattern = /(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#\d+|#\d+/i;
+            const noIssuePattern = /관련\s*이슈\s*:\s*없음|no\s+issue|without\s+issue/i;
+            const body = pull.body ?? "";
+            const hasLinkedIssue = linkedIssuePattern.test(body) || noIssuePattern.test(body);
+
+            if (!hasLinkedIssue) {
+              labels.add("needs issue");
+            }
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: pull.number,
+              labels: [...labels],
+            });
+
+            if (hasLinkedIssue) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: pull.number,
+                  name: "needs issue",
+                });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+              }
+            }
+
+            if (!hasLinkedIssue && !pull.draft) {
+              const marker = "<!-- opengem-needs-issue -->";
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: pull.number,
+                per_page: 100,
+              });
+
+              const alreadyCommented = comments.some((comment) => comment.body?.includes(marker));
+
+              if (!alreadyCommented) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pull.number,
+                  body: `${marker}\nPR 본문에 관련 이슈 번호를 적어 주세요. 예: \`Closes #123\` 또는 관련 이슈가 없으면 \`관련 이슈: 없음\`으로 남겨 주세요.`,
+                });
+              }
+            }

@@ -58,6 +58,17 @@ PR 제목 예시: `feat: 메시지 카드 렌더링 성능 개선`
 - 빌드(`pnpm run build`) 또는 실행 흐름(`pnpm run dev`, `pnpm run tauri:dev`)을 검증한다.
 - 변경 파일의 의도와 부작용이 문서(README/관련 가이드) 또는 PR 본문에 반영되었는지 확인한다.
 
+### GitHub 자동화
+
+PR을 열면 GitHub Actions가 아래 항목을 자동으로 처리합니다.
+
+- 변경 파일 경로에 따라 `area: frontend`, `area: tauri`, `area: docs`, `area: config`, `area: ci` 라벨을 붙입니다.
+- 변경 줄 수에 따라 `size: XS`, `size: S`, `size: M`, `size: L` 라벨을 붙입니다.
+- PR 본문에 `#123`, `Closes #123` 같은 이슈 참조가 없으면 `needs issue` 라벨과 안내 댓글을 남깁니다.
+- 관련 이슈가 없을 때는 PR 본문에 `관련 이슈: 없음`을 명시합니다.
+- `pnpm run env:check`, `pnpm run build`를 PR 품질 체크로 실행합니다.
+- `pnpm run format:check`, `pnpm run lint`는 현재 코드베이스 정리 후 필수 체크로 올립니다.
+
 PR 본문 템플릿:
 
 ```text
@@ -82,6 +93,17 @@ PR 본문 템플릿:
 - 재현 단계
 - 기대 동작/실제 동작
 - 관련 로그나 스크린샷
+
+이슈를 열면 제목과 본문을 기준으로 `bug`, `enhancement`, `question`, `area:*`, `priority:*` 라벨을 자동으로 붙입니다. 분류할 단서가 없으면 `needs triage` 라벨이 붙습니다.
+
+### 예약 작업
+
+Codex 예약 작업은 열린 이슈와 PR을 주기적으로 확인합니다.
+
+- 이슈 작업자는 열린 이슈 중 아직 연결 PR이 없는 항목을 하나 골라 작업하고 Draft PR을 생성합니다.
+- PR 병합 작업자는 열린 PR 중 충돌이 없고 검증이 통과한 항목을 하나 골라 검토 후 병합합니다.
+- 자동 판단이 어렵거나 사람이 봐야 할 위험이 있으면 `needs-human-review` 라벨을 붙이고 이유를 댓글로 남깁니다.
+- 자동화 전용 라벨은 사용하지 않으며, 사람이 만든 항목과 예약 작업이 만든 항목을 동일하게 취급합니다.
 
 ---
 
