@@ -41,6 +41,25 @@
   padding-left: 17px;
 }
 
+.activity-empty {
+  min-height: 160px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.activity-empty p {
+  margin: 0;
+  max-width: 180px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .timeline-item {
   display: flex;
   align-items: flex-start;
