@@ -23,6 +23,14 @@ pub struct WorkspaceFileMatchPayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceDirectoryEntryPayload {
+    path: String,
+    name: String,
+    kind: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceSkillSummaryPayload {
     name: String,
     description: String,
@@ -113,6 +121,72 @@ pub fn list_workspace_files(
 }
 
 #[tauri::command]
+pub fn list_workspace_directory(
+    project_paths: Vec<String>,
+    path: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<WorkspaceDirectoryEntryPayload>, String> {
+    let roots = normalize_project_paths(project_paths)?;
+    let directory = match path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => normalize_workspace_path(&roots, value)?,
+        None => roots
+            .first()
+            .cloned()
+            .ok_or_else(|| "탐색할 프로젝트 경로가 없습니다.".to_string())?,
+    };
+
+    if !directory.is_dir() {
+        return Err(format!(
+            "폴더 경로가 아닙니다: {}",
+            directory.to_string_lossy()
+        ));
+    }
+
+    let max_items = limit.unwrap_or(DEFAULT_FILE_LIMIT).max(1);
+    let mut entries = Vec::new();
+    let read_dir = fs::read_dir(&directory).map_err(|error| error.to_string())?;
+
+    for entry in read_dir {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if should_skip_entry(&path) {
+            continue;
+        }
+
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        let kind = if file_type.is_dir() {
+            "directory"
+        } else if file_type.is_file() {
+            "file"
+        } else {
+            "other"
+        };
+
+        entries.push(WorkspaceDirectoryEntryPayload {
+            path: path.to_string_lossy().to_string(),
+            name: entry.file_name().to_string_lossy().to_string(),
+            kind: kind.to_string(),
+        });
+
+        if entries.len() >= max_items {
+            break;
+        }
+    }
+
+    entries.sort_by(|left, right| {
+        left.kind
+            .cmp(&right.kind)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+
+    Ok(entries)
+}
+
+#[tauri::command]
 pub fn search_workspace_text(
     project_paths: Vec<String>,
     query: String,
@@ -171,8 +245,16 @@ pub fn search_workspace_text(
 }
 
 #[tauri::command]
-pub fn read_workspace_file(path: String) -> Result<String, String> {
-    let normalized = normalize_existing_path(&path)?;
+pub fn read_workspace_file(project_paths: Vec<String>, path: String) -> Result<String, String> {
+    let roots = normalize_project_paths(project_paths)?;
+    let normalized = normalize_workspace_path(&roots, &path)?;
+    if !normalized.is_file() {
+        return Err(format!(
+            "파일 경로가 아닙니다: {}",
+            normalized.to_string_lossy()
+        ));
+    }
+
     let metadata = fs::metadata(&normalized).map_err(|error| error.to_string())?;
     if metadata.len() as usize > MAX_FILE_SIZE_BYTES {
         return Err("파일이 너무 커서 한 번에 읽을 수 없습니다.".to_string());
@@ -427,6 +509,36 @@ fn normalize_existing_path(path: &str) -> Result<PathBuf, String> {
     }
 
     normalized.canonicalize().map_err(|error| error.to_string())
+}
+
+fn normalize_workspace_path(roots: &[PathBuf], path: &str) -> Result<PathBuf, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("경로가 비어 있습니다.".to_string());
+    }
+
+    let candidates: Vec<PathBuf> = if Path::new(trimmed).is_absolute() {
+        vec![PathBuf::from(trimmed)]
+    } else {
+        roots.iter().map(|root| root.join(trimmed)).collect()
+    };
+
+    for candidate in candidates {
+        if !candidate.exists() {
+            continue;
+        }
+
+        let canonical = candidate
+            .canonicalize()
+            .map_err(|error| error.to_string())?;
+        if roots.iter().any(|root| canonical.starts_with(root)) {
+            return Ok(canonical);
+        }
+    }
+
+    Err(format!(
+        "프로젝트 경로 안에서 경로를 찾을 수 없습니다: {trimmed}"
+    ))
 }
 
 fn should_skip_entry(path: &Path) -> bool {
