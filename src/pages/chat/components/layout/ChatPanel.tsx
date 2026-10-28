@@ -41,8 +41,6 @@ export function ChatPanel({
   const shouldFollowStreamRef = useRef(true);
   const lastTypingMessageIdRef = useRef<string | null>(null);
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
-  const [projectPathInput, setProjectPathInput] = useState("");
-  const [editingPath, setEditingPath] = useState<string | null>(null);
   const [projectError, setProjectError] = useState("");
 
   const projectPaths = currentSessionId ? currentSessionProjectPaths : defaultProjectPaths;
@@ -55,7 +53,9 @@ export function ChatPanel({
   };
 
   useEffect(() => {
-    const latestTypingMessage = [...messages].reverse().find((message) => message.type === "typing");
+    const latestTypingMessage = [...messages]
+      .reverse()
+      .find((message) => message.type === "typing");
     const latestTypingMessageId = latestTypingMessage?.id ?? null;
 
     if (latestTypingMessageId && latestTypingMessageId !== lastTypingMessageIdRef.current) {
@@ -114,21 +114,22 @@ export function ChatPanel({
     setProjectError("");
   };
 
-  const handleAddProjectPath = async () => {
-    const normalizedPath = normalizePath(projectPathInput);
-    if (!normalizedPath) {
-      setProjectError("프로젝트 폴더 경로를 입력해 주세요.");
+  const handleRemoveProjectPath = async (targetPath: string) => {
+    await persistProjectPaths(projectPaths.filter((path) => path !== targetPath));
+  };
+
+  const handlePickProjectPath = async () => {
+    if (!currentSessionId) {
+      setProjectError("세션을 생성한 뒤에 프로젝트 폴더를 설정할 수 있어요.");
       return;
     }
 
-    if (editingPath) {
-      const nextPaths = projectPaths.map((path) => (path === editingPath ? normalizedPath : path));
-      await persistProjectPaths(nextPaths);
-      setEditingPath(null);
-      setProjectPathInput("");
+    const pickedPath = await invoke<string | null>("pick_project_folder");
+    if (!pickedPath) {
       return;
     }
 
+    const normalizedPath = normalizePath(pickedPath);
     const exists = projectPaths.some((path) => path.toLowerCase() === normalizedPath.toLowerCase());
     if (exists) {
       setProjectError("이미 연결된 프로젝트 폴더예요.");
@@ -136,25 +137,6 @@ export function ChatPanel({
     }
 
     await persistProjectPaths([...projectPaths, normalizedPath]);
-    setProjectPathInput("");
-  };
-
-  const handleRemoveProjectPath = async (targetPath: string) => {
-    await persistProjectPaths(projectPaths.filter((path) => path !== targetPath));
-    if (editingPath === targetPath) {
-      setEditingPath(null);
-      setProjectPathInput("");
-    }
-  };
-
-  const handlePickProjectPath = async () => {
-    const pickedPath = await invoke<string | null>("pick_project_folder");
-    if (!pickedPath) {
-      return;
-    }
-
-    setProjectPathInput(normalizePath(pickedPath));
-    setProjectError("");
   };
 
   const handleChatViewportInteraction = () => {
@@ -215,11 +197,7 @@ export function ChatPanel({
                           type="button"
                           className="project-path-label"
                           title={projectPath}
-                          onClick={() => {
-                            setProjectPathInput(projectPath);
-                            setEditingPath(projectPath);
-                            setProjectError("");
-                          }}
+                          onClick={() => void onOpenProjectFolder(projectPath)}
                         >
                           {projectPath}
                         </button>
@@ -230,22 +208,11 @@ export function ChatPanel({
                             title="폴더 열기"
                             onClick={() => void onOpenProjectFolder(projectPath)}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "16px" }}
+                            >
                               folder_open
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="small-icon-btn"
-                            title="경로 수정"
-                            onClick={() => {
-                              setProjectPathInput(projectPath);
-                              setEditingPath(projectPath);
-                              setProjectError("");
-                            }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                              edit
                             </span>
                           </button>
                           <button
@@ -254,7 +221,10 @@ export function ChatPanel({
                             title="경로 제거"
                             onClick={() => void handleRemoveProjectPath(projectPath)}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "16px" }}
+                            >
                               close
                             </span>
                           </button>
@@ -267,23 +237,6 @@ export function ChatPanel({
                 </div>
 
                 <div className="project-path-editor">
-                  <input
-                    type="text"
-                    className="project-path-editor-input"
-                    value={projectPathInput}
-                    placeholder="프로젝트 폴더 경로 입력"
-                    onChange={(event) => {
-                      setProjectPathInput(event.target.value);
-                      setProjectError("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleAddProjectPath();
-                      }
-                    }}
-                    disabled={!currentSessionId}
-                  />
                   <div className="project-path-editor-actions">
                     <button
                       type="button"
@@ -295,17 +248,6 @@ export function ChatPanel({
                         folder_open
                       </span>
                       폴더 선택
-                    </button>
-                    <button
-                      type="button"
-                      className="chip project-chip-primary"
-                      onClick={() => void handleAddProjectPath()}
-                      disabled={!currentSessionId}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                        {editingPath ? "edit" : "add_circle"}
-                      </span>
-                      {editingPath ? "경로 수정" : "경로 추가"}
                     </button>
                   </div>
                   {projectError && <p className="project-path-error">{projectError}</p>}
