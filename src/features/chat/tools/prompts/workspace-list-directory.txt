@@ -2,4 +2,6 @@ Lists direct children of a workspace folder.
 
 - Use this when the user asks to inspect a specific folder or when you need a concise directory overview.
 - Pass a workspace-relative path when possible, or omit path to list the first attached project root.
+- If the user provides another folder, pass it as `rootPath`; omit `path` to list that folder, or pass a path within it.
+- When `rootPath` is present, only that folder is accessible. Otherwise paths must stay within attached projects.
 - Use workspace_list_files when you need a recursive file search instead.

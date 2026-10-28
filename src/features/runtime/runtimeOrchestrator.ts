@@ -122,10 +122,10 @@ type ExecuteRuntimeInput = {
 };
 
 const BUILTIN_TOOL_LINES = [
-  '- workspace_search: 프로젝트 경로 안에서 텍스트를 검색한다. 입력 예시: {"query":"tool registry"}',
-  '- workspace_read_file: 파일 내용을 읽는다. 입력 예시: {"path":"C:/repo/src/App.tsx"}',
-  '- workspace_list_files: 파일 경로 목록을 나열한다. 입력 예시: {"query":"prompt"}',
-  '- workspace_list_directory: 특정 폴더의 바로 아래 항목을 나열한다. 입력 예시: {"path":"src"}',
+  "- workspace_search: 프로젝트 경로 또는 rootPath 안에서 텍스트를 검색한다. 입력 예시: {\"query\":\"tool registry\",\"rootPath\":\"C:/repo\"}",
+  "- workspace_read_file: 파일 내용을 읽는다. 상대 경로는 rootPath와 함께 사용한다. 입력 예시: {\"path\":\"src/App.tsx\",\"rootPath\":\"C:/repo\"}",
+  "- workspace_list_files: 프로젝트 경로 또는 rootPath의 파일 경로 목록을 나열한다. 입력 예시: {\"rootPath\":\"C:/repo\",\"query\":\"prompt\"}",
+  '- workspace_list_directory: 특정 폴더의 바로 아래 항목을 나열한다. 입력 예시: {"rootPath":"C:/repo","path":"src"}',
 ];
 
 const MCP_LINES = [
@@ -138,10 +138,6 @@ const MCP_LINES = [
 export async function executeRuntimePlan(
   input: ExecuteRuntimeInput
 ): Promise<RuntimeExecutionResult | null> {
-  if (input.projectPaths.length === 0) {
-    return null;
-  }
-
   const catalog = await loadRuntimeCatalog(input.projectPaths);
   const plan = await decideRuntimePlan({
     text: input.text,
@@ -162,7 +158,10 @@ export async function executeRuntimePlan(
   for (const action of plan.actions.slice(0, 6)) {
     const statusText = formatActionStatus(action);
     input.onStatus?.(statusText);
-    const result = await executeAction(action, input.projectPaths, catalog);
+    const result = await executeAction(action, input.projectPaths, catalog).catch((error) => ({
+      logs: [{ title: formatActionStatus(action), detail: `실행 실패: ${String(error)}` }],
+      artifacts: [{ kind: "error", title: formatActionStatus(action), content: String(error) }],
+    }));
     artifacts.push(...result.artifacts);
     actionLogs.push(...result.logs);
   }
@@ -281,7 +280,8 @@ async function decideRuntimePlan(input: {
     '- command => {"type":"command","name":"command name","arguments":"free text args"}',
     '- shell => {"type":"shell","command":"actual shell command","cwd":"optional path"}',
     "",
-    `Project paths:\n${input.projectPaths.join("\n")}`,
+    `Project paths:\n${input.projectPaths.length > 0 ? input.projectPaths.join("\n") : "none"}`,
+    "If the user provides a concrete folder path, pass it as input.rootPath for any workspace tool. This scopes access to that folder only. Otherwise use attached project paths.",
     "",
     "Available built-in tools:",
     ...BUILTIN_TOOL_LINES,
@@ -390,9 +390,10 @@ async function executeToolAction(
     const matches = query
       ? await invoke<WorkspaceFileMatch[]>("search_workspace_text", {
           projectPaths,
+          rootPath: getStringInput(action.input, "rootPath") || null,
           query,
           limit: 20,
-        }).catch(() => [])
+        })
       : [];
     return {
       logs: [
@@ -416,9 +417,11 @@ async function executeToolAction(
   if (action.toolName === "workspace_read_file") {
     const path = getStringInput(action.input, "path");
     const content = path
-      ? await invoke<string>("read_workspace_file", { projectPaths, path }).catch((error) =>
-          String(error)
-        )
+      ? await invoke<string>("read_workspace_file", {
+          projectPaths,
+          path,
+          rootPath: getStringInput(action.input, "rootPath") || null,
+        })
       : "path missing";
     return {
       logs: [
@@ -441,9 +444,10 @@ async function executeToolAction(
     const path = getStringInput(action.input, "path");
     const entries = await invoke<WorkspaceDirectoryEntry[]>("list_workspace_directory", {
       projectPaths,
+      rootPath: getStringInput(action.input, "rootPath") || null,
       path: path || null,
       limit: 100,
-    }).catch(() => []);
+    });
 
     return {
       logs: [
@@ -465,11 +469,13 @@ async function executeToolAction(
   }
 
   const query = getStringInput(action.input, "query");
+  const rootPath = getStringInput(action.input, "rootPath");
   const files = await invoke<string[]>("list_workspace_files", {
     projectPaths,
+    rootPath: rootPath || null,
     query: query || null,
     limit: 100,
-  }).catch(() => []);
+  });
   return {
     logs: [
       {

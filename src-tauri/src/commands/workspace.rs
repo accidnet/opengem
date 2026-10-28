@@ -78,10 +78,11 @@ pub struct RunCommandLineInput {
 #[tauri::command]
 pub fn list_workspace_files(
     project_paths: Vec<String>,
+    root_path: Option<String>,
     query: Option<String>,
     limit: Option<usize>,
 ) -> Result<Vec<String>, String> {
-    let roots = normalize_project_paths(project_paths)?;
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let lowered_query = query
         .as_deref()
         .map(str::trim)
@@ -123,10 +124,11 @@ pub fn list_workspace_files(
 #[tauri::command]
 pub fn list_workspace_directory(
     project_paths: Vec<String>,
+    root_path: Option<String>,
     path: Option<String>,
     limit: Option<usize>,
 ) -> Result<Vec<WorkspaceDirectoryEntryPayload>, String> {
-    let roots = normalize_project_paths(project_paths)?;
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let directory = match path
         .as_deref()
         .map(str::trim)
@@ -189,6 +191,7 @@ pub fn list_workspace_directory(
 #[tauri::command]
 pub fn search_workspace_text(
     project_paths: Vec<String>,
+    root_path: Option<String>,
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<WorkspaceFileMatchPayload>, String> {
@@ -197,7 +200,7 @@ pub fn search_workspace_text(
         return Ok(Vec::new());
     }
 
-    let roots = normalize_project_paths(project_paths)?;
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let normalized_query = trimmed_query.to_lowercase();
     let max_items = limit.unwrap_or(DEFAULT_MATCH_LIMIT).max(1);
     let mut matches = Vec::new();
@@ -245,8 +248,12 @@ pub fn search_workspace_text(
 }
 
 #[tauri::command]
-pub fn read_workspace_file(project_paths: Vec<String>, path: String) -> Result<String, String> {
-    let roots = normalize_project_paths(project_paths)?;
+pub fn read_workspace_file(
+    project_paths: Vec<String>,
+    root_path: Option<String>,
+    path: String,
+) -> Result<String, String> {
+    let roots = normalize_workspace_roots(project_paths, root_path.as_deref())?;
     let normalized = normalize_workspace_path(&roots, &path)?;
     if !normalized.is_file() {
         return Err(format!(
@@ -497,6 +504,21 @@ fn normalize_project_paths(project_paths: Vec<String>) -> Result<Vec<PathBuf>, S
     Ok(roots)
 }
 
+fn normalize_workspace_roots(
+    project_paths: Vec<String>,
+    root_path: Option<&str>,
+) -> Result<Vec<PathBuf>, String> {
+    if let Some(root_path) = root_path.map(str::trim).filter(|value| !value.is_empty()) {
+        let root = normalize_existing_path(root_path)?;
+        if !root.is_dir() {
+            return Err(format!("폴더 경로가 아닙니다: {root_path}"));
+        }
+        return Ok(vec![root]);
+    }
+
+    normalize_project_paths(project_paths)
+}
+
 fn normalize_existing_path(path: &str) -> Result<PathBuf, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
@@ -724,4 +746,186 @@ fn extract_command_hints(content: &str) -> Vec<String> {
     }
 
     hints
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct WorkspaceFixture {
+        base: PathBuf,
+        attached: PathBuf,
+        direct: PathBuf,
+    }
+
+    impl WorkspaceFixture {
+        fn new() -> Self {
+            let base = std::env::temp_dir().join(format!(
+                "opengem-workspace-{}-{}",
+                std::process::id(),
+                rand::random::<u64>()
+            ));
+            let attached = base.join("aaa-attached");
+            let direct = base.join("zzz-direct");
+            fs::create_dir_all(&attached).unwrap();
+            fs::create_dir_all(direct.join("nested")).unwrap();
+            fs::write(attached.join("attached.txt"), "needle attached").unwrap();
+            fs::write(direct.join("direct.txt"), "needle direct").unwrap();
+            fs::write(direct.join("nested/child.txt"), "child").unwrap();
+            fs::write(base.join("outside.txt"), "outside").unwrap();
+            Self {
+                base,
+                attached,
+                direct,
+            }
+        }
+
+        fn attached_paths(&self) -> Vec<String> {
+            vec![self.attached.to_string_lossy().into_owned()]
+        }
+
+        fn root_path(&self) -> Option<String> {
+            Some(self.direct.to_string_lossy().into_owned())
+        }
+    }
+
+    impl Drop for WorkspaceFixture {
+        fn drop(&mut self) {
+            // 테스트가 직접 만든 고유 임시 폴더만 정리합니다.
+            let _ = fs::remove_dir_all(&self.base);
+        }
+    }
+
+    #[test]
+    fn explicit_root_excludes_attached_projects_from_listing_and_search() {
+        let fixture = WorkspaceFixture::new();
+        let root = fixture.direct.canonicalize().unwrap();
+        let files =
+            list_workspace_files(fixture.attached_paths(), fixture.root_path(), None, Some(1))
+                .unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(Path::new(&files[0]).starts_with(&root));
+        let matches = search_workspace_text(
+            fixture.attached_paths(),
+            fixture.root_path(),
+            "needle".into(),
+            Some(1),
+        )
+        .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].line, "needle direct");
+    }
+
+    #[test]
+    fn direct_folder_tools_work_without_attached_projects() {
+        let fixture = WorkspaceFixture::new();
+        let entries = list_workspace_directory(vec![], fixture.root_path(), None, None).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries
+            .iter()
+            .any(|entry| entry.name == "nested" && entry.kind == "directory"));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.name == "direct.txt" && entry.kind == "file"));
+        let nested =
+            list_workspace_directory(vec![], fixture.root_path(), Some("nested".into()), None)
+                .unwrap();
+        assert_eq!(nested.len(), 1);
+        assert_eq!(nested[0].name, "child.txt");
+        assert_eq!(
+            read_workspace_file(vec![], fixture.root_path(), "direct.txt".into()).unwrap(),
+            "needle direct"
+        );
+        assert_eq!(
+            list_workspace_files(vec![], fixture.root_path(), None, None)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            search_workspace_text(vec![], fixture.root_path(), "needle".into(), None)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn attached_project_relative_and_absolute_reads_still_work() {
+        let fixture = WorkspaceFixture::new();
+        for path in [
+            "attached.txt".into(),
+            fixture
+                .attached
+                .join("attached.txt")
+                .to_string_lossy()
+                .into_owned(),
+        ] {
+            assert_eq!(
+                read_workspace_file(fixture.attached_paths(), None, path).unwrap(),
+                "needle attached"
+            );
+        }
+        assert!(read_workspace_file(vec![], None, "attached.txt".into()).is_err());
+    }
+
+    #[test]
+    fn file_reads_reject_parent_traversal_and_outside_absolute_paths() {
+        let fixture = WorkspaceFixture::new();
+        for path in [
+            "../outside.txt".into(),
+            fixture
+                .base
+                .join("outside.txt")
+                .to_string_lossy()
+                .into_owned(),
+            fixture
+                .attached
+                .join("attached.txt")
+                .to_string_lossy()
+                .into_owned(),
+        ] {
+            assert!(
+                read_workspace_file(fixture.attached_paths(), fixture.root_path(), path).is_err()
+            );
+        }
+        assert!(read_workspace_file(vec![], fixture.root_path(), "nested".into()).is_err());
+    }
+
+    #[test]
+    fn directory_errors_are_not_empty_successes() {
+        let fixture = WorkspaceFixture::new();
+        for path in ["missing", "..", "direct.txt"] {
+            assert!(
+                list_workspace_directory(vec![], fixture.root_path(), Some(path.into()), None)
+                    .is_err()
+            );
+        }
+        assert!(list_workspace_directory(vec![], None, None, None).is_err());
+        assert!(list_workspace_files(
+            fixture.attached_paths(),
+            Some(fixture.base.join("missing").to_string_lossy().into_owned()),
+            None,
+            None
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn file_reads_reject_symlinks_outside_root() {
+        let fixture = WorkspaceFixture::new();
+        let target = fixture.base.join("outside.txt");
+        let link = fixture.direct.join("linked.txt");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        #[cfg(windows)]
+        if let Err(error) = std::os::windows::fs::symlink_file(&target, &link) {
+            if error.raw_os_error() == Some(1314) {
+                eprintln!("심볼릭 링크 테스트 생략: Windows 개발자 모드 또는 링크 생성 권한 필요");
+                return;
+            }
+            panic!("{error}");
+        }
+        assert!(read_workspace_file(vec![], fixture.root_path(), "linked.txt".into()).is_err());
+    }
 }

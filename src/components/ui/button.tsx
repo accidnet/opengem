@@ -55,4 +55,6 @@ function Button({
   );
 }
 
+// shadcn/ui 패턴을 유지하기 위해 variant helper를 같은 파일에서 함께 노출합니다.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants };

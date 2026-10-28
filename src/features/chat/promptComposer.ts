@@ -27,6 +27,8 @@ function buildEnvironmentSection(projectPaths: string[]) {
     lines.push("- Attached project paths: none");
   }
 
+  lines.push("- When the user provides a concrete local folder path, workspace tools can use it as rootPath.");
+
   return lines.join("\n");
 }
 
