@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { ModelSelect } from "@/components/ModelSelect";
+import { normalizeProjectPath } from "@/lib/projectPaths";
 import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 import type { useAppUpdater } from "@/hooks/useAppUpdater";
@@ -333,10 +334,6 @@ export function LeftPanel({
 
   const handleDraftModeIconChange = (id: string, icon: ModeIcon) => {
     setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, icon } : mode)));
-  };
-
-  const normalizeProjectPath = (value: string) => {
-    return value.trim().replace(/[\\/]+$/, "");
   };
 
   const addProjectPathToMode = (modeId: string, rawValue: string) => {

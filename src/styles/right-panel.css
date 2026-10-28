@@ -94,6 +94,10 @@
   background: #475569;
 }
 
+.timeline-dot-failed {
+  background: #f87171;
+}
+
 .timeline-body {
   border: 1px solid var(--border);
   border-radius: 10px;

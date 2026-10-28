@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { MessageCard } from "@/components/MessageCard";
+import { normalizeProjectPath } from "@/lib/projectPaths";
 import type { Message } from "@/types/chat";
 
 type ChatPanelProps = {
@@ -100,10 +101,6 @@ export function ChatPanel({
     };
   }, [isProjectPanelOpen]);
 
-  const normalizePath = (value: string) => {
-    return value.trim().replace(/[\\/]+$/, "");
-  };
-
   const persistProjectPaths = async (nextPaths: string[]) => {
     if (!currentSessionId) {
       setProjectError("세션을 생성한 뒤에 프로젝트 폴더를 설정할 수 있어요.");
@@ -129,7 +126,7 @@ export function ChatPanel({
       return;
     }
 
-    const normalizedPath = normalizePath(pickedPath);
+    const normalizedPath = normalizeProjectPath(pickedPath);
     const exists = projectPaths.some((path) => path.toLowerCase() === normalizedPath.toLowerCase());
     if (exists) {
       setProjectError("이미 연결된 프로젝트 폴더예요.");

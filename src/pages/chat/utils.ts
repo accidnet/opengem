@@ -1,7 +1,9 @@
 import type { LLMMessage } from "@/features/ai";
 
 import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/features/app/config/appData";
-import type { ActivityItem, ActivityState, Message } from "@/types/chat";
+import type { Message } from "@/types/chat";
+
+export { buildActivityFromMessages } from "./activity";
 
 const SESSION_TITLE_MAX_LENGTH = 40;
 
@@ -168,6 +170,7 @@ export function buildTypingMessage(
     icon: agentIcon ?? "travel_explore",
     iconColor: agentIconColor ?? "#86efac",
     type: "typing",
+    isStreaming: true,
     text,
   };
 }
@@ -184,81 +187,4 @@ export function buildReplyMessage(input: string): Message {
     type: "text",
     text: `요청을 반영해 실행 계획을 갱신했습니다. 핵심 키워드는 "${summary}"이며, Researcher/Analyst 에이전트를 추가로 할당해 자금 조달 및 기술 차별화 항목을 정리하겠습니다.`,
   };
-}
-
-function normalizeActivitySource(message: Message): string {
-  const sender = message.sender?.trim();
-  if (!sender) {
-    return "Assistant";
-  }
-
-  return sender.replace(/\s+Tool$/, "");
-}
-
-function compactActivityText(text: string): string {
-  const normalized = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
-
-  if (normalized.length <= 360) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, 360)}...`;
-}
-
-function buildToolActivityText(message: Message): string {
-  const lines = [message.text, ...(message.logs ?? [])]
-    .map((line) => line?.trim())
-    .filter((line): line is string => Boolean(line));
-
-  return compactActivityText(lines.join("\n"));
-}
-
-function resolveActivityState(message: Message): ActivityState {
-  if (message.type === "typing") {
-    return "working";
-  }
-
-  if (message.icon === "error" || message.text?.startsWith("Request failed:")) {
-    return "active";
-  }
-
-  return "done";
-}
-
-/**
- * 현재 채팅 메시지에서 우측 Activity Log에 보여줄 에이전트 동작만 추출한다.
- */
-export function buildActivityFromMessages(messages: Message[]): ActivityItem[] {
-  return messages.reduce<ActivityItem[]>((items, message) => {
-    if (message.side !== "agent") {
-      return items;
-    }
-
-    const isToolLog = message.type === "search" || Boolean(message.logs?.length);
-    const text = isToolLog
-      ? buildToolActivityText(message)
-      : message.type === "typing"
-        ? message.text || "Agent is working..."
-        : message.text?.startsWith("Request failed:")
-          ? message.text
-          : "Agent response completed.";
-
-    if (!text.trim()) {
-      return items;
-    }
-
-    items.push({
-      id: `activity-${message.id}`,
-      source: normalizeActivitySource(message),
-      byline: message.byline,
-      text: compactActivityText(text),
-      state: resolveActivityState(message),
-    });
-
-    return items;
-  }, []);
 }

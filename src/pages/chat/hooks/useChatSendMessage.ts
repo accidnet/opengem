@@ -24,6 +24,7 @@ import {
   nowTime,
 } from "@/pages/chat/utils";
 import { useAvailableProviders } from "@/hooks/useAI";
+import { finalizeAssistantMessage } from "@/pages/chat/activity";
 
 type SendMessageDeps = {
   agents: AgentItem[];
@@ -52,12 +53,12 @@ type AgentLoopResult = {
 
 const DEFAULT_MAX_AGENT_STEPS = 12;
 
-const replaceTypingMessage = (
+const finishAssistantMessage = (
   setMessages: Dispatch<SetStateAction<Message[]>>,
   typingMessageId: string,
   nextMessage: Message
 ) => {
-  setMessages((prev) => prev.map((entry) => (entry.id === typingMessageId ? nextMessage : entry)));
+  setMessages((prev) => finalizeAssistantMessage(prev, typingMessageId, nextMessage));
 };
 
 async function publishGuardMessage(input: {
@@ -72,10 +73,13 @@ async function publishGuardMessage(input: {
   const nextMessage: Message = {
     ...input.typingMessage,
     type: "text",
+    isStreaming: false,
+    icon: "error",
+    byline: nowTime(),
     text: input.text,
   };
 
-  replaceTypingMessage(input.setMessages, input.typingMessage.id, nextMessage);
+  finishAssistantMessage(input.setMessages, input.typingMessage.id, nextMessage);
   await input.persistMessage(input.sessionId, nextMessage);
   await input.refreshSessions(input.modes, input.sessionId);
 }
@@ -100,6 +104,7 @@ const updateStreamingStatusMessage = (
         ? {
             ...entry,
             type: messageType,
+            isStreaming: true,
             text: nextText,
           }
         : entry
@@ -360,6 +365,8 @@ function createAssistantMessage(base: Message, text: string): Message {
   return {
     ...base,
     type: "text",
+    isStreaming: false,
+    byline: nowTime(),
     text,
   };
 }
@@ -487,7 +494,7 @@ export function useChatSendMessage({
       });
 
       const assistantMessage = createAssistantMessage(activeAssistantMessage, response.text);
-      replaceTypingMessage(setMessages, activeAssistantMessage.id, assistantMessage);
+      finishAssistantMessage(setMessages, activeAssistantMessage.id, assistantMessage);
 
       await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
@@ -497,9 +504,12 @@ export function useChatSendMessage({
       const errorMessage: Message = {
         ...activeAssistantMessage,
         type: "text",
+        isStreaming: false,
+        icon: "error",
+        byline: nowTime(),
         text: `Request failed: ${reason}`,
       };
-      replaceTypingMessage(setMessages, activeAssistantMessage.id, errorMessage);
+      finishAssistantMessage(setMessages, activeAssistantMessage.id, errorMessage);
 
       if (activeSessionId) {
         try {

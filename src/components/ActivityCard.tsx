@@ -10,6 +10,7 @@ export function ActivityCard({ item }: ActivityCardProps) {
     active: "timeline-dot-active",
     working: "timeline-dot-working",
     pending: "timeline-dot-pending",
+    failed: "timeline-dot-failed",
   };
 
   return (
