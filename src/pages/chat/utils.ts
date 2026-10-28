@@ -1,7 +1,9 @@
 import type { LLMMessage } from "@/features/ai";
 
 import { composeAgentSystemPrompt, LLM_SYSTEM_PROMPT } from "@/features/app/config/appData";
-import type { ActivityItem, Message } from "@/types/chat";
+import type { Message } from "@/types/chat";
+
+export { buildActivityFromMessages } from "./activity";
 
 const SESSION_TITLE_MAX_LENGTH = 40;
 
@@ -168,6 +170,7 @@ export function buildTypingMessage(
     icon: agentIcon ?? "travel_explore",
     iconColor: agentIconColor ?? "#86efac",
     type: "typing",
+    isStreaming: true,
     text,
   };
 }
@@ -183,15 +186,5 @@ export function buildReplyMessage(input: string): Message {
     iconColor: "#a5b4fc",
     type: "text",
     text: `요청을 반영해 실행 계획을 갱신했습니다. 핵심 키워드는 "${summary}"이며, Researcher/Analyst 에이전트를 추가로 할당해 자금 조달 및 기술 차별화 항목을 정리하겠습니다.`,
-  };
-}
-
-export function buildActivity(statusText: string, source: string): ActivityItem {
-  return {
-    id: `act-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    source,
-    byline: nowTime(),
-    text: statusText,
-    state: "working",
   };
 }

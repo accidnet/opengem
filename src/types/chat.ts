@@ -16,9 +16,10 @@ export type Message = {
   planTitle?: string;
   steps?: string[];
   logs?: string[];
+  isStreaming?: boolean;
 };
 
-export type ActivityState = "done" | "active" | "working" | "pending";
+export type ActivityState = "done" | "active" | "working" | "pending" | "failed";
 
 export type ActivityItem = {
   id: string;

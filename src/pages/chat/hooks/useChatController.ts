@@ -5,16 +5,14 @@ import { resolveLlmSettings } from "@/features/backend/api";
 import {
   AGENTS,
   DEFAULT_MODE_ICONS,
-  INITIAL_ACTIVITY,
   MODES,
   SESSION_MESSAGES,
   type Mode,
   type ModeIcon,
 } from "@/features/app/config/appData";
 import { normalizeLlmSettings } from "@/features/ai/catalog";
-import { buildSessionTitle } from "@/pages/chat/utils";
+import { buildActivityFromMessages, buildSessionTitle } from "@/pages/chat/utils";
 import type {
-  ActivityItem,
   AgentItem,
   LLMSettings,
   Message,
@@ -35,7 +33,6 @@ export function useChatController({ settings }: UseChatControllerParams) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
   const [currentSessionProjectPaths, setCurrentSessionProjectPaths] = useState<string[]>([]);
-  const [activity, setActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
@@ -96,6 +93,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   useEffect(() => {
     void loadOperationModes();
+    // 컨트롤러 팩토리가 매 렌더마다 함수를 생성하므로 초기 로드만 실행합니다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -108,6 +107,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
   }, []);
 
   const canSend = inputValue.trim().length > 0 && !isLoading && !isSessionLoading;
+
+  const activity = useMemo(() => buildActivityFromMessages(messages), [messages]);
 
   const tokenPercent = useMemo(() => {
     return Math.max(5, Math.min(90, Math.round((resourceToken / 12000) * 100)));
@@ -178,7 +179,6 @@ export function useChatController({ settings }: UseChatControllerParams) {
       await refreshSessions(nextModes, nextSessionId);
     },
     resolveProviderSettings,
-    setActivity,
     setInputValue,
     setIsLoading,
     setMessages,
@@ -210,13 +210,11 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   const clearContext = () => {
     resetCurrentSession();
-    setActivity([...INITIAL_ACTIVITY]);
     void refreshSessions(modes, null);
   };
 
   const startNewChat = () => {
     resetCurrentSession();
-    setActivity([...INITIAL_ACTIVITY]);
     void refreshSessions(modes, null);
   };
 

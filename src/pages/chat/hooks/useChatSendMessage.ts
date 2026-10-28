@@ -12,7 +12,6 @@ import {
 } from "@/features/chat/toolRuntime";
 import { request, type LLMMessage, type LLMToolCall } from "@/features/ai";
 import type {
-  ActivityItem,
   AgentItem,
   Message,
   ResolvedLLMSettings,
@@ -20,12 +19,12 @@ import type {
 } from "@/types/chat";
 import {
   AGENT_COLOR_VALUES,
-  buildActivity,
   buildConversationMessages,
   buildTypingMessage,
   nowTime,
 } from "@/pages/chat/utils";
 import { useAvailableProviders } from "@/hooks/useAI";
+import { finalizeAssistantMessage } from "@/pages/chat/activity";
 
 type SendMessageDeps = {
   agents: AgentItem[];
@@ -38,7 +37,6 @@ type SendMessageDeps = {
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   refreshSessions: (modes: string[], nextSessionId: string | null) => Promise<void>;
   resolveProviderSettings: () => Promise<ResolvedLLMSettings>;
-  setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
   setInputValue: Dispatch<SetStateAction<string>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
@@ -55,12 +53,12 @@ type AgentLoopResult = {
 
 const DEFAULT_MAX_AGENT_STEPS = 12;
 
-const replaceTypingMessage = (
+const finishAssistantMessage = (
   setMessages: Dispatch<SetStateAction<Message[]>>,
   typingMessageId: string,
   nextMessage: Message
 ) => {
-  setMessages((prev) => prev.map((entry) => (entry.id === typingMessageId ? nextMessage : entry)));
+  setMessages((prev) => finalizeAssistantMessage(prev, typingMessageId, nextMessage));
 };
 
 async function publishGuardMessage(input: {
@@ -75,10 +73,13 @@ async function publishGuardMessage(input: {
   const nextMessage: Message = {
     ...input.typingMessage,
     type: "text",
+    isStreaming: false,
+    icon: "error",
+    byline: nowTime(),
     text: input.text,
   };
 
-  replaceTypingMessage(input.setMessages, input.typingMessage.id, nextMessage);
+  finishAssistantMessage(input.setMessages, input.typingMessage.id, nextMessage);
   await input.persistMessage(input.sessionId, nextMessage);
   await input.refreshSessions(input.modes, input.sessionId);
 }
@@ -103,6 +104,7 @@ const updateStreamingStatusMessage = (
         ? {
             ...entry,
             type: messageType,
+            isStreaming: true,
             text: nextText,
           }
         : entry
@@ -203,13 +205,12 @@ async function runMainAgentLoop(input: {
   runtimeApiUrl: string;
   baseMessages: LLMMessage[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  setActivity: Dispatch<SetStateAction<ActivityItem[]>>;
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   activeAssistantMessageId: string;
   maxAgentSteps?: number | null;
 }): Promise<AgentLoopResult> {
   const toolDefinitions = supportsStructuredToolLoop(input.activeSettings)
-    ? createChatToolDefinitions(input.projectPaths)
+    ? createChatToolDefinitions()
     : [];
   const systemPrompt = composeChatSystemPrompt({
     model: input.mainAgent.model?.trim() || input.activeSettings.model,
@@ -318,10 +319,6 @@ async function runMainAgentLoop(input: {
         const toolMessage = createToolLogMessage(input.mainAgent.name, result);
         input.setMessages((prev) => [...prev, toolMessage]);
         await input.persistMessage(input.sessionId, toolMessage);
-        input.setActivity((prev) => [
-          ...prev,
-          buildActivity(`Tool completed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
-        ]);
 
         workingMessages.push({
           role: "tool",
@@ -338,10 +335,6 @@ async function runMainAgentLoop(input: {
         );
         input.setMessages((prev) => [...prev, toolErrorMessage]);
         await input.persistMessage(input.sessionId, toolErrorMessage);
-        input.setActivity((prev) => [
-          ...prev,
-          buildActivity(`Tool failed: ${toolCall.name}`, input.mainAgent.name ?? "Assistant"),
-        ]);
 
         workingMessages.push({
           role: "tool",
@@ -372,6 +365,8 @@ function createAssistantMessage(base: Message, text: string): Message {
   return {
     ...base,
     type: "text",
+    isStreaming: false,
+    byline: nowTime(),
     text,
   };
 }
@@ -399,7 +394,6 @@ export function useChatSendMessage({
   persistMessage,
   refreshSessions,
   resolveProviderSettings,
-  setActivity,
   setInputValue,
   setIsLoading,
   setMessages,
@@ -493,7 +487,6 @@ export function useChatSendMessage({
         activeSettings,
         baseMessages: buildConversationMessages(sessionDetail.messages),
         setMessages,
-        setActivity,
         persistMessage,
         activeAssistantMessageId: activeAssistantMessage.id,
         maxAgentSteps,
@@ -501,28 +494,22 @@ export function useChatSendMessage({
       });
 
       const assistantMessage = createAssistantMessage(activeAssistantMessage, response.text);
-      replaceTypingMessage(setMessages, activeAssistantMessage.id, assistantMessage);
+      finishAssistantMessage(setMessages, activeAssistantMessage.id, assistantMessage);
 
       await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
       updateUsageMetrics(response.totalTokens, setResourceToken, setResourceCost);
-
-      const usageText = response.totalTokens > 0 ? ` Tokens used: ${response.totalTokens}` : "";
-      setActivity((prev) => [
-        ...prev,
-        buildActivity(
-          `Agent response completed.${usageText}`.trim(),
-          mainAgent?.name ?? "Assistant"
-        ),
-      ]);
     } catch (error) {
       const reason = getErrorMessage(error);
       const errorMessage: Message = {
         ...activeAssistantMessage,
         type: "text",
+        isStreaming: false,
+        icon: "error",
+        byline: nowTime(),
         text: `Request failed: ${reason}`,
       };
-      replaceTypingMessage(setMessages, activeAssistantMessage.id, errorMessage);
+      finishAssistantMessage(setMessages, activeAssistantMessage.id, errorMessage);
 
       if (activeSessionId) {
         try {
@@ -533,10 +520,6 @@ export function useChatSendMessage({
         }
       }
 
-      setActivity((prev) => [
-        ...prev,
-        buildActivity("LLM 응답을 받는 중 오류가 발생했습니다.", "System"),
-      ]);
     } finally {
       setIsLoading(false);
     }

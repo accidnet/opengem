@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { ModelSelect } from "@/components/ModelSelect";
+import { normalizeProjectPath } from "@/lib/projectPaths";
 import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 import type { useAppUpdater } from "@/hooks/useAppUpdater";
@@ -89,7 +90,6 @@ export function LeftPanel({
   const [agentSettingsTab, setAgentSettingsTab] = useState<AgentSettingsTab>("create");
   const [newModeName, setNewModeName] = useState("");
   const [newModeIcon, setNewModeIcon] = useState<ModeIcon>("tune");
-  const [newModeProjectPath, setNewModeProjectPath] = useState("");
   const [newModeProjectPaths, setNewModeProjectPaths] = useState<string[]>([]);
   const [newModeDefaultModel, setNewModeDefaultModel] = useState(DEFAULT_AGENT_MODEL);
   const [modeNameError, setModeNameError] = useState("");
@@ -233,7 +233,6 @@ export function LeftPanel({
     );
     setNewModeName("");
     setNewModeIcon("tune");
-    setNewModeProjectPath("");
     setNewModeProjectPaths([]);
     setNewModeDefaultModel(getModeDefaultModel(selectedMode));
     setModeNameError("");
@@ -315,7 +314,6 @@ export function LeftPanel({
     setModeNameError("");
     setNewModeName("");
     setNewModeIcon("tune");
-    setNewModeProjectPath("");
     setNewModeProjectPaths([]);
     setNewModeDefaultModel(getModeDefaultModel(selectedMode));
   };
@@ -336,10 +334,6 @@ export function LeftPanel({
 
   const handleDraftModeIconChange = (id: string, icon: ModeIcon) => {
     setDraftModes((prev) => prev.map((mode) => (mode.id === id ? { ...mode, icon } : mode)));
-  };
-
-  const normalizeProjectPath = (value: string) => {
-    return value.trim().replace(/[\\/]+$/, "");
   };
 
   const addProjectPathToMode = (modeId: string, rawValue: string) => {
@@ -371,32 +365,6 @@ export function LeftPanel({
     );
 
     return didAdd;
-  };
-
-  const handleAddNewModeProjectPath = () => {
-    const normalizedPath = normalizeProjectPath(newModeProjectPath);
-    if (!normalizedPath) {
-      return;
-    }
-
-    setNewModeProjectPaths((prev) => {
-      const exists = prev.some(
-        (projectPath) => projectPath.toLowerCase() === normalizedPath.toLowerCase()
-      );
-      if (exists) {
-        return prev;
-      }
-
-      return [...prev, normalizedPath];
-    });
-    setNewModeProjectPath("");
-  };
-
-  const handleAddNewModeProjectPathOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      handleAddNewModeProjectPath();
-    }
   };
 
   const handleAddDraftModeProjectPath = (id: string, value: string) => {
@@ -437,7 +405,6 @@ export function LeftPanel({
 
       return [...prev, selectedPath];
     });
-    setNewModeProjectPath("");
   };
 
   const handleRemoveNewModeProjectPath = (projectPath: string) => {
@@ -483,7 +450,6 @@ export function LeftPanel({
     ]);
     setNewModeName("");
     setNewModeIcon("tune");
-    setNewModeProjectPath("");
     setNewModeProjectPaths([]);
     setNewModeDefaultModel(getModeDefaultModel(modes[0] || "Orchestration"));
     setModeNameError("");
@@ -846,7 +812,6 @@ export function LeftPanel({
         newModeIcon={newModeIcon}
         modeNameError={modeNameError}
         draftModes={draftModes}
-        newModeProjectPath={newModeProjectPath}
         newModeProjectPaths={newModeProjectPaths}
         newModeDefaultModel={newModeDefaultModel}
         suppressOverlayCloseRef={suppressOverlayCloseRef}
@@ -862,9 +827,6 @@ export function LeftPanel({
         onNewModeDefaultModelChange={setNewModeDefaultModel}
         onCreateMode={handleCreateMode}
         onCreateModeOnEnter={handleCreateModeOnEnter}
-        onNewModeProjectPathChange={setNewModeProjectPath}
-        onAddNewModeProjectPath={handleAddNewModeProjectPath}
-        onAddNewModeProjectPathOnEnter={handleAddNewModeProjectPathOnEnter}
         onPickNewModeProjectPath={handlePickNewModeProjectPath}
         onRemoveNewModeProjectPath={handleRemoveNewModeProjectPath}
         onDraftModeNameChange={handleDraftModeNameChange}
@@ -874,7 +836,6 @@ export function LeftPanel({
             prev.map((mode) => (mode.id === id ? { ...mode, defaultModel: value } : mode))
           );
         }}
-        onAddDraftModeProjectPath={handleAddDraftModeProjectPath}
         onPickDraftModeProjectPath={handlePickDraftModeProjectPath}
         onRemoveDraftModeProjectPath={handleRemoveDraftModeProjectPath}
         onMoveDraftMode={handleMoveDraftMode}

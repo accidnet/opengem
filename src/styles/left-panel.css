@@ -534,6 +534,10 @@
 }
 
 .mode-settings-sub-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
   height: 34px;
   background: transparent;
@@ -558,9 +562,9 @@
 }
 
 .mode-project-path-input-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .mode-project-paths-list {
@@ -605,10 +609,6 @@
   .mode-settings-item-main,
   .agent-settings-item {
     grid-template-columns: auto 1fr;
-  }
-
-  .mode-project-path-input-row {
-    grid-template-columns: 1fr;
   }
 
   .mode-panel-modal-main {

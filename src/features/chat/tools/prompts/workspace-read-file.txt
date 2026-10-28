@@ -1,4 +1,6 @@
 Reads a workspace file and returns its contents.
 
 - Use this after locating a relevant file through search or when the user references a known path.
+- Paths are resolved inside `rootPath` when provided, otherwise inside attached project paths. Both absolute and relative paths must stay inside that scope.
 - Prefer reading only the files that matter to the current step.
+- If reading from a user-provided folder outside attached projects, pass the folder as `rootPath`, including for absolute file paths.

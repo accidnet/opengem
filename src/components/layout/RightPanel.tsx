@@ -35,11 +35,20 @@ export function RightPanel({
       </header>
 
       <div className="activity-scroll">
-        <div className="activity-timeline">
-          {activity.map((item) => (
-            <ActivityCard key={item.id} item={item} />
-          ))}
-        </div>
+        {activity.length > 0 ? (
+          <div className="activity-timeline">
+            {activity.map((item) => (
+              <ActivityCard key={item.id} item={item} />
+            ))}
+          </div>
+        ) : (
+          <div className="activity-empty">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              list_alt
+            </span>
+            <p>현재 채팅의 에이전트 동작 로그가 없습니다.</p>
+          </div>
+        )}
       </div>
 
       <section className="system-resources">

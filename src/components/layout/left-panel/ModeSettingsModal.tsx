@@ -12,7 +12,6 @@ type ModeSettingsModalProps = {
   isOpen: boolean;
   newModeName: string;
   newModeIcon: ModeIcon;
-  newModeProjectPath: string;
   newModeProjectPaths: string[];
   newModeDefaultModel: string;
   modeNameError: string;
@@ -23,9 +22,6 @@ type ModeSettingsModalProps = {
   onNewModeNameChange: (value: string) => void;
   onNewModeIconChange: (icon: ModeIcon) => void;
   onNewModeDefaultModelChange: (value: string) => void;
-  onNewModeProjectPathChange: (value: string) => void;
-  onAddNewModeProjectPath: () => void;
-  onAddNewModeProjectPathOnEnter: (event: KeyboardEvent<HTMLInputElement>) => void;
   onPickNewModeProjectPath: () => void | Promise<void>;
   onRemoveNewModeProjectPath: (projectPath: string) => void;
   onCreateMode: () => void;
@@ -33,7 +29,6 @@ type ModeSettingsModalProps = {
   onDraftModeNameChange: (id: string, value: string) => void;
   onDraftModeIconChange: (id: string, icon: ModeIcon) => void;
   onDraftModeDefaultModelChange: (id: string, value: string) => void;
-  onAddDraftModeProjectPath: (id: string, value: string) => void;
   onPickDraftModeProjectPath: (id: string) => void | Promise<void>;
   onRemoveDraftModeProjectPath: (id: string, projectPath: string) => void;
   onMoveDraftMode: (index: number, direction: "up" | "down") => void;
@@ -82,7 +77,6 @@ export function ModeSettingsModal({
   isOpen,
   newModeName,
   newModeIcon,
-  newModeProjectPath,
   newModeProjectPaths,
   newModeDefaultModel,
   modeNameError,
@@ -93,9 +87,6 @@ export function ModeSettingsModal({
   onNewModeNameChange,
   onNewModeIconChange,
   onNewModeDefaultModelChange,
-  onNewModeProjectPathChange,
-  onAddNewModeProjectPath,
-  onAddNewModeProjectPathOnEnter,
   onPickNewModeProjectPath,
   onRemoveNewModeProjectPath,
   onCreateMode,
@@ -103,7 +94,6 @@ export function ModeSettingsModal({
   onDraftModeNameChange,
   onDraftModeIconChange,
   onDraftModeDefaultModelChange,
-  onAddDraftModeProjectPath,
   onPickDraftModeProjectPath,
   onRemoveDraftModeProjectPath,
   onMoveDraftMode,
@@ -112,7 +102,6 @@ export function ModeSettingsModal({
   onSave,
 }: ModeSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<"create" | "list">("create");
-  const [projectPathDrafts, setProjectPathDrafts] = useState<Record<string, string>>({});
 
   const projectPathCounts = useMemo(() => {
     return draftModes.reduce<Record<string, number>>((acc, mode) => {
@@ -143,7 +132,12 @@ export function ModeSettingsModal({
               Modes
             </h3>
           </div>
-          <button className="panel-modal-close-btn" type="button" aria-label="모드 설정 닫기" onClick={onClose}>
+          <button
+            className="panel-modal-close-btn"
+            type="button"
+            aria-label="모드 설정 닫기"
+            onClick={onClose}
+          >
             <span className="material-symbols-outlined" aria-hidden="true">
               close
             </span>
@@ -151,9 +145,14 @@ export function ModeSettingsModal({
         </header>
 
         <div className="panel-modal-body">
-          <aside className="panel-modal-sidebar mode-panel-modal-sidebar" aria-label="모드 설정 안내">
+          <aside
+            className="panel-modal-sidebar mode-panel-modal-sidebar"
+            aria-label="모드 설정 안내"
+          >
             <p className="panel-modal-sidebar-label">MODES</p>
-            <p className="panel-modal-sidebar-help">모드마다 기본 모델과 프로젝트 폴더를 함께 관리할 수 있어요.</p>
+            <p className="panel-modal-sidebar-help">
+              모드마다 기본 모델과 프로젝트 폴더를 함께 관리할 수 있어요.
+            </p>
 
             <div className="mode-panel-modal-tabs" role="tablist" aria-label="모드 설정 탭">
               <button
@@ -246,31 +245,32 @@ export function ModeSettingsModal({
                 <div className="mode-project-path-section">
                   <div className="mode-project-path-copy">
                     <h5>기본 프로젝트 폴더 설정</h5>
-                    <p>Operation Mode에서 생성되는 session에 기본값으로 설정될 프로젝트 폴더예요.</p>
+                    <p>
+                      Operation Mode에서 생성되는 session에 기본값으로 설정될 프로젝트 폴더예요.
+                    </p>
                   </div>
 
                   <div className="mode-project-path-input-row">
-                    <input
-                      type="text"
-                      className="mode-settings-input"
-                      placeholder="예: C:\\workspace\\my-project"
-                      value={newModeProjectPath}
-                      onMouseDown={() => {
-                        suppressOverlayCloseRef.current = true;
-                      }}
-                      onChange={(event) => onNewModeProjectPathChange(event.target.value)}
-                      onKeyDown={onAddNewModeProjectPathOnEnter}
-                      aria-label="새 모드 프로젝트 폴더 경로"
-                    />
-                    <button className="mode-settings-sub-action" type="button" onClick={onAddNewModeProjectPath}>
-                      경로 추가
-                    </button>
-                    <button className="mode-settings-sub-action" type="button" onClick={onPickNewModeProjectPath}>
+                    <button
+                      className="mode-settings-sub-action"
+                      type="button"
+                      onClick={onPickNewModeProjectPath}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "16px" }}
+                        aria-hidden="true"
+                      >
+                        folder_open
+                      </span>
                       폴더 선택
                     </button>
                   </div>
 
-                  <ProjectPathList paths={newModeProjectPaths} onRemove={onRemoveNewModeProjectPath} />
+                  <ProjectPathList
+                    paths={newModeProjectPaths}
+                    onRemove={onRemoveNewModeProjectPath}
+                  />
                 </div>
 
                 {modeNameError && <p className="mode-settings-error">{modeNameError}</p>}
@@ -287,13 +287,15 @@ export function ModeSettingsModal({
                 <div className="mode-settings-list" role="list" aria-label="모드 목록">
                   {draftModes.map((mode, index) => {
                     const isProtectedMode = index === 0;
-                    const projectPathDraft = projectPathDrafts[mode.id] || "";
 
                     return (
                       <div className="mode-settings-item" role="listitem" key={mode.id}>
                         <div className="mode-settings-item-main">
                           <div className="mode-settings-mode-btn" aria-hidden="true">
-                            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "18px" }}
+                            >
                               {mode.icon}
                             </span>
                           </div>
@@ -310,7 +312,9 @@ export function ModeSettingsModal({
                             <select
                               className="mode-settings-select"
                               value={mode.icon}
-                              onChange={(event) => onDraftModeIconChange(mode.id, event.target.value as ModeIcon)}
+                              onChange={(event) =>
+                                onDraftModeIconChange(mode.id, event.target.value as ModeIcon)
+                              }
                               aria-label={`${mode.name || "mode"} 아이콘 변경`}
                             >
                               {MODE_ICON_OPTIONS.map((iconName) => (
@@ -337,7 +341,10 @@ export function ModeSettingsModal({
                             onClick={() => onMoveDraftMode(index, "up")}
                             disabled={isProtectedMode || index === 1}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "16px" }}
+                            >
                               arrow_upward
                             </span>
                           </button>
@@ -348,7 +355,10 @@ export function ModeSettingsModal({
                             onClick={() => onMoveDraftMode(index, "down")}
                             disabled={index === draftModes.length - 1 || isProtectedMode}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "16px" }}
+                            >
                               arrow_downward
                             </span>
                           </button>
@@ -359,7 +369,10 @@ export function ModeSettingsModal({
                             onClick={() => onRemoveDraftMode(mode.id)}
                             disabled={isProtectedMode}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "16px" }}
+                            >
                               delete
                             </span>
                           </button>
@@ -375,57 +388,27 @@ export function ModeSettingsModal({
                           </div>
 
                           <div className="mode-project-path-input-row">
-                            <input
-                              type="text"
-                              className="mode-settings-input"
-                              placeholder="프로젝트 폴더 경로 입력"
-                              value={projectPathDraft}
-                              onMouseDown={() => {
-                                suppressOverlayCloseRef.current = true;
-                              }}
-                              onChange={(event) =>
-                                setProjectPathDrafts((prev) => ({
-                                  ...prev,
-                                  [mode.id]: event.target.value,
-                                }))
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  onAddDraftModeProjectPath(mode.id, projectPathDraft);
-                                  setProjectPathDrafts((prev) => ({
-                                    ...prev,
-                                    [mode.id]: "",
-                                  }));
-                                }
-                              }}
-                              aria-label={`${mode.name || "mode"} 프로젝트 폴더 경로`}
-                            />
-                            <button
-                              className="mode-settings-sub-action"
-                              type="button"
-                              onClick={() => {
-                                onAddDraftModeProjectPath(mode.id, projectPathDraft);
-                                setProjectPathDrafts((prev) => ({
-                                  ...prev,
-                                  [mode.id]: "",
-                                }));
-                              }}
-                            >
-                              경로 추가
-                            </button>
                             <button
                               className="mode-settings-sub-action"
                               type="button"
                               onClick={() => void onPickDraftModeProjectPath(mode.id)}
                             >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "16px" }}
+                                aria-hidden="true"
+                              >
+                                folder_open
+                              </span>
                               폴더 선택
                             </button>
                           </div>
 
                           <ProjectPathList
                             paths={mode.projectPaths}
-                            onRemove={(projectPath) => onRemoveDraftModeProjectPath(mode.id, projectPath)}
+                            onRemove={(projectPath) =>
+                              onRemoveDraftModeProjectPath(mode.id, projectPath)
+                            }
                           />
                         </div>
                       </div>
