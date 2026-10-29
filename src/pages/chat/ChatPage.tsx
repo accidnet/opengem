@@ -20,7 +20,17 @@ export function ChatPage() {
   const [rightPanelWidth, setRightPanelWidth] = useState(270);
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
+  const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
   const appUpdater = useAppUpdater();
+
+  useEffect(() => {
+    if (!openPanel) return undefined;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPanel(null);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [openPanel]);
 
   const {
     chatGPTLoginUrl,
@@ -150,12 +160,14 @@ export function ChatPage() {
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
+        openPanel={openPanel}
+        onTogglePanel={(panel) => setOpenPanel((current) => (current === panel ? null : panel))}
         onOpenPanelModal={() => setIsPanelModalOpen(true)}
       />
 
       <main
         ref={bodyGridRef}
-        className={`body-grid${isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""}`}
+        className={`body-grid${isResizingLeftPanel || isResizingRightPanel ? " is-resizing" : ""}${openPanel ? ` is-${openPanel}-open` : ""}`}
         style={
           {
             "--left-panel-width": `${leftPanelWidth}px`,
@@ -163,6 +175,14 @@ export function ChatPage() {
           } as CSSProperties
         }
       >
+        {openPanel && (
+          <button
+            className="panel-backdrop"
+            type="button"
+            aria-label="패널 닫기"
+            onClick={() => setOpenPanel(null)}
+          />
+        )}
         <LeftPanel
           modes={modes}
           selectedMode={selectedMode}
@@ -175,7 +195,10 @@ export function ChatPage() {
           getModeDefaultModel={getModeDefaultModel}
           agents={agents}
           sessionsByMode={sessionsByMode}
-          onSessionSelect={handleSessionSelect}
+          onSessionSelect={(session) => {
+            setOpenPanel(null);
+            return handleSessionSelect(session);
+          }}
           onSessionDelete={handleSessionDelete}
           tools={TOOLS}
           updater={appUpdater}

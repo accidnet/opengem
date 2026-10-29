@@ -288,7 +288,7 @@ export function LeftPanel({
   const handleCreateMode = () => {
     const trimmedName = newModeName.trim();
     if (!trimmedName) {
-      setModeNameError("?? ??? ??? ???.");
+      setModeNameError("모드 이름을 입력해줘.");
       return;
     }
 
@@ -296,7 +296,7 @@ export function LeftPanel({
       (mode) => mode.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (exists) {
-      setModeNameError("?? ?? ??? ??? ???.");
+      setModeNameError("이미 같은 이름의 모드가 있어.");
       return;
     }
 
@@ -483,18 +483,18 @@ export function LeftPanel({
     }));
 
     if (normalizedModes.length === 0) {
-      setModeNameError("?? ? ?? ??? ????.");
+      setModeNameError("최소 한 개의 모드는 필요해.");
       return;
     }
 
     if (normalizedModes.some((mode) => !mode.name)) {
-      setModeNameError("?? ??? ??? ? ???.");
+      setModeNameError("모드 이름을 비워둘 수 없어.");
       return;
     }
 
     const normalizedNames = normalizedModes.map((mode) => mode.name.toLowerCase());
     if (new Set(normalizedNames).size !== normalizedNames.length) {
-      setModeNameError("?? ?? ??? ??? ???.");
+      setModeNameError("이미 같은 이름의 모드가 있어.");
       return;
     }
 
@@ -519,7 +519,7 @@ export function LeftPanel({
   const handleCreateAgent = () => {
     const trimmedName = newAgentName.trim();
     if (!trimmedName) {
-      setAgentNameError("???? ??? ??? ???.");
+      setAgentNameError("에이전트 이름을 입력해줘.");
       return;
     }
 
@@ -527,7 +527,7 @@ export function LeftPanel({
       (agent) => agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (exists) {
-      setAgentNameError("?? ?? ??? ????? ???.");
+      setAgentNameError("이미 같은 이름의 에이전트가 있어.");
       return;
     }
 
@@ -547,7 +547,7 @@ export function LeftPanel({
         tools: parseConfigList(newAgentTools),
         mcpServers: parseConfigList(newAgentMcpServers),
         skills: parseConfigList(newAgentSkills),
-        status: "?? ?",
+        status: "대기 중",
         active: true,
       },
     ]);
@@ -646,13 +646,13 @@ export function LeftPanel({
     }));
 
     if (normalizedAgents.some((agent) => !agent.name)) {
-      setAgentNameError("???? ??? ??? ? ???.");
+      setAgentNameError("에이전트 이름을 비워둘 수 없어.");
       return;
     }
 
     const normalizedNames = normalizedAgents.map((agent) => agent.name.toLowerCase());
     if (new Set(normalizedNames).size !== normalizedNames.length) {
-      setAgentNameError("?? ?? ??? ????? ???.");
+      setAgentNameError("이미 같은 이름의 에이전트가 있어.");
       return;
     }
 
@@ -714,7 +714,7 @@ export function LeftPanel({
 
     const trimmedName = quickEditAgentDraft.name.trim();
     if (!trimmedName) {
-      setQuickEditError("???? ??? ??? ???.");
+      setQuickEditError("에이전트 이름을 입력해줘.");
       return;
     }
 
@@ -724,7 +724,7 @@ export function LeftPanel({
         agent.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (duplicateName) {
-      setQuickEditError("?? ??? ????? ?? ???.");
+      setQuickEditError("같은 이름의 에이전트가 이미 있어.");
       return;
     }
 
@@ -766,6 +766,15 @@ export function LeftPanel({
 
   return (
     <aside className="left-panel">
+      <div className="workspace-intro">
+        <span className="workspace-intro-icon material-symbols-outlined" aria-hidden="true">
+          space_dashboard
+        </span>
+        <div>
+          <strong>작업 공간</strong>
+          <span>에이전트와 함께 만드는 곳</span>
+        </div>
+      </div>
       <ModeSection
         modes={modes}
         selectedMode={selectedMode}

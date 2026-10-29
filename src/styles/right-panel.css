@@ -1,50 +1,116 @@
 .right-panel {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  background: var(--panel);
 }
 
+/* 활동과 사용량은 현재 세션의 실제 데이터를 보여줍니다. */
 .right-head {
-  height: 40px;
-  min-height: 40px;
+  min-height: 68px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #9aa4b2;
-  font-weight: 700;
+  gap: 12px;
 }
 
 .right-head h3 {
-  margin: 0;
-  font-size: 11px;
+  margin: 4px 0 0;
+  color: var(--text-main);
+  font-size: 14px;
+  letter-spacing: -0.03em;
 }
 
-.toolbar-icons {
-  display: flex;
-  gap: 6px;
+.right-eyebrow {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.activity-count {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .activity-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 20px;
 }
 
+.activity-intro {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-intro-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  font-size: 21px;
+}
+
+.activity-intro strong {
+  color: var(--text-main);
+  font-size: 13px;
+}
+.activity-intro p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.activity-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 21px 0 15px;
+}
+.activity-section-heading h4 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+}
+.activity-section-heading span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
 .activity-timeline {
   position: relative;
   padding-left: 17px;
 }
-
+.activity-timeline::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 12px;
+  left: 4px;
+  width: 1px;
+  background: var(--border);
+}
 .activity-empty {
-  min-height: 160px;
+  min-height: 142px;
+  padding: 20px 12px;
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -52,156 +118,151 @@
   color: var(--text-muted);
   text-align: center;
 }
-
+.activity-empty .material-symbols-outlined {
+  color: var(--primary);
+  opacity: 0.65;
+}
 .activity-empty p {
   margin: 0;
-  max-width: 180px;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.6;
 }
-
 .timeline-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 24px;
+  gap: 11px;
+  margin-bottom: 17px;
   animation: fadeUp 280ms ease-out;
 }
-
 .timeline-dot {
-  margin-left: -22px;
-  width: 12px;
-  height: 12px;
+  flex: none;
+  margin: 5px 0 0 -16px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 2px solid var(--panel);
-  background: #64748b;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 3px var(--panel);
 }
-
 .timeline-dot-done {
-  background: #22c55e;
+  background: #72b994;
 }
-
 .timeline-dot-active {
-  background: #60a5fa;
+  background: #9b8bdf;
 }
-
 .timeline-dot-working {
-  background: #f59e0b;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+  background: #d8a85f;
 }
-
 .timeline-dot-pending {
-  background: #475569;
+  background: #a8a6b1;
 }
-
 .timeline-dot-failed {
-  background: #f87171;
+  background: #df858b;
 }
-
 .timeline-body {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--timeline-body-bg);
-  padding: 10px;
+  min-width: 0;
   width: 100%;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
 }
-
 .timeline-name {
-  font-size: 13px;
   color: var(--text-main);
-  font-weight: 700;
-}
-
-.timeline-time {
-  color: var(--text-muted);
   font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
-
+.timeline-time {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 10px;
+}
 .timeline-title-wrap {
   display: flex;
   justify-content: space-between;
   gap: 8px;
 }
-
 .timeline-text {
   margin: 6px 0 0;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.45;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.55;
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
-
 .timeline-item-faded {
   opacity: 0.7;
 }
-
 .progress-wrap {
-  margin-top: 8px;
   display: flex;
   gap: 4px;
+  margin-top: 9px;
 }
-
 .progress-seg {
   height: 4px;
-  border-radius: 999px;
   flex: 1;
-  background: #475569;
+  border-radius: 999px;
+  background: var(--bar-track-bg);
 }
-
 .progress-seg.done {
-  background: #22c55e;
+  background: #72b994;
 }
-
 .system-resources {
-  border-top: 1px dashed var(--border);
-  padding: 14px;
+  padding: 18px 20px 20px;
+  border-top: 1px solid var(--border);
 }
-
-.system-resources h4 {
-  margin: 0 0 12px;
-  color: #94a3b8;
+.resource-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.resource-section-heading h4 {
+  margin: 0;
+  color: var(--text-main);
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-
+.resource-section-heading p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.resource-section-heading > span {
+  color: var(--primary);
+  font-size: 19px;
+}
 .resource {
-  margin-bottom: 14px;
+  margin-bottom: 15px;
 }
-
 .resource:last-child {
   margin-bottom: 0;
 }
-
 .resource-head {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  color: #94a3b8;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: var(--text-soft);
+  font-size: 11px;
 }
-
 .resource-value {
   color: var(--text-main);
-  font-family: ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-
 .bar-track {
   height: 5px;
   border-radius: 999px;
   background: var(--bar-track-bg);
+  overflow: hidden;
 }
-
 .bar-fill {
   height: 100%;
   border-radius: inherit;
 }
-
 .bar-fill-primary {
   background: var(--primary);
 }
-
 .bar-fill-green {
-  background: #34d399;
+  background: #72b994;
 }
-

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { MessageCard } from "@/components/MessageCard";
+import officeScene from "@/assets/agent-office-scene.svg";
 import { normalizeProjectPath } from "@/lib/projectPaths";
 import type { Message } from "@/types/chat";
 
@@ -54,6 +55,14 @@ export function ChatPanel({
   };
 
   useEffect(() => {
+    if (messages.length === 0) {
+      // 새 대화에서는 안내 화면의 시작 부분을 보여줍니다.
+      chatContentRef.current?.parentElement?.scrollTo({ top: 0 });
+      shouldFollowStreamRef.current = true;
+      lastTypingMessageIdRef.current = null;
+      return;
+    }
+
     const latestTypingMessage = [...messages]
       .reverse()
       .find((message) => message.type === "typing");
@@ -152,10 +161,40 @@ export function ChatPanel({
         >
           {messages.length === 0 && (
             <div className="chat-empty-state" aria-live="polite">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                forum
-              </span>
-              <p>오늘은 무슨 일을 함께할까요?</p>
+              <div className="chat-welcome">
+                <span className="chat-welcome-eyebrow">YOUR LITTLE TEAM, BIG IDEAS ✳</span>
+                <h1>
+                  좋은 아이디어가 모이는 곳<span>.</span>
+                </h1>
+                <p>오늘은 에이전트와 어떤 일을 함께할까요?</p>
+              </div>
+              <div className="chat-office">
+                <div className="chat-office-head">
+                  <strong>
+                    <span aria-hidden="true">✳</span> 우리 팀 오피스
+                  </strong>
+                  <span className="chat-office-badge">WORKSPACE</span>
+                </div>
+                <div className="chat-office-scene">
+                  <img
+                    src={officeScene}
+                    alt="에이전트들이 각자의 책상에서 일하는 픽셀 아트 오피스"
+                  />
+                  <span className="chat-office-caption">✳ &nbsp; 함께 만드는 중</span>
+                </div>
+                <div className="chat-office-foot">
+                  작은 아이디어도, 함께라면 크게 <span aria-hidden="true">✦</span>
+                </div>
+              </div>
+              <div className="chat-start-hint">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  chat_bubble
+                </span>
+                <div>
+                  <strong>대화를 시작해 보세요</strong>
+                  <p>아래에 메시지를 입력하면 에이전트가 함께할게요.</p>
+                </div>
+              </div>
             </div>
           )}
           {messages.map((message) => (
@@ -263,19 +302,6 @@ export function ChatPanel({
               {hasConnectedProjects ? `Projects ${projectPaths.length}` : "프로젝트 없음"}
             </button>
           </div>
-
-          <button type="button" className="chip">
-            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-              add_circle
-            </span>
-            Use File
-          </button>
-          <button type="button" className="chip">
-            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-              tune
-            </span>
-            Configure Agent
-          </button>
         </div>
 
         <div className="composer-box">
@@ -283,28 +309,26 @@ export function ChatPanel({
             value={inputValue}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={onEnterSubmit}
-            placeholder="메시지 입력..."
+            placeholder="어떤 일을 함께 해볼까요?"
+            aria-label="메시지 입력"
             rows={1}
           />
           <div className="composer-actions">
-            <button type="button" className="icon-btn">
-              <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-                attach_file
-              </span>
-            </button>
-            <button type="button" className="icon-btn">
-              <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-                mic
-              </span>
-            </button>
-            <button className="send-btn" type="button" onClick={onSubmit} disabled={!canSend}>
+            <span className="composer-hint">Enter로 보내기 · Shift + Enter로 줄바꿈</span>
+            <button
+              className="send-btn"
+              type="button"
+              onClick={onSubmit}
+              disabled={!canSend}
+              aria-label="메시지 보내기"
+            >
               <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
                 arrow_upward
               </span>
             </button>
           </div>
         </div>
-        <p className="disclaimer">AI can make mistakes. Verify critical information.</p>
+        <p className="disclaimer">AI가 생성한 내용은 확인이 필요할 수 있어요.</p>
       </footer>
     </section>
   );

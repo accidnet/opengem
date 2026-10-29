@@ -1,0 +1,133 @@
+/* 스튜디오의 공통 프레임과 작은 화면의 패널 탐색 */
+#root,
+[data-theme="light"] #root {
+  padding: 0;
+  background: var(--bg);
+}
+
+.app-shell {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.top-bar {
+  height: 68px;
+  background: var(--panel);
+  padding: 0 24px;
+}
+
+.top-left {
+  max-width: none;
+  gap: 16px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: #8d7ddd;
+}
+
+.brand-title {
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.session-label-wrap {
+  display: flex;
+}
+
+.running-pill {
+  color: #659c7e;
+  border: 0;
+  background: #e7f5eb;
+  border-radius: 999px;
+}
+
+.new-session-btn {
+  height: 36px;
+  border: 0;
+  background: #8d7ddd;
+  color: #fff;
+}
+
+.new-session-btn:hover {
+  background: #7767c5;
+}
+
+.panel-toggle,
+.panel-backdrop {
+  display: none;
+}
+
+@media (max-width: 1280px) {
+  .panel-toggle-right {
+    display: inline-flex;
+  }
+
+  .body-grid.is-right-open .right-panel {
+    display: flex;
+    position: fixed;
+    z-index: 40;
+    top: 68px;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 90vw);
+    box-shadow: -12px 0 36px rgba(24, 20, 37, 0.16);
+  }
+
+  .body-grid.is-right-open .panel-backdrop {
+    display: block;
+  }
+}
+
+@media (max-width: 980px) {
+  .panel-toggle-left {
+    display: inline-flex;
+  }
+
+  .body-grid.is-left-open .left-panel {
+    display: flex;
+    position: fixed;
+    z-index: 40;
+    top: 68px;
+    bottom: 0;
+    left: 0;
+    width: min(280px, 90vw);
+    min-width: 0;
+    background: #242530;
+    box-shadow: 12px 0 36px rgba(24, 20, 37, 0.2);
+  }
+
+  .body-grid.is-left-open .panel-backdrop {
+    display: block;
+  }
+}
+
+.panel-backdrop {
+  position: fixed;
+  inset: 68px 0 0;
+  z-index: 35;
+  border: 0;
+  background: rgba(24, 20, 37, 0.36);
+}
+
+@media (max-width: 640px) {
+  .top-bar {
+    padding: 0 12px;
+  }
+
+  .top-left,
+  .top-right {
+    gap: 6px;
+  }
+
+  .session-label-wrap,
+  .separator {
+    display: none;
+  }
+}

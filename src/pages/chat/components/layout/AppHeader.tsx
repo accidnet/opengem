@@ -14,6 +14,8 @@ type AppHeaderProps = {
   onClearContext: () => void;
   onThemeToggle: () => void;
   onOpenPanelModal: () => void;
+  openPanel: "left" | "right" | null;
+  onTogglePanel: (panel: "left" | "right") => void;
 };
 
 export function AppHeader({
@@ -26,6 +28,8 @@ export function AppHeader({
   onClearContext,
   onThemeToggle,
   onOpenPanelModal,
+  openPanel,
+  onTogglePanel,
 }: AppHeaderProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -55,6 +59,17 @@ export function AppHeader({
   return (
     <header className="top-bar">
       <div className="top-left">
+        <button
+          className="icon-btn panel-toggle panel-toggle-left"
+          type="button"
+          aria-label="작업 공간 메뉴"
+          aria-expanded={openPanel === "left"}
+          onClick={() => onTogglePanel("left")}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            menu
+          </span>
+        </button>
         <div className="brand-chip">
           <div className="brand-mark">
             <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
@@ -78,12 +93,18 @@ export function AppHeader({
         </button>
       </div>
 
-      <div className="top-center">
-        <button className="nav-link active">Chat</button>
-        <button className="nav-link">Dashboard</button>
-      </div>
-
       <div className="top-right">
+        <button
+          className="icon-btn panel-toggle panel-toggle-right"
+          type="button"
+          aria-label="활동 기록"
+          aria-expanded={openPanel === "right"}
+          onClick={() => onTogglePanel("right")}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            view_sidebar
+          </span>
+        </button>
         <button className="icon-btn" title="Export Chat" onClick={onExportChat}>
           <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
             ios_share

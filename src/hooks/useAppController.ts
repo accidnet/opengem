@@ -6,7 +6,7 @@ import type { LLMSettings, ThemeMode } from "../types/chat";
 import { createProviderSettingsController } from "./providerSettingsController";
 
 export function useAppController() {
-  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [theme, setTheme] = useState<ThemeMode>("light");
   const [settings, setSettings] = useState<LLMSettings>(LLM_CONFIG);
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
@@ -53,7 +53,9 @@ export function useAppController() {
     setPanelModalError,
     setSettings: (next: SetStateAction<LLMSettings>) => {
       if (typeof next === "function") {
-        setSettings((prev) => normalizeLlmSettings((next as (prev: LLMSettings) => LLMSettings)(prev)));
+        setSettings((prev) =>
+          normalizeLlmSettings((next as (prev: LLMSettings) => LLMSettings)(prev))
+        );
         return;
       }
       setSettings(normalizeLlmSettings(next));

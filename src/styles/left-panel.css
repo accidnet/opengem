@@ -949,3 +949,214 @@
   align-items: center;
   gap: 8px;
 }
+
+/* 작업 공간 내비게이션은 테마와 관계없이 차분한 어두운 배경을 유지합니다. */
+.left-panel {
+  background: #242530;
+  border-color: #343440;
+  color: #f3f1fa;
+  scrollbar-color: #51505f #242530;
+}
+
+.workspace-intro {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 22px 18px 15px;
+}
+
+.workspace-intro-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+  background: #403b61;
+  color: #c8bbff;
+  font-size: 21px;
+}
+
+.workspace-intro strong,
+.workspace-intro span:not(.workspace-intro-icon) {
+  display: block;
+}
+
+.workspace-intro strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-intro span:not(.workspace-intro-icon) {
+  margin-top: 4px;
+  color: #92909e;
+  font-size: 10px;
+}
+
+.left-panel .panel-block {
+  padding: 16px 14px;
+  border-bottom: 1px solid #343440;
+}
+
+.left-panel .section-title {
+  color: #9693a3;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.left-panel .section-head-with-action {
+  margin-bottom: 9px;
+}
+
+.left-panel .small-icon-btn {
+  color: #9693a3;
+}
+
+.left-panel .small-icon-btn:hover,
+.left-panel .small-icon-btn:focus-visible {
+  color: #f3f1fa;
+  background: #3b3949;
+}
+
+.left-panel .mode-btn {
+  min-height: 41px;
+  padding: 9px 10px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #aaa7b5;
+  font-weight: 600;
+}
+
+.left-panel .mode-btn:hover {
+  background: #343440;
+}
+
+.left-panel .mode-btn.is-active {
+  border-color: transparent;
+  background: #3d3a55;
+  color: #d8cdfc;
+}
+
+.left-panel .btn-side {
+  gap: 10px;
+  min-width: 0;
+  color: #d7d4e0;
+}
+
+.left-panel .mode-btn.is-active .btn-side {
+  color: #f3efff;
+}
+
+.left-panel .btn-side > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.left-panel .btn-side .material-symbols-outlined {
+  color: #b8a7ee !important;
+}
+
+.left-panel .sub-session-list {
+  margin-left: 19px;
+  padding-left: 9px;
+  border-left: 1px solid #4a4857;
+}
+
+.left-panel .session-row {
+  color: #aaa7b5;
+}
+
+.left-panel .session-row:hover,
+.left-panel .session-row-active {
+  background: #343440;
+  border-color: #aa98e9;
+  color: #f3f1fa;
+}
+
+.left-panel .session-row-main span:last-child {
+  color: #8c899a;
+}
+
+.left-panel .agent-entry {
+  gap: 9px;
+  padding: 8px 6px;
+}
+
+.left-panel .agent-entry:hover,
+.left-panel .agent-entry-shell.is-editing .agent-entry {
+  background: #343440;
+}
+
+.left-panel .agent-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+.left-panel .status-dot {
+  border-color: #242530;
+}
+
+.left-panel .status-dot-active {
+  background: #72ce9d;
+}
+
+.left-panel .agent-name {
+  color: #eae8f0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.left-panel .agent-model,
+.left-panel .agent-state {
+  color: #9693a3;
+  font-size: 10px;
+}
+
+.left-panel .agent-state-active {
+  color: #83d5aa;
+}
+
+.left-panel .tool-item {
+  padding: 5px 6px;
+  color: #b9b6c3;
+}
+
+.left-panel .app-update-block {
+  margin: 16px 14px;
+  padding: 12px;
+  border: 1px solid #403e4b;
+  border-radius: 11px;
+  background: #2d2e3a;
+}
+
+.left-panel .app-update-copy span {
+  color: #aaa7b5;
+  font-size: 10px;
+}
+
+.left-panel .app-update-btn {
+  border-color: #514c69;
+  background: #403b58;
+  color: #e4ddfa;
+}
+
+.left-panel .app-update-btn:hover:not(:disabled) {
+  border-color: #aa98e9;
+  background: #50496d;
+}
+
+[data-theme="light"] .left-panel .section-title {
+  color: #9693a3;
+}
+
+[data-theme="light"] .left-panel .agent-entry:hover {
+  background: #343440;
+}
+
+[data-theme="light"] .left-panel .session-row-active {
+  background: #343440;
+  color: #f3f1fa;
+}
