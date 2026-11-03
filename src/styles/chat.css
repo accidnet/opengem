@@ -6,6 +6,42 @@
   background: var(--chat-bg);
 }
 
+/* 오피스와 대화를 오가도 대화 내용은 유지합니다. */
+.workspace-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 14px clamp(20px, 4vw, 48px) 0;
+}
+
+.workspace-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-tabs button.is-active {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--primary);
+}
+
+.workspace-tabs button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.workspace-tabs .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .chat-scroll {
   flex: 1;
   min-height: 0;

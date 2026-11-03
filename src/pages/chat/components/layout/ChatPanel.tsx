@@ -2,11 +2,16 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { MessageCard } from "@/components/MessageCard";
-import officeScene from "@/assets/agent-office-scene.svg";
+import { AgentOffice } from "@/pages/chat/components/office/AgentOffice";
 import { normalizeProjectPath } from "@/lib/projectPaths";
-import type { Message } from "@/types/chat";
+import type { AgentItem, Message } from "@/types/chat";
 
 type ChatPanelProps = {
+  agents: AgentItem[];
+  selectedAgentIndex: number | null;
+  onSelectAgent: (index: number) => void;
+  workspaceView: "office" | "chat";
+  onWorkspaceViewChange: (view: "office" | "chat") => void;
   messages: Message[];
   currentSessionId: string | null;
   currentSessionProjectPaths: string[];
@@ -23,6 +28,11 @@ type ChatPanelProps = {
 };
 
 export function ChatPanel({
+  agents,
+  selectedAgentIndex,
+  onSelectAgent,
+  workspaceView,
+  onWorkspaceViewChange,
   messages,
   currentSessionId,
   currentSessionProjectPaths,
@@ -55,9 +65,13 @@ export function ChatPanel({
   };
 
   useEffect(() => {
+    if (workspaceView !== "chat") {
+      chatContentRef.current?.scrollTo({ top: 0 });
+      return;
+    }
     if (messages.length === 0) {
       // 새 대화에서는 안내 화면의 시작 부분을 보여줍니다.
-      chatContentRef.current?.parentElement?.scrollTo({ top: 0 });
+      chatContentRef.current?.scrollTo({ top: 0 });
       shouldFollowStreamRef.current = true;
       lastTypingMessageIdRef.current = null;
       return;
@@ -82,7 +96,7 @@ export function ChatPanel({
     if (shouldFollowStreamRef.current) {
       scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, workspaceView]);
 
   useEffect(() => {
     if (!isProjectPanelOpen) {
@@ -151,6 +165,30 @@ export function ChatPanel({
 
   return (
     <section className="chat-panel">
+      <nav className="workspace-tabs" aria-label="작업 공간 화면">
+        <button
+          type="button"
+          className={workspaceView === "office" ? "is-active" : ""}
+          aria-current={workspaceView === "office" ? "page" : undefined}
+          onClick={() => onWorkspaceViewChange("office")}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            space_dashboard
+          </span>{" "}
+          에이전트 오피스
+        </button>
+        <button
+          type="button"
+          className={workspaceView === "chat" ? "is-active" : ""}
+          aria-current={workspaceView === "chat" ? "page" : undefined}
+          onClick={() => onWorkspaceViewChange("chat")}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            chat_bubble
+          </span>{" "}
+          대화
+        </button>
+      </nav>
       <div className="chat-scroll">
         <div
           ref={chatContentRef}
@@ -159,33 +197,14 @@ export function ChatPanel({
           onWheel={handleChatViewportInteraction}
           onTouchStart={handleChatViewportInteraction}
         >
-          {messages.length === 0 && (
+          {workspaceView === "office" ? (
+            <AgentOffice
+              agents={agents}
+              selectedAgentIndex={selectedAgentIndex}
+              onSelectAgent={onSelectAgent}
+            />
+          ) : messages.length === 0 ? (
             <div className="chat-empty-state" aria-live="polite">
-              <div className="chat-welcome">
-                <span className="chat-welcome-eyebrow">YOUR LITTLE TEAM, BIG IDEAS ✳</span>
-                <h1>
-                  좋은 아이디어가 모이는 곳<span>.</span>
-                </h1>
-                <p>오늘은 에이전트와 어떤 일을 함께할까요?</p>
-              </div>
-              <div className="chat-office">
-                <div className="chat-office-head">
-                  <strong>
-                    <span aria-hidden="true">✳</span> 우리 팀 오피스
-                  </strong>
-                  <span className="chat-office-badge">WORKSPACE</span>
-                </div>
-                <div className="chat-office-scene">
-                  <img
-                    src={officeScene}
-                    alt="에이전트들이 각자의 책상에서 일하는 픽셀 아트 오피스"
-                  />
-                  <span className="chat-office-caption">✳ &nbsp; 함께 만드는 중</span>
-                </div>
-                <div className="chat-office-foot">
-                  작은 아이디어도, 함께라면 크게 <span aria-hidden="true">✦</span>
-                </div>
-              </div>
               <div className="chat-start-hint">
                 <span className="material-symbols-outlined" aria-hidden="true">
                   chat_bubble
@@ -196,140 +215,155 @@ export function ChatPanel({
                 </div>
               </div>
             </div>
-          )}
-          {messages.map((message) => (
-            <MessageCard
-              key={message.id}
-              message={message}
-              onApprovePlan={onApprovePlan}
-              onModifyPlan={onModifyPlan}
-            />
-          ))}
-          <div ref={chatEndRef} />
+          ) : null}
+          {workspaceView === "chat" &&
+            messages.map((message) => (
+              <MessageCard
+                key={message.id}
+                message={message}
+                onApprovePlan={onApprovePlan}
+                onModifyPlan={onModifyPlan}
+              />
+            ))}
+          {workspaceView === "chat" && <div ref={chatEndRef} />}
         </div>
       </div>
 
-      <footer className="composer-wrap">
-        <div className="composer-floating-actions">
-          <div className="project-chip-wrap" ref={projectPanelRef}>
-            {isProjectPanelOpen && (
-              <div className="project-path-popover">
-                <div className="project-path-popover-head">
-                  <div>
-                    <strong>세션 프로젝트</strong>
-                    <p>
-                      {currentSessionId
-                        ? "이 세션에 연결된 프로젝트 폴더를 관리해요."
-                        : "세션 생성 전이라 기본 프로젝트 폴더만 확인할 수 있어요."}
-                    </p>
+      {workspaceView === "chat" && (
+        <footer className="composer-wrap">
+          <div className="composer-floating-actions">
+            <div className="project-chip-wrap" ref={projectPanelRef}>
+              {isProjectPanelOpen && (
+                <div className="project-path-popover">
+                  <div className="project-path-popover-head">
+                    <div>
+                      <strong>세션 프로젝트</strong>
+                      <p>
+                        {currentSessionId
+                          ? "이 세션에 연결된 프로젝트 폴더를 관리해요."
+                          : "세션 생성 전이라 기본 프로젝트 폴더만 확인할 수 있어요."}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="project-path-popover-list">
-                  {hasConnectedProjects ? (
-                    projectPaths.map((projectPath) => (
-                      <div className="project-path-row" key={projectPath}>
-                        <button
-                          type="button"
-                          className="project-path-label"
-                          title={projectPath}
-                          onClick={() => void onOpenProjectFolder(projectPath)}
-                        >
-                          {projectPath}
-                        </button>
-                        <div className="project-path-row-actions">
+                  <div className="project-path-popover-list">
+                    {hasConnectedProjects ? (
+                      projectPaths.map((projectPath) => (
+                        <div className="project-path-row" key={projectPath}>
                           <button
                             type="button"
-                            className="small-icon-btn"
-                            title="폴더 열기"
+                            className="project-path-label"
+                            title={projectPath}
                             onClick={() => void onOpenProjectFolder(projectPath)}
                           >
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: "16px" }}
-                            >
-                              folder_open
-                            </span>
+                            {projectPath}
                           </button>
-                          <button
-                            type="button"
-                            className="small-icon-btn danger"
-                            title="경로 제거"
-                            onClick={() => void handleRemoveProjectPath(projectPath)}
-                          >
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: "16px" }}
+                          <div className="project-path-row-actions">
+                            <button
+                              type="button"
+                              className="small-icon-btn"
+                              title="폴더 열기"
+                              onClick={() => void onOpenProjectFolder(projectPath)}
                             >
-                              close
-                            </span>
-                          </button>
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "16px" }}
+                              >
+                                folder_open
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="small-icon-btn danger"
+                              title="경로 제거"
+                              onClick={() => void handleRemoveProjectPath(projectPath)}
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "16px" }}
+                              >
+                                close
+                              </span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="project-path-empty">연결된 프로젝트가 없어요.</p>
-                  )}
-                </div>
-
-                <div className="project-path-editor">
-                  <div className="project-path-editor-actions">
-                    <button
-                      type="button"
-                      className="chip project-chip-secondary"
-                      onClick={() => void handlePickProjectPath()}
-                      disabled={!currentSessionId}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                        folder_open
-                      </span>
-                      폴더 선택
-                    </button>
+                      ))
+                    ) : (
+                      <p className="project-path-empty">연결된 프로젝트가 없어요.</p>
+                    )}
                   </div>
-                  {projectError && <p className="project-path-error">{projectError}</p>}
+
+                  <div className="project-path-editor">
+                    <div className="project-path-editor-actions">
+                      <button
+                        type="button"
+                        className="chip project-chip-secondary"
+                        onClick={() => void handlePickProjectPath()}
+                        disabled={!currentSessionId}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                          folder_open
+                        </span>
+                        폴더 선택
+                      </button>
+                    </div>
+                    {projectError && <p className="project-path-error">{projectError}</p>}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <button
-              type="button"
-              className={`chip project-chip ${hasConnectedProjects ? "is-active" : "is-empty"}`}
-              onClick={() => setIsProjectPanelOpen((prev) => !prev)}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                folder_code
-              </span>
-              {hasConnectedProjects ? `Projects ${projectPaths.length}` : "프로젝트 없음"}
-            </button>
+              <button
+                type="button"
+                className={`chip project-chip ${hasConnectedProjects ? "is-active" : "is-empty"}`}
+                onClick={() => setIsProjectPanelOpen((prev) => !prev)}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                  folder_code
+                </span>
+                {hasConnectedProjects ? `Projects ${projectPaths.length}` : "프로젝트 없음"}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="composer-box">
-          <textarea
-            value={inputValue}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={onEnterSubmit}
-            placeholder="어떤 일을 함께 해볼까요?"
-            aria-label="메시지 입력"
-            rows={1}
-          />
-          <div className="composer-actions">
-            <span className="composer-hint">Enter로 보내기 · Shift + Enter로 줄바꿈</span>
-            <button
-              className="send-btn"
-              type="button"
-              onClick={onSubmit}
-              disabled={!canSend}
-              aria-label="메시지 보내기"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-                arrow_upward
-              </span>
-            </button>
+          <div className="composer-box">
+            <textarea
+              value={inputValue}
+              onChange={(event) => onInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing &&
+                  canSend
+                )
+                  onWorkspaceViewChange("chat");
+                onEnterSubmit(event);
+              }}
+              placeholder="어떤 일을 함께 해볼까요?"
+              aria-label="메시지 입력"
+              rows={1}
+            />
+            <div className="composer-actions">
+              <span className="composer-hint">Enter로 보내기 · Shift + Enter로 줄바꿈</span>
+              <button
+                className="send-btn"
+                type="button"
+                onClick={() => {
+                  onWorkspaceViewChange("chat");
+                  onSubmit();
+                }}
+                disabled={!canSend}
+                aria-label="메시지 보내기"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                  arrow_upward
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
-        <p className="disclaimer">AI가 생성한 내용은 확인이 필요할 수 있어요.</p>
-      </footer>
+          <p className="disclaimer">AI가 생성한 내용은 확인이 필요할 수 있어요.</p>
+        </footer>
+      )}
     </section>
   );
 }

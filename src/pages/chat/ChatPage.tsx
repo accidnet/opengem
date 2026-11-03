@@ -4,6 +4,7 @@ import { ChatPanel } from "./components/layout/ChatPanel";
 import { ProvidersSettingModal } from "./components/ProvidersSettingModal";
 import { LeftPanel } from "../../components/layout/LeftPanel";
 import { RightPanel } from "../../components/layout/RightPanel";
+import { AgentDetailPanel } from "@/components/AgentDetailPanel";
 import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
 import { useAppUpdater } from "../../hooks/useAppUpdater";
@@ -21,6 +22,8 @@ export function ChatPage() {
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
   const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
+  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
+  const [workspaceView, setWorkspaceView] = useState<"office" | "chat">("office");
   const appUpdater = useAppUpdater();
 
   useEffect(() => {
@@ -84,6 +87,17 @@ export function ChatPage() {
     tokenPercent,
     updateCurrentSessionProjectPaths,
   } = useChatController({ settings });
+
+  const selectedAgentIndex = agents.findIndex((agent) => agent.name === selectedAgentName);
+  const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
+
+  useEffect(() => {
+    setSelectedAgentName(null);
+  }, [selectedMode]);
+
+  useEffect(() => {
+    if (selectedAgentName && selectedAgentIndex < 0) setSelectedAgentName(null);
+  }, [selectedAgentIndex, selectedAgentName]);
 
   useEffect(() => {
     if (!isResizingLeftPanel && !isResizingRightPanel) {
@@ -156,12 +170,22 @@ export function ChatPage() {
         isLoggedIn={settings.loggedIn}
         sessionTitle={currentSessionTitle}
         hasActiveSession={Boolean(currentSessionId)}
-        onNewChat={startNewChat}
+        onNewChat={() => {
+          setWorkspaceView("office");
+          startNewChat();
+        }}
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
         openPanel={openPanel}
-        onTogglePanel={(panel) => setOpenPanel((current) => (current === panel ? null : panel))}
+        onTogglePanel={(panel) => {
+          if (panel === "right" && selectedAgentName) {
+            setSelectedAgentName(null);
+            setOpenPanel("right");
+            return;
+          }
+          setOpenPanel((current) => (current === panel ? null : panel));
+        }}
         onOpenPanelModal={() => setIsPanelModalOpen(true)}
       />
 
@@ -197,6 +221,7 @@ export function ChatPage() {
           sessionsByMode={sessionsByMode}
           onSessionSelect={(session) => {
             setOpenPanel(null);
+            setWorkspaceView("chat");
             return handleSessionSelect(session);
           }}
           onSessionDelete={handleSessionDelete}
@@ -220,6 +245,16 @@ export function ChatPage() {
         />
 
         <ChatPanel
+          agents={agents}
+          selectedAgentIndex={selectedAgentIndex >= 0 ? selectedAgentIndex : null}
+          onSelectAgent={(index) => {
+            const agent = agents[index];
+            if (!agent) return;
+            setSelectedAgentName(agent.name);
+            if (window.innerWidth <= 1280) setOpenPanel("right");
+          }}
+          workspaceView={workspaceView}
+          onWorkspaceViewChange={setWorkspaceView}
           messages={messages}
           currentSessionId={currentSessionId}
           currentSessionProjectPaths={currentSessionProjectPaths}
@@ -250,13 +285,24 @@ export function ChatPage() {
           }}
         />
 
-        <RightPanel
-          activity={activity}
-          resourceToken={resourceToken}
-          resourceCost={resourceCost}
-          tokenPercent={tokenPercent}
-          costPercent={costPercent}
-        />
+        {selectedAgent ? (
+          <AgentDetailPanel
+            agent={selectedAgent}
+            activity={activity}
+            onClose={() => {
+              setSelectedAgentName(null);
+              setOpenPanel(null);
+            }}
+          />
+        ) : (
+          <RightPanel
+            activity={activity}
+            resourceToken={resourceToken}
+            resourceCost={resourceCost}
+            tokenPercent={tokenPercent}
+            costPercent={costPercent}
+          />
+        )}
       </main>
 
       <ProvidersSettingModal
