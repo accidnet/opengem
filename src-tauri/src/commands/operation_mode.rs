@@ -1,4 +1,5 @@
 use crate::app_state::AppState;
+use rand::{distributions::Alphanumeric, Rng};
 use rfd::FileDialog;
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashSet;
@@ -23,6 +24,8 @@ fn default_agent_role() -> String {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPayload {
+    #[serde(default)]
+    agent_id: Option<String>,
     name: String,
     icon: String,
     color: String,
@@ -64,6 +67,7 @@ pub struct OperationModeState {
 fn default_orchestration_agents() -> Vec<AgentPayload> {
     vec![
         AgentPayload {
+            agent_id: None,
             name: "오케스트레이터".to_string(),
             icon: "account_tree".to_string(),
             color: "indigo".to_string(),
@@ -76,6 +80,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             skills: Some(vec!["task-routing".to_string()]),
         },
         AgentPayload {
+            agent_id: None,
             name: "프론트엔드 개발자".to_string(),
             icon: "travel_explore".to_string(),
             color: "emerald".to_string(),
@@ -88,6 +93,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
             skills: Some(vec!["design-review".to_string()]),
         },
         AgentPayload {
+            agent_id: None,
             name: "백엔드 개발자".to_string(),
             icon: "code".to_string(),
             color: "amber".to_string(),
@@ -104,6 +110,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
 
 fn default_mode_agents() -> Vec<AgentPayload> {
     vec![AgentPayload {
+        agent_id: None,
         name: "오케스트레이터".to_string(),
         icon: "account_tree".to_string(),
         color: "indigo".to_string(),
@@ -119,6 +126,15 @@ fn default_mode_agents() -> Vec<AgentPayload> {
 
 fn default_mode_model() -> String {
     "gpt-5.4".to_string()
+}
+
+fn generate_agent_id() -> String {
+    let suffix: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(24)
+        .map(char::from)
+        .collect();
+    format!("agent-{suffix}")
 }
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {
@@ -200,9 +216,10 @@ fn seed_agents_for_mode(
                     mcp_servers,
                     skills,
                     agent_role,
-                    display_order
+                    display_order,
+                    agent_id
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                 ",
                 params![
                     mode_id,
@@ -216,7 +233,8 @@ fn seed_agents_for_mode(
                     mcp_servers,
                     skills,
                     agent.role,
-                    index as i64
+                    index as i64,
+                    generate_agent_id()
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -598,6 +616,13 @@ pub fn load_mode_agents(
     mode_name: String,
 ) -> Result<Vec<AgentPayload>, String> {
     let connection = state.open_connection()?;
+    load_mode_agents_from_connection(&connection, &mode_name)
+}
+
+fn load_mode_agents_from_connection(
+    connection: &rusqlite::Connection,
+    mode_name: &str,
+) -> Result<Vec<AgentPayload>, String> {
     let mode_id = resolve_mode_id(&connection, mode_name.trim())?;
 
     let mut statement = connection
@@ -613,7 +638,8 @@ pub fn load_mode_agents(
                 tools,
                 mcp_servers,
                 skills,
-                agent_role
+                agent_role,
+                agent_id
             FROM operation_mode_agents
             WHERE mode_id = ?1
             ORDER BY display_order ASC, id ASC
@@ -625,6 +651,7 @@ pub fn load_mode_agents(
         .query_map(params![mode_id], |row| {
             let active: i64 = row.get(3)?;
             Ok(AgentPayload {
+                agent_id: row.get(10)?,
                 name: row.get(0)?,
                 icon: row.get(1)?,
                 color: row.get(2)?,
@@ -655,6 +682,15 @@ pub fn save_mode_agents(
     mode_name: String,
     agents: Vec<AgentPayload>,
 ) -> Result<(), String> {
+    let mut connection = state.open_connection()?;
+    save_mode_agents_in_connection(&mut connection, &mode_name, agents)
+}
+
+fn save_mode_agents_in_connection(
+    connection: &mut rusqlite::Connection,
+    mode_name: &str,
+    agents: Vec<AgentPayload>,
+) -> Result<(), String> {
     let mode_name = mode_name.trim().to_string();
     if mode_name.is_empty() {
         return Err("저장할 operation mode가 비어 있습니다.".to_string());
@@ -675,6 +711,9 @@ pub fn save_mode_agents(
 
         seen_names.insert(normalized_name);
         normalized_agents.push(AgentPayload {
+            agent_id: Some(
+                normalize_optional_text(agent.agent_id).unwrap_or_else(generate_agent_id),
+            ),
             name: trimmed_name.to_string(),
             icon: agent.icon.trim().to_string(),
             color: agent.color.trim().to_string(),
@@ -710,7 +749,6 @@ pub fn save_mode_agents(
         }
     }
 
-    let mut connection = state.open_connection()?;
     let transaction = connection
         .transaction()
         .map_err(|error| error.to_string())?;
@@ -743,9 +781,10 @@ pub fn save_mode_agents(
                     mcp_servers,
                     skills,
                     agent_role,
-                    display_order
+                    display_order,
+                    agent_id
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                 ",
                 params![
                     mode_id,
@@ -759,7 +798,8 @@ pub fn save_mode_agents(
                     mcp_servers,
                     skills,
                     agent.role,
-                    index as i64
+                    index as i64,
+                    agent.agent_id
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -767,4 +807,57 @@ pub fn save_mode_agents(
 
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod agent_identity_tests {
+    use super::*;
+    use crate::migrations::run_migrations;
+
+    #[test]
+    fn agent_ids_survive_rename_save_and_new_agent_creation() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        let mut agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        let original_id = agents[0].agent_id.clone().unwrap();
+        agents[0].name = "새 이름".to_string();
+        let mut new_agent = agents[0].clone();
+        new_agent.name = "새 에이전트".to_string();
+        new_agent.agent_id = None;
+        agents.push(new_agent);
+
+        save_mode_agents_in_connection(&mut connection, "Orchestration", agents).unwrap();
+        let saved = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(saved[0].agent_id.as_deref(), Some(original_id.as_str()));
+        assert_eq!(saved[0].name, "새 이름");
+        let new_id = saved.last().unwrap().agent_id.as_ref().unwrap();
+        assert_ne!(new_id, &original_id);
+        let stable_ids: Vec<_> = saved.iter().map(|agent| agent.agent_id.clone()).collect();
+
+        save_mode_agents_in_connection(&mut connection, "Orchestration", saved).unwrap();
+        let reloaded = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(
+            stable_ids,
+            reloaded
+                .iter()
+                .map(|agent| agent.agent_id.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn newly_seeded_mode_has_agent_id() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO operation_modes (mode_name, display_order) VALUES ('New mode', 1)",
+                [],
+            )
+            .unwrap();
+        let mode_id = connection.last_insert_rowid();
+        seed_agents_for_mode(&connection, mode_id, "New mode").unwrap();
+        let agents = load_mode_agents_from_connection(&connection, "New mode").unwrap();
+        assert!(agents[0].agent_id.as_ref().is_some_and(|id| !id.is_empty()));
+    }
 }

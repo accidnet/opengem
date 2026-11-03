@@ -7,6 +7,8 @@ type AgentOfficeProps = {
   agents: AgentItem[];
   selectedAgentIndex: number | null;
   onSelectAgent: (index: number) => void;
+  onStartChat: (index: number) => void;
+  isConversationBusy: boolean;
 };
 
 // 한 오피스에 네 자리를 두고, 인원이 늘면 다음 오피스를 이어서 표시합니다.
@@ -20,7 +22,13 @@ const SHIRT_COLORS: Record<AgentItem["color"], string> = {
   rose: "#e9a69b",
 };
 
-export function AgentOffice({ agents, selectedAgentIndex, onSelectAgent }: AgentOfficeProps) {
+export function AgentOffice({
+  agents,
+  selectedAgentIndex,
+  onSelectAgent,
+  onStartChat,
+  isConversationBusy,
+}: AgentOfficeProps) {
   const roomCount = Math.max(1, Math.ceil(agents.length / AGENTS_PER_ROOM));
 
   return (
@@ -47,16 +55,20 @@ export function AgentOffice({ agents, selectedAgentIndex, onSelectAgent }: Agent
               const index = roomIndex * AGENTS_PER_ROOM + deskIndex;
               return (
                 <button
-                  key={index}
+                  key={agent.agentId || index}
                   type="button"
                   className={
                     "agent-office-marker " + (selectedAgentIndex === index ? "is-selected" : "")
                   }
                   style={{ left: String(DESK_POSITIONS[deskIndex]) + "%" }}
-                  aria-pressed={selectedAgentIndex === index}
-                  aria-label={agent.name + " 에이전트 선택"}
-                  title={agent.name}
-                  onClick={() => onSelectAgent(index)}
+                  aria-label={agent.name + "와 대화하기"}
+                  title={
+                    isConversationBusy
+                      ? "응답이 끝난 뒤 대화를 전환할 수 있어요."
+                      : agent.name + "와 대화하기"
+                  }
+                  disabled={isConversationBusy}
+                  onClick={() => onStartChat(index)}
                 >
                   <span className="agent-office-marker-label">
                     <span
@@ -97,37 +109,63 @@ export function AgentOffice({ agents, selectedAgentIndex, onSelectAgent }: Agent
         <span>
           우리 팀 <strong>{agents.length}</strong>명
         </span>
-        <span>에이전트를 선택해 자세히 살펴보세요</span>
+        <span>
+          {isConversationBusy
+            ? "응답이 끝나면 대화를 전환할 수 있어요"
+            : "에이전트를 선택해 대화를 시작하세요"}
+        </span>
       </div>
       {agents.length > 0 ? (
         <div className="agent-office-team" aria-label="에이전트 목록">
           {agents.map((agent, index) => (
-            <button
-              key={index}
-              type="button"
+            <div
+              key={agent.agentId || index}
               className={"agent-office-card " + (selectedAgentIndex === index ? "is-selected" : "")}
-              aria-pressed={selectedAgentIndex === index}
-              onClick={() => onSelectAgent(index)}
             >
-              <span className={"agent-office-avatar agent-office-avatar-" + agent.color}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {agent.icon}
+              <button
+                type="button"
+                className="agent-office-card-chat"
+                aria-label={agent.name + "와 대화하기"}
+                title={
+                  isConversationBusy
+                    ? "응답이 끝난 뒤 대화를 전환할 수 있어요."
+                    : agent.name + "와 대화하기"
+                }
+                disabled={isConversationBusy}
+                onClick={() => onStartChat(index)}
+              >
+                <span className={"agent-office-avatar agent-office-avatar-" + agent.color}>
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {agent.icon}
+                  </span>
                 </span>
-              </span>
-              <span className="agent-office-card-copy">
-                <strong>{agent.name}</strong>
-                <small>
-                  {agent.role === "main"
-                    ? "메인 에이전트"
-                    : agent.role === "sub"
-                      ? "보조 에이전트"
-                      : "역할 미지정"}
-                </small>
-              </span>
-              <span className={"agent-office-state " + (agent.active ? "is-active" : "")}>
-                {agent.active ? "활성" : "비활성"}
-              </span>
-            </button>
+                <span className="agent-office-card-copy">
+                  <strong>{agent.name}</strong>
+                  <small>
+                    {agent.role === "main"
+                      ? "메인 에이전트"
+                      : agent.role === "sub"
+                        ? "보조 에이전트"
+                        : "역할 미지정"}
+                  </small>
+                </span>
+                <span className={"agent-office-state " + (agent.active ? "is-active" : "")}>
+                  {agent.active ? "활성" : "비활성"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="agent-office-info"
+                aria-label={`${agent.name} 상세 정보`}
+                aria-expanded={selectedAgentIndex === index}
+                title={`${agent.name} 상세 정보`}
+                onClick={() => onSelectAgent(index)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  info
+                </span>
+              </button>
+            </div>
           ))}
         </div>
       ) : (

@@ -111,7 +111,8 @@
 }
 
 .agent-office-marker:focus-visible,
-.agent-office-card:focus-visible {
+.agent-office-card-chat:focus-visible,
+.agent-office-info:focus-visible {
   outline: 3px solid #a79af2;
   outline-offset: 2px;
 }
@@ -157,20 +158,61 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 9px;
-  padding: 10px;
+  padding: 3px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-soft);
   color: var(--text-main);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
 }
 
 .agent-office-card:hover,
 .agent-office-card.is-selected {
   border-color: var(--primary);
+}
+
+/* 대화와 상세 정보는 각각 독립된 키보드 조작으로 제공합니다. */
+.agent-office-card-chat {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  padding: 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-office-info {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.agent-office-info:hover,
+.agent-office-info[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+.agent-office-info .material-symbols-outlined {
+  font-size: 18px;
+}
+.agent-office-marker:disabled,
+.agent-office-card-chat:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .agent-office-avatar {

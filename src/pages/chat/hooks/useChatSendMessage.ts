@@ -1,8 +1,9 @@
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
-import { getChatSession } from "@/features/backend/api";
-import { getProviderCatalog } from "@/features/ai/catalog";
+import { getChatSession, getProviderCredential } from "@/features/backend/api";
+import { resolveProviderApiUrl } from "@/config/loadModels";
+import { getProviderCatalog, listProviders } from "@/features/ai/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
 import {
@@ -11,23 +12,22 @@ import {
   type ChatToolExecutionResult,
 } from "@/features/chat/toolRuntime";
 import { request, type LLMMessage, type LLMToolCall } from "@/features/ai";
-import type {
-  AgentItem,
-  Message,
-  ResolvedLLMSettings,
-  SessionItem,
-} from "@/types/chat";
+import type { AgentItem, Message, ResolvedLLMSettings, SessionItem } from "@/types/chat";
 import {
   AGENT_COLOR_VALUES,
   buildConversationMessages,
   buildTypingMessage,
   nowTime,
 } from "@/pages/chat/utils";
-import { useAvailableProviders } from "@/hooks/useAI";
+import { useAvailableModels, useAvailableProviders } from "@/hooks/useAI";
 import { finalizeAssistantMessage } from "@/pages/chat/activity";
+import { resolveConversationAgent } from "@/pages/chat/conversationTarget";
+import { selectModelProvider } from "@/pages/chat/providerRouting";
 
 type SendMessageDeps = {
   agents: AgentItem[];
+  targetAgentId: string | null;
+  conversationLockRef: MutableRefObject<boolean>;
   canSend: boolean;
   currentSessionId: string | null;
   ensureSession: (text: string) => Promise<SessionItem>;
@@ -257,7 +257,7 @@ async function runMainAgentLoop(input: {
       apiKey: input.activeSettings.apiKey,
       accessToken: input.activeSettings.accessToken,
       accountId: input.activeSettings.accountId,
-      model: input.mainAgent.model?.trim() ?? "gpt-5.4",
+      model: input.activeSettings.model,
       messages: workingMessages,
       tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
       toolChoice: toolDefinitions.length > 0 ? "auto" : undefined,
@@ -380,11 +380,13 @@ function resolveRuntimeApiUrl(input: {
   );
   const credentialApiUrl = matchedProvider?.apiUrls?.[input.activeSettings.providerKind];
 
-  return credentialApiUrl || matchedProvider?.apiUrl || input.activeSettings.baseUrl;
+  return credentialApiUrl || input.activeSettings.baseUrl;
 }
 
 export function useChatSendMessage({
   agents,
+  targetAgentId,
+  conversationLockRef,
   canSend,
   currentSessionId,
   ensureSession,
@@ -404,10 +406,11 @@ export function useChatSendMessage({
 }: SendMessageDeps) {
   // 사용가능한 provider가 있는 지 확인
   const { data: availableProviders = [] } = useAvailableProviders();
+  const { data: availableModels = [] } = useAvailableModels();
   const hasProvider = hasAvailableProvider(availableProviders);
 
   const sendMessage = async (): Promise<void> => {
-    if (!canSend) {
+    if (!canSend || conversationLockRef.current) {
       return;
     }
 
@@ -415,6 +418,10 @@ export function useChatSendMessage({
     if (!text) {
       return;
     }
+
+    const mainAgent = resolveConversationAgent(agents, targetAgentId);
+    if (!mainAgent || (targetAgentId && !mainAgent.active)) return;
+    conversationLockRef.current = true;
 
     const isFirstMessageInFreshSession = currentSessionId === null && messages.length === 0;
     if (isFirstMessageInFreshSession) {
@@ -431,7 +438,6 @@ export function useChatSendMessage({
       text,
     };
 
-    const mainAgent = agents.find((agent) => agent.role === "main") ?? agents[0];
     const typingMessage = buildTypingMessage(
       "Thinking...",
       mainAgent?.name,
@@ -452,13 +458,12 @@ export function useChatSendMessage({
       await persistMessage(session.id, userMessage);
 
       const sessionDetail = await getChatSession(session.id);
-      const activeSettings = await resolveProviderSettings();
-      const runtimeApiUrl = resolveRuntimeApiUrl({
-        activeSettings,
-        availableProviders,
-      });
+      if ((sessionDetail.session.agentId ?? null) !== targetAgentId) {
+        throw new Error("대화 대상이 일치하지 않습니다. 대화를 다시 열어 주세요.");
+      }
+      const currentSettings = await resolveProviderSettings();
 
-      if (!hasProvider) {
+      if (!hasProvider && currentSettings.providerId !== "custom") {
         await publishGuardMessage({
           sessionId: session.id,
           typingMessage,
@@ -470,6 +475,78 @@ export function useChatSendMessage({
         });
         return;
       }
+
+      const selected = selectModelProvider({
+        model: mainAgent.model,
+        activeSettings: currentSettings,
+        availableProviders,
+        availableModels,
+        catalogModels: listProviders().map((provider) => ({
+          providerId: provider.id,
+          models: provider.models,
+        })),
+      });
+      const sameCredential =
+        selected.providerId === currentSettings.providerId &&
+        selected.providerKind === currentSettings.providerKind;
+      let activeSettings: ResolvedLLMSettings;
+      const hasCurrentCredential =
+        selected.providerId === "custom" ||
+        (selected.providerKind === "api-key"
+          ? Boolean(currentSettings.apiKey?.trim())
+          : Boolean(currentSettings.accessToken?.trim()));
+      if (sameCredential && hasCurrentCredential) {
+        activeSettings = { ...currentSettings, model: selected.model };
+      } else {
+        let credential;
+        try {
+          credential = await getProviderCredential({
+            providerId: selected.providerId,
+            credentialType: selected.providerKind,
+          });
+        } catch {
+          throw new Error(
+            "선택한 Provider의 인증 정보를 불러오지 못했습니다. Provider 설정을 확인해 주세요."
+          );
+        }
+        if (
+          credential.providerId !== selected.providerId ||
+          credential.credentialType !== selected.providerKind
+        ) {
+          throw new Error(
+            "선택한 Provider의 인증 정보가 일치하지 않습니다. Provider 설정을 확인해 주세요."
+          );
+        }
+        const provider = availableProviders.find((item) => item.providerId === selected.providerId);
+        const baseUrl =
+          provider?.apiUrls?.[selected.providerKind] ||
+          resolveProviderApiUrl(
+            selected.providerId,
+            selected.providerKind,
+            getProviderCatalog(selected.providerId).baseUrl
+          );
+        activeSettings = {
+          ...selected,
+          baseUrl,
+          ...(credential.credentialType === "api-key"
+            ? { apiKey: credential.apiKey }
+            : { accessToken: credential.accessToken, accountId: credential.accountId }),
+        };
+      }
+      if (
+        activeSettings.providerId !== "custom" &&
+        (activeSettings.providerKind === "api-key"
+          ? !activeSettings.apiKey?.trim()
+          : !activeSettings.accessToken?.trim())
+      ) {
+        throw new Error(
+          "선택한 Provider의 인증 정보가 없습니다. Provider 설정 또는 로그인을 확인해 주세요."
+        );
+      }
+      const runtimeApiUrl =
+        activeSettings.providerId === "custom"
+          ? activeSettings.baseUrl
+          : resolveRuntimeApiUrl({ activeSettings, availableProviders });
 
       activeAssistantMessage = {
         ...typingMessage,
@@ -519,8 +596,8 @@ export function useChatSendMessage({
           // 오류 메시지 저장 실패가 원래 응답보다 우선되지는 않도록 무시합니다.
         }
       }
-
     } finally {
+      conversationLockRef.current = false;
       setIsLoading(false);
     }
   };

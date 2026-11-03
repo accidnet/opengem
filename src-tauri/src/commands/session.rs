@@ -17,6 +17,7 @@ pub struct SessionSummaryPayload {
     updated_at: i64,
     mode_name: String,
     project_paths: Vec<String>,
+    agent_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -49,6 +50,8 @@ pub struct ChatMessagePayload {
 pub struct CreateSessionInput {
     title: Option<String>,
     mode_name: String,
+    #[serde(default)]
+    agent_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,7 +74,7 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
     let mut statement = connection
         .prepare(
             "
-            SELECT id, title, updated_at, mode_name, project_paths
+            SELECT id, title, updated_at, mode_name, project_paths, agent_id
             FROM chat_sessions
             ORDER BY mode_name ASC, updated_at DESC, id DESC
             ",
@@ -86,6 +89,7 @@ pub fn list_chat_sessions(state: State<AppState>) -> Result<Vec<SessionSummaryPa
                 updated_at: row.get(2)?,
                 mode_name: row.get(3)?,
                 project_paths: deserialize_json(row.get(4)?)?.unwrap_or_default(),
+                agent_id: row.get(5)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -106,6 +110,13 @@ pub fn create_chat_session(
     input: Option<CreateSessionInput>,
 ) -> Result<SessionSummaryPayload, String> {
     let connection = state.open_connection()?;
+    create_session_in_connection(&connection, input)
+}
+
+fn create_session_in_connection(
+    connection: &rusqlite::Connection,
+    input: Option<CreateSessionInput>,
+) -> Result<SessionSummaryPayload, String> {
     let title = normalize_title(input.as_ref().and_then(|value| value.title.clone()));
     let mode_name = normalize_mode_name(
         input
@@ -113,7 +124,26 @@ pub fn create_chat_session(
             .map(|value| value.mode_name.as_str())
             .unwrap_or_default(),
     )?;
-    let project_paths = load_mode_project_paths(&connection, &mode_name)?;
+    let agent_id = input.as_ref().and_then(|value| value.agent_id.as_deref());
+    let agent_id = match agent_id {
+        Some(value) => {
+            let id = value.trim();
+            if id.is_empty() {
+                return Err("에이전트 ID가 비어 있습니다.".to_string());
+            }
+            let exists: bool = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM operation_mode_agents a JOIN operation_modes m ON a.mode_id = m.id WHERE m.mode_name = ?1 AND a.agent_id = ?2)",
+                params![&mode_name, id],
+                |row| row.get(0),
+            ).map_err(|error| error.to_string())?;
+            if !exists {
+                return Err("선택한 모드에서 에이전트를 찾을 수 없습니다.".to_string());
+            }
+            Some(id.to_string())
+        }
+        None => None,
+    };
+    let project_paths = load_mode_project_paths(connection, &mode_name)?;
     let now = now_millis();
     let session = SessionSummaryPayload {
         id: generate_id("session"),
@@ -121,13 +151,14 @@ pub fn create_chat_session(
         updated_at: now,
         mode_name,
         project_paths,
+        agent_id,
     };
 
     connection
         .execute(
             "
-            INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name, project_paths)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name, project_paths, agent_id)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ",
             params![
                 &session.id,
@@ -135,7 +166,8 @@ pub fn create_chat_session(
                 now,
                 session.updated_at,
                 &session.mode_name,
-                serialize_json_vec(&session.project_paths)?
+                serialize_json_vec(&session.project_paths)?,
+                &session.agent_id
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -329,7 +361,7 @@ fn load_session_summary(
     connection
         .query_row(
             "
-            SELECT id, title, updated_at, mode_name, project_paths
+            SELECT id, title, updated_at, mode_name, project_paths, agent_id
             FROM chat_sessions
             WHERE id = ?1
             ",
@@ -341,6 +373,7 @@ fn load_session_summary(
                     updated_at: row.get(2)?,
                     mode_name: row.get(3)?,
                     project_paths: deserialize_json(row.get(4)?)?.unwrap_or_default(),
+                    agent_id: row.get(5)?,
                 })
             },
         )
@@ -523,4 +556,75 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_millis() as i64)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod agent_session_tests {
+    use super::*;
+    use crate::migrations::run_migrations;
+
+    #[test]
+    fn direct_session_validates_mode_and_survives_agent_removal() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        let agent_id: String = connection
+            .query_row(
+                "SELECT agent_id FROM operation_mode_agents LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO operation_modes (mode_name, display_order) VALUES ('Other', 1)",
+                [],
+            )
+            .unwrap();
+        let invalid = create_session_in_connection(
+            &connection,
+            Some(CreateSessionInput {
+                title: None,
+                mode_name: "Other".to_string(),
+                agent_id: Some(agent_id.clone()),
+            }),
+        );
+        assert!(invalid.is_err());
+        let session = create_session_in_connection(
+            &connection,
+            Some(CreateSessionInput {
+                title: Some("대화".to_string()),
+                mode_name: "Orchestration".to_string(),
+                agent_id: Some(agent_id.clone()),
+            }),
+        )
+        .unwrap();
+        let loaded = load_session_summary(&connection, &session.id).unwrap();
+        assert_eq!(loaded.agent_id.as_deref(), Some(agent_id.as_str()));
+        connection
+            .execute(
+                "DELETE FROM operation_mode_agents WHERE agent_id = ?1",
+                [&agent_id],
+            )
+            .unwrap();
+        assert_eq!(
+            load_session_summary(&connection, &session.id)
+                .unwrap()
+                .agent_id,
+            Some(agent_id)
+        );
+
+        let legacy = create_session_in_connection(
+            &connection,
+            Some(CreateSessionInput {
+                title: None,
+                mode_name: "Orchestration".to_string(),
+                agent_id: None,
+            }),
+        )
+        .unwrap();
+        assert!(load_session_summary(&connection, &legacy.id)
+            .unwrap()
+            .agent_id
+            .is_none());
+    }
 }

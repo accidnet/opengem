@@ -112,8 +112,6 @@ pub(crate) struct StoredLlmSettings {
     pub base_url: String,
     pub api_key: Option<String>,
     pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub expires_at: Option<i64>,
     pub account_id: Option<String>,
     pub logged_in: bool,
     pub email: Option<String>,

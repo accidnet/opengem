@@ -6,6 +6,8 @@ type AgentDetailPanelProps = {
   agent: AgentItem;
   activity: ActivityItem[];
   onClose: () => void;
+  onStartChat: () => void;
+  isConversationBusy: boolean;
 };
 
 const activityLabels: Record<ActivityState, string> = {
@@ -16,7 +18,13 @@ const activityLabels: Record<ActivityState, string> = {
   failed: "실패",
 };
 
-export function AgentDetailPanel({ agent, activity, onClose }: AgentDetailPanelProps) {
+export function AgentDetailPanel({
+  agent,
+  activity,
+  onClose,
+  onStartChat,
+  isConversationBusy,
+}: AgentDetailPanelProps) {
   // 활동은 현재 세션의 메시지에서 만들어지므로 에이전트 이름으로 연결합니다.
   const agentActivity = activity
     .filter((item) => item.source === agent.name)
@@ -56,6 +64,26 @@ export function AgentDetailPanel({ agent, activity, onClose }: AgentDetailPanelP
           </p>
         </div>
       </div>
+
+      <button
+        className="agent-detail-chat"
+        type="button"
+        disabled={isConversationBusy}
+        title={
+          isConversationBusy
+            ? "응답이 끝난 뒤 대화를 전환할 수 있어요."
+            : `${agent.name}와 대화하기`
+        }
+        onClick={onStartChat}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          chat_bubble
+        </span>
+        대화하기
+      </button>
+      {isConversationBusy && (
+        <p className="agent-detail-chat-hint">응답이 끝나면 대화를 전환할 수 있어요.</p>
+      )}
 
       <div className="agent-detail-facts">
         <div>

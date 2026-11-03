@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { resolveLlmSettings } from "@/features/backend/api";
@@ -19,7 +19,12 @@ import type {
   ResolvedLLMSettings,
   SessionItem,
 } from "@/types/chat";
-import { normalizeAgentsForUi } from "@/features/app/appHelpers";
+import { getErrorMessage, normalizeAgentsForUi } from "@/features/app/appHelpers";
+import {
+  conversationDraftKey,
+  findAgentSession,
+  resolveConversationAgent,
+} from "@/pages/chat/conversationTarget";
 import { createSessionModeController } from "@/hooks/sessionModeController";
 import { useChatSendMessage } from "./useChatSendMessage";
 
@@ -31,6 +36,12 @@ export function useChatController({ settings }: UseChatControllerParams) {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
   const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
+  const [conversationError, setConversationError] = useState("");
+  const [isTransitioning, setIsTransitioning] = useState(true);
+  const conversationLockRef = useRef(false);
+  const initialLoadRef = useRef<Promise<void> | null>(null);
+  const draftsRef = useRef(new Map<string, string>());
   const [currentSessionTitle, setCurrentSessionTitle] = useState("새 채팅");
   const [currentSessionProjectPaths, setCurrentSessionProjectPaths] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -49,6 +60,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
   const resetCurrentSession = () => {
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
+    setCurrentAgentId(null);
     setCurrentSessionTitle("새 채팅");
     setCurrentSessionProjectPaths([]);
     setInputValue("");
@@ -58,14 +70,15 @@ export function useChatController({ settings }: UseChatControllerParams) {
     getModeDefaultModel,
     getModeIcon,
     getModeProjectPaths,
-    handleSessionDelete,
-    handleSessionSelect,
+    handleSessionDelete: selectDeleteSession,
+    handleSessionSelect: selectSavedSession,
+    loadSession,
     loadOperationModes,
     refreshSessions,
-    saveAgentsForSelectedMode,
-    saveOperationModeSettings,
-    selectOperationMode,
-    updateCurrentSessionProjectPaths,
+    saveAgentsForSelectedMode: persistAgents,
+    saveOperationModeSettings: persistModes,
+    selectOperationMode: selectMode,
+    updateCurrentSessionProjectPaths: persistSessionProjectPaths,
     openProjectFolder,
   } = createSessionModeController({
     agents,
@@ -78,6 +91,14 @@ export function useChatController({ settings }: UseChatControllerParams) {
     settings,
     setAgents,
     setCurrentSessionId,
+    setCurrentAgentId,
+    restoreDraft: (session) => {
+      setInputValue(
+        draftsRef.current.get(
+          conversationDraftKey(session.id, session.modeName, session.agentId ?? null)
+        ) ?? ""
+      );
+    },
     setCurrentSessionProjectPaths,
     setCurrentSessionTitle,
     setIsSessionLoading,
@@ -92,7 +113,15 @@ export function useChatController({ settings }: UseChatControllerParams) {
   });
 
   useEffect(() => {
-    void loadOperationModes();
+    conversationLockRef.current = true;
+    // StrictMode에서 효과가 재실행되어도 같은 초기화 작업을 기다립니다.
+    initialLoadRef.current ??= loadOperationModes();
+    void initialLoadRef.current
+      .catch((error) => setConversationError(getErrorMessage(error)))
+      .finally(() => {
+        conversationLockRef.current = false;
+        setIsTransitioning(false);
+      });
     // 컨트롤러 팩토리가 매 렌더마다 함수를 생성하므로 초기 로드만 실행합니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -106,7 +135,81 @@ export function useChatController({ settings }: UseChatControllerParams) {
     return () => clearInterval(timer);
   }, []);
 
-  const canSend = inputValue.trim().length > 0 && !isLoading && !isSessionLoading;
+  const conversationAgent = resolveConversationAgent(agents, currentAgentId);
+  const unavailableReason =
+    !currentAgentId && !conversationAgent
+      ? "대화할 에이전트가 없습니다. 에이전트 설정에서 추가해 주세요."
+      : currentAgentId && !conversationAgent
+        ? "이 대화의 에이전트가 삭제되었습니다. 기존 기록만 확인할 수 있어요."
+        : currentAgentId && !conversationAgent?.active
+          ? "비활성 에이전트입니다. 에이전트 설정에서 활성화한 뒤 대화할 수 있어요."
+          : "";
+  const isConversationBusy = isLoading || isSessionLoading || isTransitioning;
+  const canSend = inputValue.trim().length > 0 && !isConversationBusy && !unavailableReason;
+
+  const rememberDraft = () => {
+    draftsRef.current.set(
+      conversationDraftKey(currentSessionId, selectedMode, currentAgentId),
+      inputValue
+    );
+  };
+
+  // 화면을 바꾸는 작업과 응답 생성을 직렬화해 다른 대화로 결과가 새지 않게 합니다.
+  const changeConversation = async (action: () => Promise<void>, rethrow = false) => {
+    if (conversationLockRef.current) {
+      if (rethrow) throw new Error("진행 중인 작업이 끝난 뒤 다시 시도해 주세요.");
+      return false;
+    }
+    conversationLockRef.current = true;
+    setIsTransitioning(true);
+    setConversationError("");
+    rememberDraft();
+    try {
+      await action();
+      return true;
+    } catch (error) {
+      setConversationError(getErrorMessage(error));
+      if (rethrow) throw error;
+      return false;
+    } finally {
+      conversationLockRef.current = false;
+      setIsTransitioning(false);
+    }
+  };
+
+  const startAgentChat = (agent: AgentItem) =>
+    changeConversation(async () => {
+      if (!agent.agentId) throw new Error("에이전트를 저장한 뒤 개별 대화를 시작해 주세요.");
+      if (currentAgentId === agent.agentId) return;
+      const sessions = await invoke<SessionItem[]>("list_chat_sessions");
+      const existing = findAgentSession(sessions, selectedMode, agent.agentId);
+      if (existing) {
+        await loadSession(existing.id);
+      } else {
+        await refreshSessions(modes, null);
+        resetCurrentSession();
+        setCurrentAgentId(agent.agentId);
+        setCurrentSessionTitle(`${agent.name}와 대화`);
+        setInputValue(
+          draftsRef.current.get(conversationDraftKey(null, selectedMode, agent.agentId)) ?? ""
+        );
+      }
+    });
+
+  const handleSessionSelect = (session: SessionItem) =>
+    changeConversation(() => selectSavedSession(session));
+  const handleSessionDelete = (session: SessionItem) =>
+    changeConversation(() => selectDeleteSession(session));
+  const selectOperationMode = (mode: Mode) => changeConversation(() => selectMode(mode));
+  const saveAgentsForSelectedMode = async (next: AgentItem[]) => {
+    await changeConversation(() => persistAgents(next), true);
+  };
+  const saveOperationModeSettings = async (...args: Parameters<typeof persistModes>) => {
+    await changeConversation(() => persistModes(...args), true);
+  };
+  const updateCurrentSessionProjectPaths = async (paths: string[]) => {
+    await changeConversation(() => persistSessionProjectPaths(paths), true);
+  };
 
   const activity = useMemo(() => buildActivityFromMessages(messages), [messages]);
 
@@ -122,12 +225,18 @@ export function useChatController({ settings }: UseChatControllerParams) {
     try {
       const next = await resolveLlmSettings();
       return {
-        ...normalizeLlmSettings(next),
+        ...normalizeLlmSettings({ ...settings, ...next }),
+        baseUrl: next.baseUrl,
+        model: next.model,
         accessToken: next.accessToken,
         accountId: next.accountId,
       };
     } catch {
-      return normalizeLlmSettings(settings);
+      return {
+        ...normalizeLlmSettings(settings),
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+      };
     }
   };
 
@@ -148,6 +257,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
         updatedAt: Date.now(),
         modeName: selectedMode,
         projectPaths: currentSessionProjectPaths,
+        agentId: currentAgentId,
       };
     }
 
@@ -155,6 +265,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
       input: {
         title: buildSessionTitle(text),
         modeName: selectedMode,
+        agentId: currentAgentId,
       },
     });
 
@@ -168,6 +279,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   const { sendMessage } = useChatSendMessage({
     agents,
+    targetAgentId: currentAgentId,
+    conversationLockRef,
     canSend,
     currentSessionId,
     ensureSession,
@@ -200,22 +313,29 @@ export function useChatController({ settings }: UseChatControllerParams) {
   };
 
   const handleApprovePlan = () => {
+    if (conversationLockRef.current) return;
     appendStatusMessage("계획을 승인했고 다음 단계를 진행합니다.");
   };
 
   const handleModifyPlan = () => {
+    if (conversationLockRef.current) return;
     setInputValue("계획에서 수정하거나 보완할 내용을 정리해 주세요.");
     appendStatusMessage("계획 수정 요청을 남겼습니다.");
   };
 
   const clearContext = () => {
-    resetCurrentSession();
-    void refreshSessions(modes, null);
+    return changeConversation(async () => {
+      await refreshSessions(modes, null);
+      resetCurrentSession();
+      setCurrentAgentId(currentAgentId);
+    });
   };
 
   const startNewChat = () => {
-    resetCurrentSession();
-    void refreshSessions(modes, null);
+    return changeConversation(async () => {
+      await refreshSessions(modes, null);
+      resetCurrentSession();
+    });
   };
 
   const exportChat = async () => {
@@ -254,6 +374,12 @@ export function useChatController({ settings }: UseChatControllerParams) {
     clearContext,
     costPercent,
     currentSessionId,
+    currentAgentId,
+    conversationAgent,
+    conversationError,
+    unavailableReason,
+    isConversationBusy,
+    startAgentChat,
     currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,

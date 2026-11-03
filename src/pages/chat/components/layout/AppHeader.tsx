@@ -5,6 +5,7 @@ import "./AppHeader.css";
 import type { ThemeMode } from "@/types/chat";
 
 type AppHeaderProps = {
+  isConversationBusy: boolean;
   theme: ThemeMode;
   isLoggedIn: boolean;
   sessionTitle: string;
@@ -19,6 +20,7 @@ type AppHeaderProps = {
 };
 
 export function AppHeader({
+  isConversationBusy,
   theme,
   isLoggedIn,
   sessionTitle,
@@ -85,7 +87,13 @@ export function AppHeader({
           <h2>{sessionTitle}</h2>
           <span className="running-pill">{hasActiveSession ? "Session" : "Draft"}</span>
         </div>
-        <button className="new-session-btn" type="button" title="새 채팅 시작" onClick={onNewChat}>
+        <button
+          className="new-session-btn"
+          type="button"
+          title="새 채팅 시작"
+          onClick={onNewChat}
+          disabled={isConversationBusy}
+        >
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
           </span>
@@ -110,7 +118,12 @@ export function AppHeader({
             ios_share
           </span>
         </button>
-        <button className="icon-btn" title="Clear Context" onClick={onClearContext}>
+        <button
+          className="icon-btn"
+          title="Clear Context"
+          onClick={onClearContext}
+          disabled={isConversationBusy}
+        >
           <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
             delete_sweep
           </span>

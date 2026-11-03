@@ -97,7 +97,11 @@ pub fn get_provider_credential(
     let connection = state.open_connection()?;
     let provider_id = normalize_provider_id(&input.provider_id);
     let credential_type = normalize_provider_kind(&provider_id, &input.credential_type);
-    let credential = load_credential(&connection, &provider_id, &credential_type)?;
+    let credential = if provider_id == DEFAULT_PROVIDER_ID && credential_type == "oauth" {
+        resolve_oauth_credential(&connection)?
+    } else {
+        load_credential(&connection, &provider_id, &credential_type)?
+    };
 
     Ok(ProviderCredentialPayload {
         provider_id: credential.provider_id,
@@ -458,40 +462,52 @@ fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, String> {
 }
 
 fn resolve_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettings, String> {
-    let mut settings = load_settings(connection)?;
+    let settings = load_settings(connection)?;
     if settings.provider_kind != "oauth" {
         return Ok(settings);
     }
 
-    let refresh_token = settings
+    resolve_oauth_credential(connection)?;
+    load_settings(connection)
+}
+
+fn resolve_oauth_credential(
+    connection: &rusqlite::Connection,
+) -> Result<StoredProviderCredential, String> {
+    resolve_oauth_credential_with(connection, refresh_access_token)
+}
+
+fn resolve_oauth_credential_with(
+    connection: &rusqlite::Connection,
+    refresh: impl FnOnce(&str) -> Result<TokenResponse, String>,
+) -> Result<StoredProviderCredential, String> {
+    // 전역 모델 선택과 무관하게 OpenAI OAuth 자격 증명만 확인합니다.
+    let mut credential = load_credential(connection, DEFAULT_PROVIDER_ID, "oauth")?;
+
+    let refresh_token = credential
         .refresh_token
         .clone()
         .ok_or_else(|| "ChatGPT 로그인이 필요합니다.".to_string())?;
     let now = now_millis()?;
-    if settings.access_token.is_none() || settings.expires_at.unwrap_or(0) <= now + 60_000 {
-        let tokens = refresh_access_token(&refresh_token)?;
+    if credential.access_token.is_none() || credential.expires_at.unwrap_or(0) <= now + 60_000 {
+        let tokens = refresh(&refresh_token)?;
         let claims = extract_claims(
             tokens.id_token.as_deref(),
             Some(tokens.access_token.as_str()),
         );
-        save_credential(
-            connection,
-            StoredProviderCredential {
-                provider_id: DEFAULT_PROVIDER_ID.to_string(),
-                credential_type: "oauth".to_string(),
-                access_token: Some(tokens.access_token),
-                refresh_token: Some(tokens.refresh_token),
-                expires_at: Some(now + tokens.expires_in.unwrap_or(3600) * 1000),
-                account_id: extract_account_id(claims.as_ref()).or(settings.account_id.clone()),
-                email: claims
-                    .and_then(|item| item.email)
-                    .or(settings.email.clone()),
-                ..StoredProviderCredential::default()
-            },
-        )?;
-        settings = load_settings(connection)?;
+        credential = StoredProviderCredential {
+            provider_id: DEFAULT_PROVIDER_ID.to_string(),
+            credential_type: "oauth".to_string(),
+            access_token: Some(tokens.access_token),
+            refresh_token: Some(tokens.refresh_token),
+            expires_at: Some(now + tokens.expires_in.unwrap_or(3600) * 1000),
+            account_id: extract_account_id(claims.as_ref()).or(credential.account_id),
+            email: claims.and_then(|item| item.email).or(credential.email),
+            ..StoredProviderCredential::default()
+        };
+        save_credential(connection, credential.clone())?;
     }
-    Ok(settings)
+    Ok(credential)
 }
 
 fn to_payload(settings: StoredLlmSettings) -> LlmSettingsPayload {
@@ -654,4 +670,80 @@ const OAUTH_SUCCESS_HTML: &str = r#"<!doctype html><html><head><meta charset="ut
 
 fn oauth_error_html(message: &str) -> String {
     format!("<!doctype html><html><head><meta charset=\"utf-8\" /><title>OpenGem 로그인 실패</title></head><body style=\"margin:0;min-height:100vh;display:grid;place-items:center;background:#111827;color:#f8fafc;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;\"><main style=\"max-width:440px;padding:32px;border-radius:20px;background:rgba(17,24,39,.92);border:1px solid rgba(248,113,113,.28);text-align:center;\"><h1 style=\"margin:0 0 12px;font-size:24px;color:#fca5a5;\">로그인 실패</h1><p style=\"margin:0;color:#d1d5db;\">{message}</p></main></body></html>")
+}
+
+#[cfg(test)]
+mod oauth_credential_tests {
+    use super::*;
+    use crate::migrations::run_migrations;
+
+    #[test]
+    fn refreshes_openai_credentials_without_changing_selected_provider() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        save_selection(
+            &connection,
+            "anthropic",
+            "api-key",
+            "example-model",
+            false,
+            1,
+            true,
+            2,
+        )
+        .unwrap();
+        save_credential(
+            &connection,
+            StoredProviderCredential {
+                provider_id: "openai".to_string(),
+                credential_type: "oauth".to_string(),
+                access_token: Some("old-test-value".to_string()),
+                refresh_token: Some("test-refresh-value".to_string()),
+                expires_at: Some(1),
+                account_id: Some("test-account".to_string()),
+                ..StoredProviderCredential::default()
+            },
+        )
+        .unwrap();
+
+        let resolved = resolve_oauth_credential_with(&connection, |value| {
+            assert!(value == "test-refresh-value");
+            Ok(TokenResponse {
+                access_token: "new-test-value".to_string(),
+                refresh_token: "rotated-test-value".to_string(),
+                expires_in: Some(3600),
+                id_token: None,
+            })
+        })
+        .unwrap();
+        assert!(resolved.access_token.as_deref() == Some("new-test-value"));
+        let saved = load_credential(&connection, "openai", "oauth").unwrap();
+        assert!(saved.refresh_token.as_deref() == Some("rotated-test-value"));
+        assert!(saved.account_id.as_deref() == Some("test-account"));
+        assert_eq!(load_settings(&connection).unwrap().provider_id, "anthropic");
+        resolve_oauth_credential_with(&connection, |_| {
+            panic!("유효한 토큰은 갱신하지 않아야 합니다")
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn refresh_failure_is_returned() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        save_credential(
+            &connection,
+            StoredProviderCredential {
+                provider_id: "openai".to_string(),
+                credential_type: "oauth".to_string(),
+                refresh_token: Some("test-refresh-value".to_string()),
+                ..StoredProviderCredential::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            resolve_oauth_credential_with(&connection, |_| Err("refresh failed".to_string()))
+                .is_err()
+        );
+    }
 }

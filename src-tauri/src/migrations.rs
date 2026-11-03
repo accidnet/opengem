@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const MIGRATIONS: [(&str, &str); 16] = [
+const MIGRATIONS: [(&str, &str); 17] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -62,6 +62,10 @@ const MIGRATIONS: [(&str, &str); 16] = [
         "016_openai_auth_preferences",
         include_str!("../sql/migrations/016_openai_auth_preferences.sql"),
     ),
+    (
+        "017_agent_chat_identity",
+        include_str!("../sql/migrations/017_agent_chat_identity.sql"),
+    ),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
@@ -106,4 +110,47 @@ pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migration_preserves_legacy_sessions_and_assigns_stable_agent_ids() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE schema_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").unwrap();
+        for (name, sql) in &MIGRATIONS[..16] {
+            connection.execute_batch(sql).unwrap();
+            connection
+                .execute("INSERT INTO schema_migrations (name) VALUES (?1)", [name])
+                .unwrap();
+        }
+        connection.execute("INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name) VALUES ('legacy', '이전 대화', 1, 1, 'Orchestration')", []).unwrap();
+        run_migrations(&mut connection).unwrap();
+        let ids = |db: &Connection| {
+            let mut statement = db
+                .prepare("SELECT agent_id FROM operation_mode_agents ORDER BY id")
+                .unwrap();
+            let result = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            result
+        };
+        let original_ids = ids(&connection);
+        assert!(!original_ids.is_empty());
+        assert!(original_ids.iter().all(|id| !id.is_empty()));
+        let target: Option<String> = connection
+            .query_row(
+                "SELECT agent_id FROM chat_sessions WHERE id = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(target.is_none());
+        run_migrations(&mut connection).unwrap();
+        assert_eq!(ids(&connection), original_ids);
+    }
 }

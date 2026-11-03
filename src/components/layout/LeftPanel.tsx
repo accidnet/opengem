@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { ModelSelect } from "@/components/ModelSelect";
 import { normalizeProjectPath } from "@/lib/projectPaths";
+import { getErrorMessage } from "@/features/app/appHelpers";
 import type { Mode, ModeIcon } from "@/features/app/config/appData";
 import type { AgentColor, AgentItem, AgentRole, SessionItem } from "@/types/chat";
 import type { useAppUpdater } from "@/hooks/useAppUpdater";
@@ -60,6 +61,9 @@ type LeftPanelProps = {
   getModeProjectPaths: (mode: Mode) => string[];
   getModeDefaultModel: (mode: Mode) => string;
   agents: AgentItem[];
+  onAgentChat: (agent: AgentItem) => void;
+  isConversationBusy: boolean;
+  currentAgentId: string | null;
   sessionsByMode: Record<Mode, SessionItem[]>;
   onSessionSelect: (session: SessionItem) => void | Promise<void>;
   onSessionDelete: (session: SessionItem) => void | Promise<void>;
@@ -78,6 +82,9 @@ export function LeftPanel({
   getModeProjectPaths,
   getModeDefaultModel,
   agents,
+  onAgentChat,
+  isConversationBusy,
+  currentAgentId,
   sessionsByMode,
   onSessionSelect,
   onSessionDelete,
@@ -111,6 +118,8 @@ export function LeftPanel({
   const [quickEditPopoverAnchor, setQuickEditPopoverAnchor] =
     useState<QuickEditPopoverAnchor | null>(null);
   const [quickEditError, setQuickEditError] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const isSavingSettingsRef = useRef(false);
   const suppressOverlayCloseRef = useRef(false);
   const quickEditPopoverRef = useRef<HTMLElement | null>(null);
   const draftModeIdRef = useRef(0);
@@ -149,7 +158,7 @@ export function LeftPanel({
     }
 
     const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isSavingSettingsRef.current) {
         if (isAgentSettingsOpen) {
           setIsAgentSettingsOpen(false);
           return;
@@ -257,10 +266,12 @@ export function LeftPanel({
   };
 
   const closeModeSettings = () => {
+    if (isSavingSettingsRef.current) return;
     setIsModeSettingsOpen(false);
   };
 
   const closeAgentSettings = () => {
+    if (isSavingSettingsRef.current) return;
     setIsAgentSettingsOpen(false);
   };
 
@@ -465,6 +476,7 @@ export function LeftPanel({
   };
 
   const handleSaveModeSettings = async () => {
+    if (isConversationBusy || isSavingSettingsRef.current) return;
     const normalizedModes = draftModes.map((mode) => ({
       ...mode,
       name: mode.name.trim(),
@@ -512,8 +524,18 @@ export function LeftPanel({
     const selectedDraftMode = normalizedModes.find((mode) => mode.originalName === selectedMode);
     const nextSelectedMode = selectedDraftMode?.name || nextModes[0];
 
-    await onSaveModeSettings(nextModes, nextModeIcons, nextSelectedMode, modeItems);
-    closeModeSettings();
+    isSavingSettingsRef.current = true;
+    setIsSavingSettings(true);
+    setModeNameError("");
+    try {
+      await onSaveModeSettings(nextModes, nextModeIcons, nextSelectedMode, modeItems);
+      setIsModeSettingsOpen(false);
+    } catch (error) {
+      setModeNameError(getErrorMessage(error));
+    } finally {
+      isSavingSettingsRef.current = false;
+      setIsSavingSettings(false);
+    }
   };
 
   const handleCreateAgent = () => {
@@ -538,6 +560,7 @@ export function LeftPanel({
       ...prev,
       {
         id: `draft-agent-${draftAgentIdRef.current}`,
+        agentId: crypto.randomUUID(),
         name: trimmedName,
         icon: newAgentIcon,
         color: newAgentColor,
@@ -631,7 +654,9 @@ export function LeftPanel({
   };
 
   const handleSaveAgentSettings = async () => {
+    if (isConversationBusy || isSavingSettingsRef.current) return;
     const normalizedAgents = draftAgents.map((agent, index) => ({
+      agentId: agent.agentId,
       name: agent.name.trim(),
       icon: agent.icon,
       status: agent.status,
@@ -660,8 +685,18 @@ export function LeftPanel({
       normalizedAgents[0].role = "main";
     }
 
-    await onSaveAgents(normalizedAgents);
-    closeAgentSettings();
+    isSavingSettingsRef.current = true;
+    setIsSavingSettings(true);
+    setAgentNameError("");
+    try {
+      await onSaveAgents(normalizedAgents);
+      setIsAgentSettingsOpen(false);
+    } catch (error) {
+      setAgentNameError(getErrorMessage(error));
+    } finally {
+      isSavingSettingsRef.current = false;
+      setIsSavingSettings(false);
+    }
   };
 
   const handleStartQuickEditAgent = (index: number, anchorRect: DOMRect) => {
@@ -699,7 +734,7 @@ export function LeftPanel({
     }
   };
 
-  const handleCancelQuickEditAgent = () => {
+  const resetQuickEditAgent = () => {
     setQuickEditAgentIndex(null);
     setQuickEditAgentDraft(null);
     setQuickEditPopoverAnchor(null);
@@ -707,7 +742,12 @@ export function LeftPanel({
     setQuickEditError("");
   };
 
+  const handleCancelQuickEditAgent = () => {
+    if (!isSavingSettingsRef.current) resetQuickEditAgent();
+  };
+
   const handleSaveQuickEditAgent = async () => {
+    if (isConversationBusy || isSavingSettingsRef.current) return;
     if (quickEditAgentIndex === null || !quickEditAgentDraft) {
       return;
     }
@@ -756,8 +796,18 @@ export function LeftPanel({
               role: (index === 0 ? "main" : "sub") as AgentRole,
             }));
 
-    await onSaveAgents(normalizedAgents);
-    handleCancelQuickEditAgent();
+    isSavingSettingsRef.current = true;
+    setIsSavingSettings(true);
+    setQuickEditError("");
+    try {
+      await onSaveAgents(normalizedAgents);
+      resetQuickEditAgent();
+    } catch (error) {
+      setQuickEditError(getErrorMessage(error));
+    } finally {
+      isSavingSettingsRef.current = false;
+      setIsSavingSettings(false);
+    }
   };
 
   const handleCheckUpdate = async () => {
@@ -775,26 +825,33 @@ export function LeftPanel({
           <span>에이전트와 함께 만드는 곳</span>
         </div>
       </div>
-      <ModeSection
-        modes={modes}
-        selectedMode={selectedMode}
-        openModes={openModes}
-        getModeIcon={getModeIcon}
-        sessionsByMode={sessionsByMode}
-        onModeClick={handleModeClick}
-        onOpenSettings={openModeSettings}
-        onSessionSelect={onSessionSelect}
-        onSessionDelete={onSessionDelete}
-      />
-      <AgentsSection
-        agents={agents}
-        onOpenSettings={openAgentSettings}
-        quickEditAgentIndex={quickEditAgentIndex}
-        quickEditDraft={quickEditAgentDraft}
-        quickEditError={quickEditError}
-        onStartQuickEditAgent={handleStartQuickEditAgent}
-        onQuickEditAgentChange={handleQuickEditAgentChange}
-      />
+      <fieldset
+        disabled={isConversationBusy}
+        style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+      >
+        <ModeSection
+          modes={modes}
+          selectedMode={selectedMode}
+          openModes={openModes}
+          getModeIcon={getModeIcon}
+          sessionsByMode={sessionsByMode}
+          onModeClick={handleModeClick}
+          onOpenSettings={openModeSettings}
+          onSessionSelect={onSessionSelect}
+          onSessionDelete={onSessionDelete}
+        />
+        <AgentsSection
+          agents={agents}
+          onAgentChat={onAgentChat}
+          currentAgentId={currentAgentId}
+          onOpenSettings={openAgentSettings}
+          quickEditAgentIndex={quickEditAgentIndex}
+          quickEditDraft={quickEditAgentDraft}
+          quickEditError={quickEditError}
+          onStartQuickEditAgent={handleStartQuickEditAgent}
+          onQuickEditAgentChange={handleQuickEditAgentChange}
+        />
+      </fieldset>
       <ToolsSection tools={tools} />
       <section className="panel-block app-update-block">
         <div className="app-update-copy">
@@ -817,6 +874,7 @@ export function LeftPanel({
 
       <ModeSettingsModal
         isOpen={isModeSettingsOpen}
+        isBusy={isConversationBusy || isSavingSettings}
         newModeName={newModeName}
         newModeIcon={newModeIcon}
         modeNameError={modeNameError}
@@ -855,6 +913,7 @@ export function LeftPanel({
 
       <AgentSettingsModal
         isOpen={isAgentSettingsOpen}
+        isBusy={isConversationBusy || isSavingSettings}
         agentSettingsTab={agentSettingsTab}
         newAgentName={newAgentName}
         newAgentIcon={newAgentIcon}
@@ -910,84 +969,95 @@ export function LeftPanel({
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="agent-quick-popover-header">
-              <div className="agent-quick-popover-title-wrap">
-                <h3 id="agent-quick-edit-title" className="agent-quick-popover-title">
-                  Agent Quick Edit
-                </h3>
-                <p className="agent-quick-popover-subtitle">{agents[quickEditAgentIndex]?.name}</p>
-              </div>
-              <button
-                className="agent-quick-popover-close"
-                type="button"
-                aria-label="에이전트 빠른 설정 닫기"
-                onClick={handleCancelQuickEditAgent}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </header>
-
-            <div className="agent-quick-popover-body">
-              <label className="agent-quick-edit-field">
-                <span>이름</span>
-                <input
-                  className="mode-settings-input"
-                  type="text"
-                  value={quickEditAgentDraft.name}
-                  onChange={(event) => handleQuickEditAgentChange("name", event.target.value)}
-                />
-              </label>
-              <label className="agent-quick-edit-field">
-                <span>모델</span>
-                <ModelSelect
-                  className="agent-quick-model-select"
-                  value={quickEditAgentDraft.model}
-                  ariaLabel="에이전트 quick edit 모델"
-                  onChange={(value) => handleQuickEditAgentChange("model", value)}
-                />
-              </label>
-              <label className="agent-quick-edit-field">
-                <span>역할</span>
-                <select
-                  className="mode-settings-select"
-                  value={quickEditAgentDraft.role}
-                  onChange={(event) =>
-                    handleQuickEditAgentChange("role", event.target.value as AgentRole)
-                  }
+            <fieldset
+              disabled={isConversationBusy || isSavingSettings}
+              style={{ display: "contents" }}
+            >
+              <header className="agent-quick-popover-header">
+                <div className="agent-quick-popover-title-wrap">
+                  <h3 id="agent-quick-edit-title" className="agent-quick-popover-title">
+                    Agent Quick Edit
+                  </h3>
+                  <p className="agent-quick-popover-subtitle">
+                    {agents[quickEditAgentIndex]?.name}
+                  </p>
+                </div>
+                <button
+                  className="agent-quick-popover-close"
+                  type="button"
+                  aria-label="에이전트 빠른 설정 닫기"
+                  onClick={handleCancelQuickEditAgent}
                 >
-                  <option value="main">main</option>
-                  <option value="sub">sub</option>
-                </select>
-              </label>
-              <label className="agent-quick-edit-toggle">
-                <input
-                  type="checkbox"
-                  checked={quickEditAgentDraft.active}
-                  onChange={(event) => handleQuickEditAgentChange("active", event.target.checked)}
-                />
-                <span>활성 상태 유지</span>
-              </label>
-              {quickEditError && <p className="agent-quick-edit-error">{quickEditError}</p>}
-            </div>
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
+              </header>
 
-            <footer className="agent-quick-popover-footer">
-              <button
-                className="settings-secondary-btn agent-quick-popover-btn"
-                type="button"
-                onClick={handleCancelQuickEditAgent}
-              >
-                취소
-              </button>
-              <button
-                className="settings-primary-btn agent-quick-popover-btn"
-                type="button"
-                onClick={() => void handleSaveQuickEditAgent()}
-              >
-                저장
-              </button>
-            </footer>
+              <div className="agent-quick-popover-body">
+                <label className="agent-quick-edit-field">
+                  <span>이름</span>
+                  <input
+                    className="mode-settings-input"
+                    type="text"
+                    value={quickEditAgentDraft.name}
+                    onChange={(event) => handleQuickEditAgentChange("name", event.target.value)}
+                  />
+                </label>
+                <label className="agent-quick-edit-field">
+                  <span>모델</span>
+                  <ModelSelect
+                    className="agent-quick-model-select"
+                    value={quickEditAgentDraft.model}
+                    ariaLabel="에이전트 quick edit 모델"
+                    onChange={(value) => handleQuickEditAgentChange("model", value)}
+                  />
+                </label>
+                <label className="agent-quick-edit-field">
+                  <span>역할</span>
+                  <select
+                    className="mode-settings-select"
+                    value={quickEditAgentDraft.role}
+                    onChange={(event) =>
+                      handleQuickEditAgentChange("role", event.target.value as AgentRole)
+                    }
+                  >
+                    <option value="main">main</option>
+                    <option value="sub">sub</option>
+                  </select>
+                </label>
+                <label className="agent-quick-edit-toggle">
+                  <input
+                    type="checkbox"
+                    checked={quickEditAgentDraft.active}
+                    onChange={(event) => handleQuickEditAgentChange("active", event.target.checked)}
+                  />
+                  <span>활성 상태 유지</span>
+                </label>
+                {quickEditError && (
+                  <p className="agent-quick-edit-error" role="alert">
+                    {quickEditError}
+                  </p>
+                )}
+              </div>
+
+              <footer className="agent-quick-popover-footer">
+                <button
+                  className="settings-secondary-btn agent-quick-popover-btn"
+                  type="button"
+                  onClick={handleCancelQuickEditAgent}
+                >
+                  취소
+                </button>
+                <button
+                  className="settings-primary-btn agent-quick-popover-btn"
+                  type="button"
+                  onClick={() => void handleSaveQuickEditAgent()}
+                >
+                  저장
+                </button>
+              </footer>
+            </fieldset>
           </section>
         </div>
       )}

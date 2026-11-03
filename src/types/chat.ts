@@ -36,6 +36,7 @@ export type AgentColor = "indigo" | "emerald" | "amber" | "violet" | "rose";
 export type AgentRole = "main" | "sub";
 
 export type AgentItem = {
+  agentId?: string;
   name: string;
   icon: string;
   status: string;
@@ -51,6 +52,7 @@ export type AgentItem = {
 };
 
 export type SessionItem = {
+  agentId?: string | null;
   id: string;
   title: string;
   updatedAt: number;
@@ -73,12 +75,7 @@ export type IconBadgeProps = {
 };
 
 export type LLMConfig = {
-  providerId:
-    | "openai"
-    | "anthropic"
-    | "google"
-    | "openrouter"
-    | "custom";
+  providerId: "openai" | "anthropic" | "google" | "openrouter" | "custom";
   providerKind: "api-key" | "oauth";
   baseUrl: string;
   model: string;
@@ -97,6 +94,10 @@ export type LLMSettings = LLMConfig & {
 export type ResolvedLLMSettings = LLMConfig & {
   accessToken?: string;
   accountId?: string;
+  openaiOauthEnabled?: boolean;
+  openaiOauthPriority?: number;
+  openaiApiKeyEnabled?: boolean;
+  openaiApiKeyPriority?: number;
 };
 
 export type OperationModeItem = {

@@ -48,8 +48,6 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
         base_url,
         api_key: selected.api_key,
         access_token: selected.access_token,
-        refresh_token: selected.refresh_token,
-        expires_at: selected.expires_at,
         account_id: selected.account_id,
         logged_in: oauth
             .refresh_token

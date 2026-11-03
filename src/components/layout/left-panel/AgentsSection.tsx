@@ -11,6 +11,8 @@ type QuickEditAgentDraft = {
 
 type AgentsSectionProps = {
   agents: AgentItem[];
+  onAgentChat: (agent: AgentItem) => void;
+  currentAgentId: string | null;
   onOpenSettings: () => void;
   quickEditAgentIndex: number | null;
   quickEditDraft: QuickEditAgentDraft | null;
@@ -24,6 +26,8 @@ type AgentsSectionProps = {
 
 export function AgentsSection({
   agents,
+  onAgentChat,
+  currentAgentId,
   onOpenSettings,
   quickEditAgentIndex,
   quickEditDraft,
@@ -33,7 +37,12 @@ export function AgentsSection({
     <section className="panel-block">
       <div className="section-head-with-action">
         <h3 className="section-title">Active Agents</h3>
-        <button className="small-icon-btn" type="button" title="에이전트 설정" onClick={onOpenSettings}>
+        <button
+          className="small-icon-btn"
+          type="button"
+          title="에이전트 설정"
+          onClick={onOpenSettings}
+        >
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
           </span>
@@ -42,22 +51,47 @@ export function AgentsSection({
       <div className="panel-list">
         {agents.map((agent, index) => {
           const isEditing = quickEditAgentIndex === index && quickEditDraft;
+          const isCurrent = Boolean(agent.agentId && agent.agentId === currentAgentId);
 
           return (
-            <div key={`${agent.name}-${index}`} className={`agent-entry-shell ${isEditing ? "is-editing" : ""}`}>
-              <div className="agent-entry">
-                <div className={`agent-dot ${agent.color}`}>
+            <div
+              key={agent.agentId || index}
+              className={"agent-entry-shell " + (isEditing ? "is-editing" : "")}
+            >
+              <div
+                className="agent-entry"
+                style={isCurrent ? { background: "#3d3a55" } : undefined}
+              >
+                <div className={"agent-dot " + agent.color}>
                   <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
                     {agent.icon}
                   </span>
                   <span
-                    className={`status-dot status-dot-${agent.active ? "active" : "idle"}`}
+                    className={"status-dot status-dot-" + (agent.active ? "active" : "idle")}
                     title={agent.active ? "활성" : "대기"}
                   />
                 </div>
                 <div className="agent-copy">
                   <div className="agent-name-row">
-                    <p className="agent-name">{agent.name}</p>
+                    <button
+                      type="button"
+                      className="agent-name"
+                      aria-current={isCurrent ? "true" : undefined}
+                      title={agent.name + "와 대화"}
+                      onClick={() => onAgentChat(agent)}
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        padding: 0,
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      {agent.name}
+                    </button>
+                    {isCurrent && (
+                      <span style={{ color: "#c8b9ff", fontSize: "10px" }}>대화 중</span>
+                    )}
                     {agent.role === "main" && (
                       <span
                         className="material-symbols-outlined agent-main-badge"
@@ -69,13 +103,15 @@ export function AgentsSection({
                     )}
                   </div>
                   <p className="agent-model">{agent.model?.trim() || "기본 모델 없음"}</p>
-                  <p className={`agent-state ${agent.active ? "agent-state-active" : ""}`}>{agent.status}</p>
+                  <p className={"agent-state " + (agent.active ? "agent-state-active" : "")}>
+                    {agent.status}
+                  </p>
                 </div>
                 <button
                   className="small-icon-btn agent-entry-menu-btn"
                   type="button"
                   title="에이전트 빠른 설정"
-                  aria-label={`${agent.name} 빠른 설정`}
+                  aria-label={agent.name + " 빠른 설정"}
                   onClick={(event: MouseEvent<HTMLButtonElement>) =>
                     onStartQuickEditAgent(index, event.currentTarget.getBoundingClientRect())
                   }

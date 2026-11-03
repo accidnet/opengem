@@ -4,9 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { MessageCard } from "@/components/MessageCard";
 import { AgentOffice } from "@/pages/chat/components/office/AgentOffice";
 import { normalizeProjectPath } from "@/lib/projectPaths";
+import { getErrorMessage } from "@/features/app/appHelpers";
 import type { AgentItem, Message } from "@/types/chat";
 
 type ChatPanelProps = {
+  conversationLabel: string;
+  conversationModel: string;
+  conversationError: string;
+  isConversationBusy: boolean;
+  onStartAgentChat: (index: number) => void;
   agents: AgentItem[];
   selectedAgentIndex: number | null;
   onSelectAgent: (index: number) => void;
@@ -28,6 +34,11 @@ type ChatPanelProps = {
 };
 
 export function ChatPanel({
+  conversationLabel,
+  conversationModel,
+  conversationError,
+  isConversationBusy,
+  onStartAgentChat,
   agents,
   selectedAgentIndex,
   onSelectAgent,
@@ -54,6 +65,13 @@ export function ChatPanel({
   const lastTypingMessageIdRef = useRef<string | null>(null);
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
   const [projectError, setProjectError] = useState("");
+  const currentSessionIdRef = useRef(currentSessionId);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+    setIsProjectPanelOpen(false);
+    setProjectError("");
+  }, [currentSessionId]);
 
   const projectPaths = currentSessionId ? currentSessionProjectPaths : defaultProjectPaths;
   const hasConnectedProjects = projectPaths.length > 0;
@@ -145,6 +163,8 @@ export function ChatPanel({
     }
 
     const pickedPath = await invoke<string | null>("pick_project_folder");
+    // 폴더 선택 창이 열린 사이 대화가 바뀌면 이전 대화의 경로를 반영하지 않습니다.
+    if (currentSessionIdRef.current !== currentSessionId) return;
     if (!pickedPath) {
       return;
     }
@@ -189,6 +209,18 @@ export function ChatPanel({
           대화
         </button>
       </nav>
+      {workspaceView === "chat" && (
+        <div className="conversation-target" aria-live="polite">
+          <strong>{conversationLabel}</strong>
+          <span>{conversationModel}</span>
+          {isConversationBusy && <span>처리 중…</span>}
+        </div>
+      )}
+      {conversationError && (
+        <p className="conversation-error" role="alert">
+          {conversationError}
+        </p>
+      )}
       <div className="chat-scroll">
         <div
           ref={chatContentRef}
@@ -199,6 +231,8 @@ export function ChatPanel({
         >
           {workspaceView === "office" ? (
             <AgentOffice
+              onStartChat={onStartAgentChat}
+              isConversationBusy={isConversationBusy}
               agents={agents}
               selectedAgentIndex={selectedAgentIndex}
               onSelectAgent={onSelectAgent}
@@ -276,7 +310,12 @@ export function ChatPanel({
                               type="button"
                               className="small-icon-btn danger"
                               title="경로 제거"
-                              onClick={() => void handleRemoveProjectPath(projectPath)}
+                              disabled={isConversationBusy}
+                              onClick={() =>
+                                void handleRemoveProjectPath(projectPath).catch((error) =>
+                                  setProjectError(getErrorMessage(error))
+                                )
+                              }
                             >
                               <span
                                 className="material-symbols-outlined"
@@ -298,8 +337,12 @@ export function ChatPanel({
                       <button
                         type="button"
                         className="chip project-chip-secondary"
-                        onClick={() => void handlePickProjectPath()}
-                        disabled={!currentSessionId}
+                        onClick={() =>
+                          void handlePickProjectPath().catch((error) =>
+                            setProjectError(getErrorMessage(error))
+                          )
+                        }
+                        disabled={!currentSessionId || isConversationBusy}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
                           folder_open
@@ -339,7 +382,7 @@ export function ChatPanel({
                   onWorkspaceViewChange("chat");
                 onEnterSubmit(event);
               }}
-              placeholder="어떤 일을 함께 해볼까요?"
+              placeholder={`${conversationLabel}에 메시지를 보내세요`}
               aria-label="메시지 입력"
               rows={1}
             />

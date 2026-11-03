@@ -104,6 +104,46 @@
   font-size: 11px;
 }
 
+/* 개별 대화로 이동하며 진행 중인 응답은 중단하지 않습니다. */
+.agent-detail-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 9px;
+  background: #8977d7;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-detail-chat .material-symbols-outlined {
+  font-size: 16px;
+}
+.agent-detail-chat:hover:not(:disabled) {
+  background: #7663c5;
+}
+.agent-detail-chat:focus-visible {
+  outline: 3px solid #b4a4e6;
+  outline-offset: 2px;
+}
+.agent-detail-chat:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.agent-detail-chat-hint {
+  margin: 7px 0 0;
+  color: #80788c;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .agent-detail-facts {
   display: grid;
   gap: 10px;

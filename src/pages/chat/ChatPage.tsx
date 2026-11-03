@@ -9,6 +9,7 @@ import { TOOLS } from "@/features/app/config/appData";
 import { useAppController } from "../../hooks/useAppController";
 import { useAppUpdater } from "../../hooks/useAppUpdater";
 import { useChatController } from "./hooks/useChatController";
+import type { AgentItem } from "@/types/chat";
 
 const MIN_LEFT_PANEL_WIDTH = 180;
 const MAX_LEFT_PANEL_WIDTH = 420;
@@ -22,7 +23,7 @@ export function ChatPage() {
   const [isResizingLeftPanel, setIsResizingLeftPanel] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
   const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
-  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<"office" | "chat">("office");
   const appUpdater = useAppUpdater();
 
@@ -58,6 +59,12 @@ export function ChatPage() {
     clearContext,
     costPercent,
     currentSessionId,
+    currentAgentId,
+    conversationAgent,
+    conversationError,
+    unavailableReason,
+    isConversationBusy,
+    startAgentChat,
     currentSessionProjectPaths,
     currentSessionTitle,
     exportChat,
@@ -88,16 +95,24 @@ export function ChatPage() {
     updateCurrentSessionProjectPaths,
   } = useChatController({ settings });
 
-  const selectedAgentIndex = agents.findIndex((agent) => agent.name === selectedAgentName);
+  const selectedAgentIndex = agents.findIndex((agent) => agent.agentId === selectedAgentId);
   const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
 
   useEffect(() => {
-    setSelectedAgentName(null);
+    setSelectedAgentId(null);
   }, [selectedMode]);
 
   useEffect(() => {
-    if (selectedAgentName && selectedAgentIndex < 0) setSelectedAgentName(null);
-  }, [selectedAgentIndex, selectedAgentName]);
+    if (selectedAgentId && selectedAgentIndex < 0) setSelectedAgentId(null);
+  }, [selectedAgentIndex, selectedAgentId]);
+
+  const openAgentConversation = async (agent: AgentItem) => {
+    if (await startAgentChat(agent)) {
+      setWorkspaceView("chat");
+      setSelectedAgentId(agent.agentId ?? null);
+      setOpenPanel(null);
+    }
+  };
 
   useEffect(() => {
     if (!isResizingLeftPanel && !isResizingRightPanel) {
@@ -166,21 +181,24 @@ export function ChatPage() {
   return (
     <div className="app-shell">
       <AppHeader
+        isConversationBusy={isConversationBusy}
         theme={theme}
         isLoggedIn={settings.loggedIn}
         sessionTitle={currentSessionTitle}
         hasActiveSession={Boolean(currentSessionId)}
-        onNewChat={() => {
-          setWorkspaceView("office");
-          startNewChat();
+        onNewChat={async () => {
+          if (await startNewChat()) {
+            setWorkspaceView("chat");
+            setSelectedAgentId(null);
+          }
         }}
         onExportChat={exportChat}
         onClearContext={clearContext}
         onThemeToggle={toggleTheme}
         openPanel={openPanel}
         onTogglePanel={(panel) => {
-          if (panel === "right" && selectedAgentName) {
-            setSelectedAgentName(null);
+          if (panel === "right" && selectedAgentId) {
+            setSelectedAgentId(null);
             setOpenPanel("right");
             return;
           }
@@ -208,10 +226,15 @@ export function ChatPage() {
           />
         )}
         <LeftPanel
+          onAgentChat={(agent) => void openAgentConversation(agent)}
+          isConversationBusy={isConversationBusy}
+          currentAgentId={currentAgentId}
           modes={modes}
           selectedMode={selectedMode}
           openSelectedModeSignal={openSelectedModeSignal}
-          onModeSelect={selectOperationMode}
+          onModeSelect={async (mode) => {
+            await selectOperationMode(mode);
+          }}
           onSaveModeSettings={saveOperationModeSettings}
           onSaveAgents={saveAgentsForSelectedMode}
           getModeIcon={getModeIcon}
@@ -219,12 +242,14 @@ export function ChatPage() {
           getModeDefaultModel={getModeDefaultModel}
           agents={agents}
           sessionsByMode={sessionsByMode}
-          onSessionSelect={(session) => {
+          onSessionSelect={async (session) => {
+            if (!(await handleSessionSelect(session))) return;
             setOpenPanel(null);
             setWorkspaceView("chat");
-            return handleSessionSelect(session);
           }}
-          onSessionDelete={handleSessionDelete}
+          onSessionDelete={async (session) => {
+            await handleSessionDelete(session);
+          }}
           tools={TOOLS}
           updater={appUpdater}
         />
@@ -245,12 +270,21 @@ export function ChatPage() {
         />
 
         <ChatPanel
+          conversationLabel={
+            currentAgentId ? (conversationAgent?.name ?? "삭제된 에이전트") : "일반 대화"
+          }
+          conversationModel={conversationAgent?.model ?? ""}
+          conversationError={conversationError || unavailableReason}
+          isConversationBusy={isConversationBusy}
+          onStartAgentChat={(index) => {
+            if (agents[index]) void openAgentConversation(agents[index]);
+          }}
           agents={agents}
           selectedAgentIndex={selectedAgentIndex >= 0 ? selectedAgentIndex : null}
           onSelectAgent={(index) => {
             const agent = agents[index];
             if (!agent) return;
-            setSelectedAgentName(agent.name);
+            setSelectedAgentId(agent.agentId ?? null);
             if (window.innerWidth <= 1280) setOpenPanel("right");
           }}
           workspaceView={workspaceView}
@@ -287,10 +321,12 @@ export function ChatPage() {
 
         {selectedAgent ? (
           <AgentDetailPanel
+            isConversationBusy={isConversationBusy}
+            onStartChat={() => void openAgentConversation(selectedAgent)}
             agent={selectedAgent}
             activity={activity}
             onClose={() => {
-              setSelectedAgentName(null);
+              setSelectedAgentId(null);
               setOpenPanel(null);
             }}
           />
