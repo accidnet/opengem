@@ -32,6 +32,8 @@ export function useAppUpdater() {
   );
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const isCheckingRef = useRef(false);
+  const isInstallingRef = useRef(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
 
   const checkForUpdate = useCallback(async ({ install = false }: CheckForUpdateOptions = {}) => {
     if (!isTauri()) {
@@ -43,6 +45,11 @@ export function useAppUpdater() {
     // 시작 시 자동 확인과 사용자의 수동 확인이 겹치지 않도록 합니다.
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
+    // 설치 확인부터 재시작까지 새 대화 작업이 시작되지 않도록 잠급니다.
+    if (install) {
+      isInstallingRef.current = true;
+      setIsInstallingUpdate(true);
+    }
 
     setStatus("checking");
     setMessage("업데이트 확인 중");
@@ -103,6 +110,8 @@ export function useAppUpdater() {
       setMessage(detail ? `업데이트 실패: ${detail}` : "업데이트 확인 또는 설치 실패");
     } finally {
       isCheckingRef.current = false;
+      isInstallingRef.current = false;
+      setIsInstallingUpdate(false);
     }
   }, []);
 
@@ -124,10 +133,12 @@ export function useAppUpdater() {
       checkForUpdate,
       isBusy: status === "checking" || status === "downloading" || status === "installing",
       isUpdateAvailable: status === "available",
+      isInstallingRef,
+      isInstallingUpdate,
       latestVersion,
       message,
       status,
     }),
-    [checkForUpdate, latestVersion, message, status]
+    [checkForUpdate, isInstallingUpdate, latestVersion, message, status]
   );
 }

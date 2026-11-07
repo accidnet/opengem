@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { resolveLlmSettings } from "@/features/backend/api";
@@ -30,9 +30,15 @@ import { useChatSendMessage } from "./useChatSendMessage";
 
 type UseChatControllerParams = {
   settings: LLMSettings;
+  isInstallingUpdate: boolean;
+  isInstallingRef: RefObject<boolean>;
 };
 
-export function useChatController({ settings }: UseChatControllerParams) {
+export function useChatController({
+  settings,
+  isInstallingUpdate,
+  isInstallingRef,
+}: UseChatControllerParams) {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
   const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -148,7 +154,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
         : currentAgentId && !conversationAgent?.active
           ? "비활성 에이전트입니다. 에이전트 설정에서 활성화한 뒤 대화할 수 있어요."
           : "";
-  const isConversationBusy = isLoading || isSessionLoading || isTransitioning;
+  const isConversationBusy = isLoading || isSessionLoading || isTransitioning || isInstallingUpdate;
   const canSend = inputValue.trim().length > 0 && !isConversationBusy && !unavailableReason;
 
   const rememberDraft = () => {
@@ -160,7 +166,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
   // 화면을 바꾸는 작업과 응답 생성을 직렬화해 다른 대화로 결과가 새지 않게 합니다.
   const changeConversation = async (action: () => Promise<void>, rethrow = false) => {
-    if (conversationLockRef.current) {
+    if (conversationLockRef.current || isInstallingRef.current) {
       if (rethrow) throw new Error("진행 중인 작업이 끝난 뒤 다시 시도해 주세요.");
       return false;
     }
@@ -281,7 +287,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
     return created;
   };
 
-  const { sendMessage, cancelCodexTask, isCodexRunning } = useChatSendMessage({
+  const { sendMessage: sendChatMessage, cancelCodexTask, isCodexRunning } = useChatSendMessage({
     executionMode,
     agents,
     targetAgentId: currentAgentId,
@@ -304,6 +310,12 @@ export function useChatController({ settings }: UseChatControllerParams) {
     setResourceCost,
     setResourceToken,
   });
+
+  // 설치 요청 직후 렌더링되기 전에도 새 메시지 전송을 막습니다.
+  const sendMessage = async () => {
+    if (isInstallingRef.current) return;
+    await sendChatMessage();
+  };
 
   const appendStatusMessage = (text: string): void => {
     setMessages((prev) => [

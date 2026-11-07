@@ -160,6 +160,27 @@ fn event_failure(value: &serde_json::Value) -> Option<&str> {
         .or_else(|| value["message"].as_str())
 }
 
+#[derive(Default)]
+struct TurnState {
+    completed: bool,
+    failed: bool,
+}
+
+impl TurnState {
+    // 재연결 안내도 error 이벤트이므로 작업의 최종 상태만 기록합니다.
+    fn record(&mut self, value: &serde_json::Value) {
+        if value["type"] == "turn.completed" {
+            self.completed = true;
+        } else if value["type"] == "turn.failed" {
+            self.failed = true;
+        }
+    }
+
+    fn succeeded(&self, exit_success: bool) -> bool {
+        exit_success && self.completed && !self.failed
+    }
+}
+
 fn find_codex() -> Result<PathBuf, String> {
     let paths = std::env::var_os("PATH").ok_or("PATH를 찾을 수 없습니다.")?;
     let dirs: Vec<PathBuf> = std::env::split_paths(&paths).collect();
@@ -265,8 +286,7 @@ pub async fn run_codex_task(
     let result = tauri::async_runtime::spawn_blocking(move || {
         let output = Arc::new(Mutex::new(String::new()));
         let errors = Arc::new(Mutex::new(String::new()));
-        let turn_completed = Arc::new(Mutex::new(false));
-        let turn_failed = Arc::new(Mutex::new(false));
+        let turn_state = Arc::new(Mutex::new(TurnState::default()));
         let old_format = Arc::new(Mutex::new(false));
         let event_base = TaskEvent {
             session_id: input.session_id.clone(),
@@ -278,8 +298,7 @@ pub async fn run_codex_task(
         let stdout_app = app.clone();
         let stdout_event = event_base.clone();
         let output_clone = output.clone();
-        let completed_clone = turn_completed.clone();
-        let failed_clone = turn_failed.clone();
+        let turn_state_clone = turn_state.clone();
         let old_format_clone = old_format.clone();
         let stdout_errors = errors.clone();
         let stdout_thread = thread::spawn(move || {
@@ -288,15 +307,10 @@ pub async fn run_codex_task(
                     if value.get("type").is_none() && (value.get("model").is_some() || value.get("prompt").is_some()) {
                         if let Ok(mut old) = old_format_clone.lock() { *old = true; }
                     }
-                    if value["type"] == "turn.completed" {
-                        if let Ok(mut completed) = completed_clone.lock() {
-                            *completed = true;
-                        }
+                    if let Ok(mut state) = turn_state_clone.lock() {
+                        state.record(&value);
                     }
                     if value["type"] == "turn.failed" || value["type"] == "error" {
-                        if let Ok(mut failed) = failed_clone.lock() {
-                            *failed = true;
-                        }
                         if let Some(message) = event_failure(&value) {
                             if let Ok(mut errors) = stdout_errors.lock() {
                                 if errors.len() < 8192 { errors.extend(message.chars().take(2048)); errors.push('\n'); }
@@ -360,9 +374,11 @@ pub async fn run_codex_task(
             running.remove(&input.request_id);
         }
         let status = status?;
-        let completed = turn_completed.lock().map(|s| *s).unwrap_or(false);
-        let failed = turn_failed.lock().map(|s| *s).unwrap_or(true);
-        if !status.success() || failed || !completed {
+        let succeeded = turn_state
+            .lock()
+            .map(|state| state.succeeded(status.success()))
+            .unwrap_or(false);
+        if !succeeded {
             let detail = errors
                 .lock()
                 .map(|s| s.trim().to_string())
@@ -544,5 +560,18 @@ mod tests {
         assert_eq!(event_failure(&failure), Some("실패 원인"));
         let failure = serde_json::json!({"type": "error", "message": "연결 실패"});
         assert_eq!(event_failure(&failure), Some("연결 실패"));
+    }
+
+    #[test]
+    fn retry_error_does_not_override_a_successful_turn() {
+        let mut state = TurnState::default();
+        state.record(&serde_json::json!({"type": "error", "message": "Reconnecting... 1/5"}));
+        assert!(!state.succeeded(true));
+        state.record(&serde_json::json!({"type": "turn.completed"}));
+        assert!(state.succeeded(true));
+        assert!(!state.succeeded(false));
+
+        state.record(&serde_json::json!({"type": "turn.failed"}));
+        assert!(!state.succeeded(true));
     }
 }

@@ -97,7 +97,11 @@ export function ChatPage() {
     startNewChat,
     tokenPercent,
     updateCurrentSessionProjectPaths,
-  } = useChatController({ settings });
+  } = useChatController({
+    settings,
+    isInstallingUpdate: appUpdater.isInstallingUpdate,
+    isInstallingRef: appUpdater.isInstallingRef,
+  });
 
   const selectedAgentIndex = agents.findIndex((agent) => agent.agentId === selectedAgentId);
   const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
