@@ -1,0 +1,29 @@
+.character-library {
+  display: grid;
+  gap: 16px;
+}
+.character-library-list,
+.character-library-form {
+  display: grid;
+  gap: 12px;
+}
+.character-library-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.character-library-item img,
+.character-library-preview {
+  width: 56px;
+  height: 64px;
+  object-fit: contain;
+}
+.character-library-item strong {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.character-library-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -384,6 +384,9 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::characters::list_characters,
+            commands::characters::save_character,
+            commands::characters::delete_character,
             commands::operation_mode::load_operation_mode,
             commands::operation_mode::save_operation_mode,
             commands::operation_mode::select_operation_mode,

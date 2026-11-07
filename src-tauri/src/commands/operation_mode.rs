@@ -26,6 +26,8 @@ fn default_agent_role() -> String {
 pub struct AgentPayload {
     #[serde(default)]
     agent_id: Option<String>,
+    #[serde(default)]
+    character_id: Option<String>,
     name: String,
     icon: String,
     color: String,
@@ -68,6 +70,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
     vec![
         AgentPayload {
             agent_id: None,
+            character_id: None,
             name: "오케스트레이터".to_string(),
             icon: "account_tree".to_string(),
             color: "indigo".to_string(),
@@ -81,6 +84,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
         },
         AgentPayload {
             agent_id: None,
+            character_id: None,
             name: "프론트엔드 개발자".to_string(),
             icon: "travel_explore".to_string(),
             color: "emerald".to_string(),
@@ -94,6 +98,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
         },
         AgentPayload {
             agent_id: None,
+            character_id: None,
             name: "백엔드 개발자".to_string(),
             icon: "code".to_string(),
             color: "amber".to_string(),
@@ -111,6 +116,7 @@ fn default_orchestration_agents() -> Vec<AgentPayload> {
 fn default_mode_agents() -> Vec<AgentPayload> {
     vec![AgentPayload {
         agent_id: None,
+        character_id: None,
         name: "오케스트레이터".to_string(),
         icon: "account_tree".to_string(),
         color: "indigo".to_string(),
@@ -639,7 +645,8 @@ fn load_mode_agents_from_connection(
                 mcp_servers,
                 skills,
                 agent_role,
-                agent_id
+                agent_id,
+                character_id
             FROM operation_mode_agents
             WHERE mode_id = ?1
             ORDER BY display_order ASC, id ASC
@@ -652,6 +659,7 @@ fn load_mode_agents_from_connection(
             let active: i64 = row.get(3)?;
             Ok(AgentPayload {
                 agent_id: row.get(10)?,
+                character_id: row.get(11)?,
                 name: row.get(0)?,
                 icon: row.get(1)?,
                 color: row.get(2)?,
@@ -714,6 +722,7 @@ fn save_mode_agents_in_connection(
             agent_id: Some(
                 normalize_optional_text(agent.agent_id).unwrap_or_else(generate_agent_id),
             ),
+            character_id: normalize_optional_text(agent.character_id),
             name: trimmed_name.to_string(),
             icon: agent.icon.trim().to_string(),
             color: agent.color.trim().to_string(),
@@ -754,6 +763,22 @@ fn save_mode_agents_in_connection(
         .map_err(|error| error.to_string())?;
     let mode_id = resolve_mode_id(&transaction, &mode_name)?;
 
+    // 삭제된 캐릭터를 이전 화면 상태로 다시 연결하지 않습니다.
+    for agent in &mut normalized_agents {
+        if let Some(id) = &agent.character_id {
+            let exists: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM characters WHERE id = ?1)",
+                    [id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?;
+            if !exists {
+                agent.character_id = None;
+            }
+        }
+    }
+
     transaction
         .execute(
             "DELETE FROM operation_mode_agents WHERE mode_id = ?1",
@@ -782,9 +807,10 @@ fn save_mode_agents_in_connection(
                     skills,
                     agent_role,
                     display_order,
-                    agent_id
+                    agent_id,
+                    character_id
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                 ",
                 params![
                     mode_id,
@@ -799,7 +825,8 @@ fn save_mode_agents_in_connection(
                     skills,
                     agent.role,
                     index as i64,
-                    agent.agent_id
+                    agent.agent_id,
+                    agent.character_id
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -859,5 +886,20 @@ mod agent_identity_tests {
         seed_agents_for_mode(&connection, mode_id, "New mode").unwrap();
         let agents = load_mode_agents_from_connection(&connection, "New mode").unwrap();
         assert!(agents[0].agent_id.as_ref().is_some_and(|id| !id.is_empty()));
+    }
+
+    #[test]
+    fn stale_deleted_character_is_cleared_when_agents_are_saved() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        let agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(agents[0].character_id.as_deref(), Some("chiikawa"));
+        connection
+            .execute("DELETE FROM characters WHERE id = 'chiikawa'", [])
+            .unwrap();
+        save_mode_agents_in_connection(&mut connection, "Orchestration", agents).unwrap();
+        let reloaded = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert!(reloaded[0].character_id.is_none());
+        assert_eq!(reloaded[1].character_id.as_deref(), Some("hachiware"));
     }
 }

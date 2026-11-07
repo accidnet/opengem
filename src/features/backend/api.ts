@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
-import type { LLMSettings, ResolvedLLMSettings, SessionDetail } from "@/types/chat";
+import type { CharacterItem, LLMSettings, ResolvedLLMSettings, SessionDetail } from "@/types/chat";
 
 import type { AvailableProviderInfo, ProviderInfo } from "@/features/ai/types";
 
@@ -76,13 +76,13 @@ export async function saveLlmSettings(input: SaveLlmSettingsParams): Promise<LLM
 }
 
 export async function saveProviderSettings(
-  input: SaveProviderSettingsParams,
+  input: SaveProviderSettingsParams
 ): Promise<ProviderSettings> {
   return invoke<ProviderSettings>("save_provider_settings_command", { input });
 }
 
 export async function getProviderCredential(
-  input: GetProviderCredentialParams,
+  input: GetProviderCredentialParams
 ): Promise<ProviderCredentialValue> {
   return invoke<ProviderCredentialValue>("get_provider_credential", { input });
 }
@@ -97,4 +97,20 @@ export async function logoutChatgpt(): Promise<LLMSettings> {
 
 export async function openExternalUrl(url: string): Promise<void> {
   await invoke("open_external_url", { url });
+}
+
+export async function listCharacters(): Promise<CharacterItem[]> {
+  return invoke<CharacterItem[]>("list_characters");
+}
+
+export async function saveCharacter(input: {
+  id?: string;
+  name: string;
+  image: string;
+}): Promise<CharacterItem> {
+  return invoke<CharacterItem>("save_character", { input });
+}
+
+export async function deleteCharacter(id: string): Promise<void> {
+  return invoke("delete_character", { id });
 }

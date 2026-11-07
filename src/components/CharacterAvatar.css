@@ -1,0 +1,16 @@
+.agent-character-avatar {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  object-fit: contain;
+}
+
+img.agent-character-avatar {
+  display: block;
+}
+
+span.agent-office-person {
+  display: grid;
+  place-items: center;
+}
