@@ -57,7 +57,7 @@
   background: #e9e2f0;
 }
 
-.agent-office-scene img {
+.agent-office-scene > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -351,8 +351,9 @@
 
 .agent-office-person {
   display: block;
-  width: 30%;
-  height: auto;
+  width: 48%;
+  aspect-ratio: 1;
+  object-fit: contain;
 }
 
 @media (max-width: 600px) {

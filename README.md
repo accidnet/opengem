@@ -12,6 +12,7 @@
 
 - 자세한 개발 환경 설정 가이드는 다음 [링크](docs/development-setup.md)를 참고하세요.
 - 개발 시에는 기본적으로 `pnpm`을 활용합니다.
+- Codex CLI 설치, 인증과 작업 공간 주의 사항은 [Codex CLI 가이드](docs/codex-cli.md)를 참고하세요.
 
 ### 1. 사전 설치
 
@@ -74,6 +75,11 @@ pnpm run tauri:dev
 
 ![새 에이전트의 기본 정보를 설정하는 화면](docs/screenshots/agent-settings.jpg)
 
+## 설치 및 업데이트
+
+1. [최신 Windows 릴리즈](https://github.com/accidnet/opengem/releases/latest)에서 `opengem_*_x64-setup.exe`를 내려받아 실행합니다.
+2. 현재 버전은 앱 상단의 OpenGem 이름 아래 또는 프로필 메뉴에서 확인할 수 있습니다. 앱이 시작 시 자동으로 업데이트를 확인하며, 왼쪽 작업 공간 패널 하단의 **앱 업데이트**에서 **확인**을 누르고 새 버전이 있으면 **설치**를 누를 수도 있습니다. 업데이트에는 인터넷 연결이 필요하며, 설치 파일의 서명이 검증됩니다.
+
 ## 배포
 
-- 릴리즈와 자동 업데이트 절차는 다음 [링크](docs/release.md)를 참고하세요.
+`main`의 변경을 반영한 새 버전은 `pnpm run release -- 0.1.1`처럼 아직 사용하지 않은 버전으로 배포합니다. 스크립트가 버전 변경을 커밋하고 `main`과 태그를 푸시하면 GitHub Actions가 서명된 설치 파일과 업데이트 정보를 릴리즈에 게시합니다. 실행 조건과 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.

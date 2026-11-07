@@ -14,7 +14,7 @@ export type DraftAgentItem = AgentItem & {
   id: string;
 };
 
-export type AgentSettingsTab = "create" | "list";
+export type AgentSettingsTab = "create" | "list" | "characters";
 
 export type AgentIconOption =
   | "account_tree"

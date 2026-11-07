@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
+import { isTauri } from "@tauri-apps/api/core";
 
 import "./AppHeader.css";
 
@@ -34,7 +36,25 @@ export function AppHeader({
   onTogglePanel,
 }: AppHeaderProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    // 설치된 실행 파일의 버전을 표시합니다.
+    let active = true;
+    void getVersion()
+      .then((version) => {
+        if (active) setAppVersion(version);
+      })
+      .catch(() => {
+        if (active) setAppVersion("확인 불가");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -80,6 +100,7 @@ export function AppHeader({
           </div>
           <div className="brand-copy">
             <p className="brand-title">OpenGem</p>
+            {appVersion && <p className="brand-subtitle">버전 {appVersion}</p>}
           </div>
         </div>
         <div className="separator" />
@@ -153,6 +174,7 @@ export function AppHeader({
 
           {isProfileMenuOpen && (
             <div className="profile-menu" role="menu" aria-label="프로필 메뉴">
+              {appVersion && <div className="profile-menu-version">버전 {appVersion}</div>}
               <button
                 className="profile-menu-item"
                 type="button"

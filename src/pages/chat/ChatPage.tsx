@@ -55,6 +55,10 @@ export function ChatPage() {
   const {
     activity,
     agents,
+    executionMode,
+    setExecutionMode,
+    cancelCodexTask,
+    isCodexRunning,
     canSend,
     clearContext,
     costPercent,
@@ -93,7 +97,11 @@ export function ChatPage() {
     startNewChat,
     tokenPercent,
     updateCurrentSessionProjectPaths,
-  } = useChatController({ settings });
+  } = useChatController({
+    settings,
+    isInstallingUpdate: appUpdater.isInstallingUpdate,
+    isInstallingRef: appUpdater.isInstallingRef,
+  });
 
   const selectedAgentIndex = agents.findIndex((agent) => agent.agentId === selectedAgentId);
   const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
@@ -275,6 +283,11 @@ export function ChatPage() {
           }
           conversationModel={conversationAgent?.model ?? ""}
           conversationError={conversationError || unavailableReason}
+          executionMode={executionMode}
+          onExecutionModeChange={setExecutionMode}
+          canUseCodex={Boolean(currentAgentId)}
+          isCodexRunning={isCodexRunning}
+          onCancelCodex={cancelCodexTask}
           isConversationBusy={isConversationBusy}
           onStartAgentChat={(index) => {
             if (agents[index]) void openAgentConversation(agents[index]);

@@ -35,8 +35,15 @@ export type AgentColor = "indigo" | "emerald" | "amber" | "violet" | "rose";
 
 export type AgentRole = "main" | "sub";
 
+export type CharacterItem = {
+  id: string;
+  name: string;
+  image: string;
+};
+
 export type AgentItem = {
   agentId?: string;
+  characterId?: string | null;
   name: string;
   icon: string;
   status: string;

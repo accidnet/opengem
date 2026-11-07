@@ -1,3 +1,4 @@
+import { CharacterAvatar } from "@/components/CharacterAvatar";
 import type { ActivityItem, ActivityState, AgentItem } from "@/types/chat";
 
 import "./AgentDetailPanel.css";
@@ -49,9 +50,7 @@ export function AgentDetailPanel({
 
       <div className="agent-detail-profile">
         <div className={`agent-detail-avatar agent-detail-avatar--${agent.color}`}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            {agent.icon}
-          </span>
+          <CharacterAvatar agent={agent} className="agent-character-avatar" />
         </div>
         <div className="agent-detail-identity">
           <h3>{agent.name}</h3>
