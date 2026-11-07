@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 
+import { CharacterAvatar } from "@/components/CharacterAvatar";
 import type { AgentItem, AgentRole } from "@/types/chat";
 
 type QuickEditAgentDraft = {
@@ -63,9 +64,7 @@ export function AgentsSection({
                 style={isCurrent ? { background: "#3d3a55" } : undefined}
               >
                 <div className={"agent-dot " + agent.color}>
-                  <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                    {agent.icon}
-                  </span>
+                  <CharacterAvatar agent={agent} className="agent-character-avatar" />
                   <span
                     className={"status-dot status-dot-" + (agent.active ? "active" : "idle")}
                     title={agent.active ? "활성" : "대기"}

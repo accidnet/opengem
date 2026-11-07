@@ -1,6 +1,9 @@
 import type { KeyboardEvent, MutableRefObject } from "react";
 
 import { ModelSelect } from "@/components/ModelSelect";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
+import { CharacterLibrary } from "@/components/CharacterLibrary";
+import { useCharacters } from "@/lib/characters";
 import type { AgentColor } from "@/types/chat";
 
 import { AGENT_COLOR_LABELS, AGENT_COLOR_OPTIONS, AGENT_ICON_OPTIONS } from "./constants";
@@ -12,6 +15,7 @@ type AgentSettingsModalProps = {
   agentSettingsTab: AgentSettingsTab;
   newAgentName: string;
   newAgentIcon: AgentIconOption;
+  newAgentCharacterId: string;
   newAgentColor: AgentColor;
   newAgentModel: string;
   newAgentPrompt: string;
@@ -26,6 +30,8 @@ type AgentSettingsModalProps = {
   onTabChange: (tab: AgentSettingsTab) => void;
   onNewAgentNameChange: (value: string) => void;
   onNewAgentIconChange: (icon: AgentIconOption) => void;
+  onNewAgentCharacterIdChange: (id: string) => void;
+  onCharacterRemoved: (id: string) => void;
   onNewAgentColorChange: (color: AgentColor) => void;
   onNewAgentModelChange: (value: string) => void;
   onNewAgentPromptChange: (value: string) => void;
@@ -51,6 +57,7 @@ export function AgentSettingsModal({
   agentSettingsTab,
   newAgentName,
   newAgentIcon,
+  newAgentCharacterId,
   newAgentColor,
   newAgentModel,
   newAgentPrompt,
@@ -65,6 +72,8 @@ export function AgentSettingsModal({
   onTabChange,
   onNewAgentNameChange,
   onNewAgentIconChange,
+  onNewAgentCharacterIdChange,
+  onCharacterRemoved,
   onNewAgentColorChange,
   onNewAgentModelChange,
   onNewAgentPromptChange,
@@ -79,6 +88,7 @@ export function AgentSettingsModal({
   onRemoveDraftAgent,
   onSave,
 }: AgentSettingsModalProps) {
+  const { characters } = useCharacters();
   if (!isOpen) {
     return null;
   }
@@ -147,6 +157,17 @@ export function AgentSettingsModal({
                 </span>
                 <span>Agent 목록</span>
               </button>
+              <button
+                className={`panel-modal-nav-item ${agentSettingsTab === "characters" ? "is-active" : ""}`}
+                type="button"
+                aria-current={agentSettingsTab === "characters" ? "true" : undefined}
+                onClick={() => onTabChange("characters")}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  pets
+                </span>
+                <span>캐릭터 관리</span>
+              </button>
             </aside>
 
             <main className="panel-modal-main agent-panel-modal-main">
@@ -182,6 +203,23 @@ export function AgentSettingsModal({
                         onKeyDown={onCreateAgentOnEnter}
                         aria-label="새 에이전트 이름"
                       />
+                    </label>
+
+                    <label className="settings-field">
+                      <span>캐릭터</span>
+                      <select
+                        className="settings-input"
+                        value={newAgentCharacterId}
+                        onChange={(event) => onNewAgentCharacterIdChange(event.target.value)}
+                        aria-label="새 에이전트 캐릭터"
+                      >
+                        <option value="">기본 캐릭터</option>
+                        {characters.map((character) => (
+                          <option key={character.id} value={character.id}>
+                            {character.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
 
                     <label className="settings-field">
@@ -297,7 +335,7 @@ export function AgentSettingsModal({
                     </p>
                   )}
                 </>
-              ) : (
+              ) : agentSettingsTab === "list" ? (
                 <>
                   <div className="panel-modal-main-copy">
                     <h4>Agent 목록</h4>
@@ -326,12 +364,7 @@ export function AgentSettingsModal({
                           key={agent.id}
                         >
                           <div className={`agent-dot ${agent.color}`} aria-hidden="true">
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: "16px" }}
-                            >
-                              {agent.icon}
-                            </span>
+                            <CharacterAvatar agent={agent} className="agent-character-avatar" />
                           </div>
                           <input
                             className="mode-settings-input"
@@ -344,6 +377,33 @@ export function AgentSettingsModal({
                               onDraftAgentChange(agent.id, "name", event.target.value)
                             }
                           />
+                          <div className="mode-settings-select-wrap">
+                            <select
+                              className="mode-settings-select"
+                              value={agent.characterId || ""}
+                              onChange={(event) =>
+                                onDraftAgentChange(
+                                  agent.id,
+                                  "characterId",
+                                  event.target.value || null
+                                )
+                              }
+                              aria-label={`${agent.name || "agent"} 캐릭터 변경`}
+                            >
+                              <option value="">기본 캐릭터</option>
+                              {agent.characterId &&
+                                !characters.some((item) => item.id === agent.characterId) && (
+                                  <option value={agent.characterId}>
+                                    삭제된 캐릭터 (기본 표시)
+                                  </option>
+                                )}
+                              {characters.map((character) => (
+                                <option key={character.id} value={character.id}>
+                                  {character.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="mode-settings-select-wrap">
                             <select
                               className="mode-settings-select"
@@ -456,6 +516,8 @@ export function AgentSettingsModal({
                     </p>
                   )}
                 </>
+              ) : (
+                <CharacterLibrary onRemoved={onCharacterRemoved} />
               )}
             </main>
           </div>

@@ -510,7 +510,7 @@
 }
 
 .agent-settings-item {
-  grid-template-columns: auto 1.5fr repeat(2, minmax(0, 1fr)) auto auto auto;
+  grid-template-columns: auto minmax(90px, 1.5fr) repeat(3, minmax(75px, 1fr)) repeat(4, auto);
 }
 
 .settings-textarea {

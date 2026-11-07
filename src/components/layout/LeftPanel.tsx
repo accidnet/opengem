@@ -104,6 +104,7 @@ export function LeftPanel({
   const [draftAgents, setDraftAgents] = useState<DraftAgentItem[]>([]);
   const [newAgentName, setNewAgentName] = useState("");
   const [newAgentIcon, setNewAgentIcon] = useState<AgentIconOption>("smart_toy");
+  const [newAgentCharacterId, setNewAgentCharacterId] = useState("");
   const [newAgentColor, setNewAgentColor] = useState<AgentColor>("indigo");
   const [newAgentModel, setNewAgentModel] = useState(DEFAULT_AGENT_MODEL);
   const [newAgentPrompt, setNewAgentPrompt] = useState("");
@@ -255,6 +256,7 @@ export function LeftPanel({
     setAgentSettingsTab("create");
     setNewAgentName("");
     setNewAgentIcon("smart_toy");
+    setNewAgentCharacterId("");
     setNewAgentColor("indigo");
     setNewAgentModel(getModeDefaultModel(selectedMode));
     setNewAgentPrompt("");
@@ -563,6 +565,7 @@ export function LeftPanel({
         agentId: crypto.randomUUID(),
         name: trimmedName,
         icon: newAgentIcon,
+        characterId: newAgentCharacterId || null,
         color: newAgentColor,
         role: (hasMain ? "sub" : "main") as AgentRole,
         model: newAgentModel.trim() || DEFAULT_AGENT_MODEL,
@@ -577,6 +580,7 @@ export function LeftPanel({
     setAgentNameError("");
     setNewAgentName("");
     setNewAgentIcon("smart_toy");
+    setNewAgentCharacterId("");
     setNewAgentColor("indigo");
     setNewAgentModel(DEFAULT_AGENT_MODEL);
     setNewAgentPrompt("");
@@ -659,6 +663,7 @@ export function LeftPanel({
       agentId: agent.agentId,
       name: agent.name.trim(),
       icon: agent.icon,
+      characterId: agent.characterId,
       status: agent.status,
       color: agent.color,
       active: agent.active,
@@ -924,6 +929,7 @@ export function LeftPanel({
         agentSettingsTab={agentSettingsTab}
         newAgentName={newAgentName}
         newAgentIcon={newAgentIcon}
+        newAgentCharacterId={newAgentCharacterId}
         newAgentColor={newAgentColor}
         newAgentModel={newAgentModel}
         newAgentPrompt={newAgentPrompt}
@@ -943,6 +949,15 @@ export function LeftPanel({
           }
         }}
         onNewAgentIconChange={setNewAgentIcon}
+        onNewAgentCharacterIdChange={setNewAgentCharacterId}
+        onCharacterRemoved={(id) => {
+          setDraftAgents((previous) =>
+            previous.map((agent) =>
+              agent.characterId === id ? { ...agent, characterId: null } : agent
+            )
+          );
+          setNewAgentCharacterId((previous) => (previous === id ? "" : previous));
+        }}
         onNewAgentColorChange={setNewAgentColor}
         onNewAgentModelChange={setNewAgentModel}
         onNewAgentPromptChange={setNewAgentPrompt}
