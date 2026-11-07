@@ -2658,6 +2658,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "dotenvy",
+ "libc",
  "open",
  "rand 0.8.5",
  "reqwest 0.12.28",

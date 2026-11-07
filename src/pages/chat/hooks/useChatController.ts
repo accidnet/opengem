@@ -46,6 +46,7 @@ export function useChatController({ settings }: UseChatControllerParams) {
   const [currentSessionProjectPaths, setCurrentSessionProjectPaths] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [executionMode, setExecutionMode] = useState<"chat" | "codex">("chat");
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
@@ -134,6 +135,9 @@ export function useChatController({ settings }: UseChatControllerParams) {
 
     return () => clearInterval(timer);
   }, []);
+
+  // 다른 에이전트로 이동할 때 개발 실행을 다시 명시적으로 선택합니다.
+  useEffect(() => setExecutionMode("chat"), [currentAgentId]);
 
   const conversationAgent = resolveConversationAgent(agents, currentAgentId);
   const unavailableReason =
@@ -277,7 +281,8 @@ export function useChatController({ settings }: UseChatControllerParams) {
     return created;
   };
 
-  const { sendMessage } = useChatSendMessage({
+  const { sendMessage, cancelCodexTask, isCodexRunning } = useChatSendMessage({
+    executionMode,
     agents,
     targetAgentId: currentAgentId,
     conversationLockRef,
@@ -370,6 +375,10 @@ export function useChatController({ settings }: UseChatControllerParams) {
   return {
     activity,
     agents,
+    executionMode,
+    setExecutionMode,
+    cancelCodexTask,
+    isCodexRunning,
     canSend,
     clearContext,
     costPercent,
