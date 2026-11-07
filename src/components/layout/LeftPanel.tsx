@@ -855,13 +855,20 @@ export function LeftPanel({
       <ToolsSection tools={tools} />
       <section className="panel-block app-update-block">
         <div className="app-update-copy">
-          <h3 className="section-title">App Update</h3>
-          <span>{updater.message}</span>
+          <h3 className="section-title">앱 업데이트</h3>
+          <span role="status">{updater.message}</span>
+          {updater.isUpdateAvailable && (
+            <span>
+              {isConversationBusy ? "작업이 끝나면 설치할 수 있습니다" : "설치 시 앱이 종료됩니다"}
+            </span>
+          )}
         </div>
         <button
           className="app-update-btn"
           type="button"
-          disabled={!updater.canCheck || updater.isBusy}
+          disabled={
+            !updater.canCheck || updater.isBusy || (updater.isUpdateAvailable && isConversationBusy)
+          }
           title={updater.message}
           onClick={() => void handleCheckUpdate()}
         >

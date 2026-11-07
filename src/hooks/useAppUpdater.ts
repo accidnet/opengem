@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
@@ -31,6 +31,7 @@ export function useAppUpdater() {
     isTauri() ? "업데이트 확인 가능" : "데스크톱 앱에서 사용 가능"
   );
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const isCheckingRef = useRef(false);
 
   const checkForUpdate = useCallback(async ({ install = false }: CheckForUpdateOptions = {}) => {
     if (!isTauri()) {
@@ -39,24 +40,33 @@ export function useAppUpdater() {
       return;
     }
 
+    // 시작 시 자동 확인과 사용자의 수동 확인이 겹치지 않도록 합니다.
+    if (isCheckingRef.current) return;
+    isCheckingRef.current = true;
+
     setStatus("checking");
     setMessage("업데이트 확인 중");
+    let update: Awaited<ReturnType<typeof check>> = null;
 
     try {
-      const update = await check({ timeout: 15000 });
+      const foundUpdate = await check({ timeout: 15000 });
+      update = foundUpdate;
 
-      if (!update) {
+      if (!foundUpdate) {
         setLatestVersion(null);
         setStatus("up-to-date");
         setMessage("최신 버전");
         return;
       }
 
-      setLatestVersion(update.version);
+      setLatestVersion(foundUpdate.version);
 
       if (!install) {
+        // 확인만 한 업데이트는 백엔드 리소스를 해제합니다.
+        await foundUpdate.close();
+        update = null;
         setStatus("available");
-        setMessage(`새 버전 ${update.version}`);
+        setMessage(`새 버전 ${foundUpdate.version}`);
         return;
       }
 
@@ -64,13 +74,13 @@ export function useAppUpdater() {
       let contentLength: number | undefined;
 
       setStatus("downloading");
-      setMessage(`다운로드 중 ${update.version}`);
+      setMessage(`다운로드 중 ${foundUpdate.version}`);
 
-      await update.downloadAndInstall((event: DownloadEvent) => {
+      await foundUpdate.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
           contentLength = event.data.contentLength;
           downloadedBytes = 0;
-          setMessage(`다운로드 중 ${update.version}`);
+          setMessage(`다운로드 중 ${foundUpdate.version}`);
           return;
         }
 
@@ -86,8 +96,13 @@ export function useAppUpdater() {
 
       await relaunch();
     } catch (error) {
+      if (update) await update.close().catch(() => {});
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "업데이트 확인 실패");
+      const detail =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "";
+      setMessage(detail ? `업데이트 실패: ${detail}` : "업데이트 확인 또는 설치 실패");
+    } finally {
+      isCheckingRef.current = false;
     }
   }, []);
 
