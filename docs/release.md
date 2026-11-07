@@ -17,6 +17,7 @@ v* 태그 push
 릴리즈 자동화는 다음 workflow에서 관리합니다.
 
 - `.github/workflows/release.yml`
+- 빌드 전에 태그와 `package.json`, Tauri, Cargo 버전의 일치 여부와 서명키 설정을 확인합니다.
 
 태그 트리거는 다음과 같습니다.
 
@@ -138,7 +139,7 @@ gh run list --repo accidnet/opengem --workflow release --limit 5
 
 최초 설치는 GitHub Release에 올라간 NSIS 설치 파일을 실행합니다.
 
-설치 후에는 앱 왼쪽 패널의 `App Update` 영역에서 업데이트를 확인할 수 있습니다.
+설치 후에는 앱 상단 또는 프로필 메뉴에서 현재 버전을 확인할 수 있습니다. 앱 시작 시 자동으로 업데이트를 확인하며 왼쪽 작업 공간 패널 하단의 `앱 업데이트` 영역에서 `확인` 버튼으로 다시 확인할 수 있습니다. 새 버전이 있으면 `설치`를 누릅니다. 대화 작업 중에는 설치가 비활성화됩니다.
 
 업데이트 확인 흐름:
 

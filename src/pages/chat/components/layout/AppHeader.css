@@ -60,9 +60,10 @@
 }
 
 .brand-subtitle {
-  margin: 0;
+  margin: 3px 0 0;
   color: var(--text-muted);
   font-size: 11px;
+  line-height: 1;
 }
 
 .brand-copy {
@@ -235,6 +236,12 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.profile-menu-version {
+  padding: 6px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .profile-menu-item:hover,
