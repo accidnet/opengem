@@ -54,15 +54,25 @@ pnpm run tauri:dev
 
 ## UI 미리보기
 
-- 아래 이미지는 현재 데스크톱 UI/UX 화면 예시입니다.
+아래 화면은 예시 데이터로 촬영한 현재 UI입니다.
 
-### 메인 화면 1 (일반 모드)
+### 에이전트 오피스
 
-![OpenGem UI 메인 화면](docs/uiux1.PNG)
+픽셀 오피스에서 팀의 에이전트를 살펴보고 원하는 에이전트와 대화를 시작할 수 있습니다.
 
-### 메인 화면 2 (개발 모드)
+![에이전트와 작업 모드가 표시된 OpenGem 오피스](docs/screenshots/agent-office.jpg)
 
-![OpenGem UI 좌측 패널](docs/uiux2.PNG)
+### 대화 작업 공간
+
+대화 화면에서 메시지를 작성하고 세션에 프로젝트 폴더를 연결할 수 있습니다.
+
+![메시지를 작성 중인 OpenGem 대화 화면](docs/screenshots/chat-compose.jpg)
+
+### 에이전트 설정
+
+에이전트의 이름, 모델, 프롬프트와 연결 리소스를 설정할 수 있습니다.
+
+![새 에이전트의 기본 정보를 설정하는 화면](docs/screenshots/agent-settings.jpg)
 
 ## 배포
 
