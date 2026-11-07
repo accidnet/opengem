@@ -12,6 +12,7 @@
 
 - 자세한 개발 환경 설정 가이드는 다음 [링크](docs/development-setup.md)를 참고하세요.
 - 개발 시에는 기본적으로 `pnpm`을 활용합니다.
+- Codex CLI 설치, 인증과 작업 공간 주의 사항은 [Codex CLI 가이드](docs/codex-cli.md)를 참고하세요.
 
 ### 1. 사전 설치
 

@@ -55,6 +55,10 @@ export function ChatPage() {
   const {
     activity,
     agents,
+    executionMode,
+    setExecutionMode,
+    cancelCodexTask,
+    isCodexRunning,
     canSend,
     clearContext,
     costPercent,
@@ -275,6 +279,11 @@ export function ChatPage() {
           }
           conversationModel={conversationAgent?.model ?? ""}
           conversationError={conversationError || unavailableReason}
+          executionMode={executionMode}
+          onExecutionModeChange={setExecutionMode}
+          canUseCodex={Boolean(currentAgentId)}
+          isCodexRunning={isCodexRunning}
+          onCancelCodex={cancelCodexTask}
           isConversationBusy={isConversationBusy}
           onStartAgentChat={(index) => {
             if (agents[index]) void openAgentConversation(agents[index]);
