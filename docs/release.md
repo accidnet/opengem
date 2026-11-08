@@ -122,7 +122,7 @@ src-tauri\target\release\bundle\nsis\opengem_0.1.0_x64-setup.exe.sig
 예를 들어 `0.1.1`을 릴리즈하려면 다음 명령을 실행합니다.
 
 ```powershell
-pnpm run release -- 0.1.1
+pnpm run release 0.1.1
 ```
 
 Actions 실행 상태 확인:

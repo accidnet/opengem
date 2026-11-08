@@ -91,7 +91,12 @@ updateCargoToml(version);
 updateTauriConfig(version);
 
 run("cargo", ["check"], { cwd: "src-tauri" });
-run("pnpm", ["run", "build"]);
+// Windows에서는 pnpm이 cmd 스크립트이므로 명령 셸을 통해 실행합니다.
+if (process.platform === "win32") {
+  run("cmd.exe", ["/d", "/c", "pnpm", "run", "build"]);
+} else {
+  run("pnpm", ["run", "build"]);
+}
 
 run("git", [
   "add",
