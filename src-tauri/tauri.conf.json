@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "opengem",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.opengem.desktop",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -22,7 +22,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true
   },
   "plugins": {
