@@ -45,7 +45,8 @@ export function ModelSelect({
     const optionMap = new Map<string, ModelOption>();
 
     data?.forEach((provider) => {
-      const providerLabel = providerCatalog[provider.providerId]?.name?.trim() || provider.providerId;
+      const providerLabel =
+        providerCatalog[provider.providerId]?.name?.trim() || provider.providerId;
 
       provider.models.forEach((model) => {
         const modelValue = model.id?.trim();
@@ -72,7 +73,9 @@ export function ModelSelect({
       });
     });
 
-    return Array.from(optionMap.values()).sort((left, right) => left.label.localeCompare(right.label));
+    return Array.from(optionMap.values()).sort((left, right) =>
+      left.label.localeCompare(right.label)
+    );
   }, [data, providerCatalog]);
 
   const filteredOptions = useMemo(() => {
@@ -198,7 +201,12 @@ export function ModelSelect({
           </div>
 
           {!isLoading && !isError && filteredOptions.length > 0 && (
-            <div id={listboxId} className="model-select-options" role="listbox" aria-label={ariaLabel}>
+            <div
+              id={listboxId}
+              className="model-select-options"
+              role="listbox"
+              aria-label={ariaLabel}
+            >
               {filteredOptions.map((option, index) => {
                 const isSelected = option.value === value.trim();
                 const isHighlighted = index === highlightedIndex;

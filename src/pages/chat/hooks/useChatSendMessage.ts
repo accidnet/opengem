@@ -701,7 +701,8 @@ export function useChatSendMessage({
         isStreaming: false,
         icon: "error",
         byline: nowTime(),
-        text: executionMode === "codex" ? `Codex 실행 종료: ${reason}` : `Request failed: ${reason}`,
+        text:
+          executionMode === "codex" ? `Codex 실행 종료: ${reason}` : `Request failed: ${reason}`,
       };
       finishAssistantMessage(setMessages, activeAssistantMessage.id, errorMessage);
 

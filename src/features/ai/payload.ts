@@ -68,7 +68,10 @@ export function extractTextChunk(payload: JsonRecord, protocol: ProviderProtocol
   return "";
 }
 
-export function extractUsage(payload: JsonRecord, protocol: ProviderProtocol): LLMUsage | undefined {
+export function extractUsage(
+  payload: JsonRecord,
+  protocol: ProviderProtocol
+): LLMUsage | undefined {
   if (protocol === "google-gemini") {
     const usage = payload.usageMetadata as GoogleUsage | undefined;
     if (!usage) {
@@ -102,7 +105,10 @@ export function extractUsage(payload: JsonRecord, protocol: ProviderProtocol): L
   };
 }
 
-export function extractFinishReason(payload: JsonRecord, protocol: ProviderProtocol): string | undefined {
+export function extractFinishReason(
+  payload: JsonRecord,
+  protocol: ProviderProtocol
+): string | undefined {
   if (protocol === "anthropic") {
     const stopReason = readPath(payload, ["stop_reason"]);
     if (typeof stopReason === "string" && stopReason.length > 0) {
@@ -135,7 +141,10 @@ export function extractFinishReason(payload: JsonRecord, protocol: ProviderProto
   return undefined;
 }
 
-export function extractToolCalls(payload: JsonRecord, protocol: ProviderProtocol): LLMToolCall[] | undefined {
+export function extractToolCalls(
+  payload: JsonRecord,
+  protocol: ProviderProtocol
+): LLMToolCall[] | undefined {
   if (protocol !== "openai-compatible" && protocol !== "chatgpt-responses") {
     return undefined;
   }
@@ -170,7 +179,10 @@ export function extractToolCallDeltas(
       }
 
       const record = entry as JsonRecord;
-      const fn = record.function && typeof record.function === "object" ? (record.function as JsonRecord) : null;
+      const fn =
+        record.function && typeof record.function === "object"
+          ? (record.function as JsonRecord)
+          : null;
       return {
         index: typeof record.index === "number" ? record.index : index,
         id: typeof record.id === "string" ? record.id : undefined,
@@ -187,7 +199,8 @@ function mapResolvedToolCall(entry: unknown): LLMToolCall | null {
   }
 
   const record = entry as JsonRecord;
-  const fn = record.function && typeof record.function === "object" ? (record.function as JsonRecord) : null;
+  const fn =
+    record.function && typeof record.function === "object" ? (record.function as JsonRecord) : null;
   const id = typeof record.id === "string" ? record.id : "";
   const name = typeof fn?.name === "string" ? fn.name : "";
   const args = typeof fn?.arguments === "string" ? fn.arguments : "{}";

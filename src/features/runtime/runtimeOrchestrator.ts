@@ -122,9 +122,9 @@ type ExecuteRuntimeInput = {
 };
 
 const BUILTIN_TOOL_LINES = [
-  "- workspace_search: 프로젝트 경로 또는 rootPath 안에서 텍스트를 검색한다. 입력 예시: {\"query\":\"tool registry\",\"rootPath\":\"C:/repo\"}",
-  "- workspace_read_file: 파일 내용을 읽는다. 상대 경로는 rootPath와 함께 사용한다. 입력 예시: {\"path\":\"src/App.tsx\",\"rootPath\":\"C:/repo\"}",
-  "- workspace_list_files: 프로젝트 경로 또는 rootPath의 파일 경로 목록을 나열한다. 입력 예시: {\"rootPath\":\"C:/repo\",\"query\":\"prompt\"}",
+  '- workspace_search: 프로젝트 경로 또는 rootPath 안에서 텍스트를 검색한다. 입력 예시: {"query":"tool registry","rootPath":"C:/repo"}',
+  '- workspace_read_file: 파일 내용을 읽는다. 상대 경로는 rootPath와 함께 사용한다. 입력 예시: {"path":"src/App.tsx","rootPath":"C:/repo"}',
+  '- workspace_list_files: 프로젝트 경로 또는 rootPath의 파일 경로 목록을 나열한다. 입력 예시: {"rootPath":"C:/repo","query":"prompt"}',
   '- workspace_list_directory: 특정 폴더의 바로 아래 항목을 나열한다. 입력 예시: {"rootPath":"C:/repo","path":"src"}',
 ];
 

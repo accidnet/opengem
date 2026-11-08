@@ -64,7 +64,7 @@ export const getErrorMessage = (error: unknown) => {
   return "알 수 없는 오류가 발생했습니다.";
 };
 
-export const parseJsonObject = <T,>(value: string): T | null => {
+export const parseJsonObject = <T>(value: string): T | null => {
   try {
     return JSON.parse(value) as T;
   } catch {

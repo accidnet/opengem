@@ -90,7 +90,10 @@ export function buildLLMMessages(
   const resolvedSystemPrompt =
     systemPrompt?.trim() || (model ? composeAgentSystemPrompt(model) : LLM_SYSTEM_PROMPT);
 
-  return [{ role: "system", content: resolvedSystemPrompt }, ...buildConversationMessages(messages)];
+  return [
+    { role: "system", content: resolvedSystemPrompt },
+    ...buildConversationMessages(messages),
+  ];
 }
 
 export function appendChunkToMessage(messages: Message[], id: string, text: string): Message[] {

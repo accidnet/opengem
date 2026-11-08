@@ -1,8 +1,20 @@
 import type { ProviderProtocol } from "@/features/ai/catalog";
 
-import type { JsonRecord, LLMResponse, LLMStreamEvent, LLMToolCall, LLMUsage } from "../../lib/llm/types";
+import type {
+  JsonRecord,
+  LLMResponse,
+  LLMStreamEvent,
+  LLMToolCall,
+  LLMUsage,
+} from "../../lib/llm/types";
 import { safeJsonParse } from "./json";
-import { extractFinishReason, extractTextChunk, extractToolCallDeltas, extractToolCalls, extractUsage } from "./payload";
+import {
+  extractFinishReason,
+  extractTextChunk,
+  extractToolCallDeltas,
+  extractToolCalls,
+  extractUsage,
+} from "./payload";
 
 export async function parseSSEStream(
   response: Response,
@@ -135,7 +147,10 @@ export async function parseSSEStream(
   };
 }
 
-function mergeStreamText(currentText: string, nextChunk: string): {
+function mergeStreamText(
+  currentText: string,
+  nextChunk: string
+): {
   text: string;
   delta: string;
 } {
@@ -175,7 +190,9 @@ function extractCompleteSSEEvents(buffer: string): {
   const normalized = buffer.replace(/\r\n/g, "\n");
   const blocks = normalized.split("\n\n");
   const remainder = blocks.pop() ?? "";
-  const events = blocks.map(parseSSEEventBlock).filter((event): event is LLMStreamEvent => Boolean(event));
+  const events = blocks
+    .map(parseSSEEventBlock)
+    .filter((event): event is LLMStreamEvent => Boolean(event));
   return { events, remainder };
 }
 

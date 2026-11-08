@@ -19,7 +19,7 @@ type ProviderCredentialResult =
 
 export async function resolveProviderCredential(
   providerId: LLMConfig["providerId"],
-  credentialType: ProviderCredentialType,
+  credentialType: ProviderCredentialType
 ): Promise<ProviderCredentialResult> {
   return getProviderCredential({
     providerId,

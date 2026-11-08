@@ -10,7 +10,10 @@
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
-  transition: background 0.18s, border-color 0.18s, transform 0.15s;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.15s;
   flex-shrink: 0;
 }
 

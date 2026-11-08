@@ -168,7 +168,8 @@ export function createChatToolDefinitions(): LLMToolDefinition[] {
             },
             rootPath: {
               type: "string",
-              description: "Optional user-provided folder that scopes file access and resolves relative paths.",
+              description:
+                "Optional user-provided folder that scopes file access and resolves relative paths.",
             },
           },
           ["path"]

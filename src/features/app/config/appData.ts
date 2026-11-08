@@ -34,7 +34,10 @@ export const composeSystemPrompt = (...sections: Array<string | undefined>) => {
     .join("\n\n");
 };
 
-export const composeAgentSystemPrompt = (model: string | undefined, ...sections: Array<string | undefined>) => {
+export const composeAgentSystemPrompt = (
+  model: string | undefined,
+  ...sections: Array<string | undefined>
+) => {
   return composeSystemPrompt(getModelSystemPrompt(model), ...sections);
 };
 

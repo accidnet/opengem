@@ -287,7 +287,11 @@ export function useChatController({
     return created;
   };
 
-  const { sendMessage: sendChatMessage, cancelCodexTask, isCodexRunning } = useChatSendMessage({
+  const {
+    sendMessage: sendChatMessage,
+    cancelCodexTask,
+    isCodexRunning,
+  } = useChatSendMessage({
     executionMode,
     agents,
     targetAgentId: currentAgentId,

@@ -39,7 +39,9 @@ export function createProviderSettingsController({
   setPanelModalError,
   setSettings,
 }: ProviderSettingsControllerParams) {
-  const saveProviderConfiguration = async (nextSettings: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl">) => {
+  const saveProviderConfiguration = async (
+    nextSettings: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl">
+  ) => {
     if (nextSettings.providerId === "openai") {
       const oauthUrl = resolveProviderApiUrl("openai", "oauth", nextSettings.baseUrl);
       const apiKeyUrl = resolveProviderApiUrl("openai", "api-key", nextSettings.baseUrl);
@@ -115,7 +117,9 @@ export function createProviderSettingsController({
       setPanelModalError("");
       setIsPanelModalOpen(false);
     } catch (error) {
-      setPanelModalError(error instanceof Error ? error.message : "Provider 설정을 저장하지 못했습니다.");
+      setPanelModalError(
+        error instanceof Error ? error.message : "Provider 설정을 저장하지 못했습니다."
+      );
     } finally {
       setIsSavingProvider(false);
     }
@@ -176,7 +180,9 @@ export function createProviderSettingsController({
       setChatGPTLoginUrl("");
       setPanelModalError("");
     } catch (error) {
-      setPanelModalError(error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다.");
+      setPanelModalError(
+        error instanceof Error ? error.message : "ChatGPT 로그아웃에 실패했습니다."
+      );
     } finally {
       setIsChatGPTLoginBusy(false);
     }
