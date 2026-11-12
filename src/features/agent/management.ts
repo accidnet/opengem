@@ -1,5 +1,8 @@
+import { parseGoogleWorkspaceRequest, type GoogleWorkspaceRequest } from "./googlePlan.ts";
+
 export type ManagementPlan = {
   memoryNote: string | null;
+  google: GoogleWorkspaceRequest | null;
   routine: null | {
     action: "save" | "pause" | "resume" | "delete" | "run";
     instruction: string;
@@ -64,7 +67,7 @@ export function parseManagementPlan(text: string, userText: string): ManagementP
       sourceQuote: item.sourceQuote,
     };
   }
-  return { memoryNote, routine };
+  return { memoryNote, routine, google: parseGoogleWorkspaceRequest(record.google, userText) };
 }
 
 export function appendMemoryNote(current: string, note: string | null, date: string): string {

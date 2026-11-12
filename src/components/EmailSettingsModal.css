@@ -166,3 +166,38 @@
 .email-settings-notice {
   color: var(--primary);
 }
+
+/* 서비스마다 권한과 계정을 구분해 보여 줍니다. */
+.google-settings-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.google-settings-tabs button {
+  flex: 1;
+}
+.google-settings-tabs button[aria-pressed="true"] {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--panel-soft);
+}
+.google-service-list {
+  display: grid;
+  gap: 12px;
+}
+.google-service-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-width: 0;
+}
+.google-service-card .email-settings-status {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.google-service-card .email-settings-status > div {
+  min-width: 0;
+}

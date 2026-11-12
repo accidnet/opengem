@@ -386,6 +386,16 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::google_auth::get_google_settings,
+            commands::google_auth::save_google_settings,
+            commands::google_auth::begin_google_login,
+            commands::google_auth::cancel_google_login,
+            commands::google_auth::disconnect_google_service,
+            commands::google_workspace::list_google_drive_files,
+            commands::google_workspace::read_google_drive_file,
+            commands::google_workspace::list_google_calendars,
+            commands::google_workspace::list_google_calendar_events,
+            commands::google_workspace::create_google_calendar_event,
             commands::agent_workspace::get_agent_memory,
             commands::agent_workspace::save_agent_memory,
             commands::agent_workspace::get_agent_recent_context,

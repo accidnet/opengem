@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { CalendarEventDraftDialog } from "@/components/CalendarEventDraftDialog";
+import type { CalendarEventDraft } from "@/features/agent/googleApi";
 import { EmailSettingsModal } from "@/components/EmailSettingsModal";
 import { useAgentRoutines } from "@/features/agent/useAgentRoutines";
 
@@ -33,6 +35,13 @@ export function ChatPage() {
   const [agentPanelOpenCount, setAgentPanelOpenCount] = useState(0);
   const appUpdater = useAppUpdater();
   const [emailSettingsOpen, setEmailSettingsOpen] = useState(false);
+  const [calendarDraft, setCalendarDraft] = useState<CalendarEventDraft | null>(null);
+  useEffect(() => {
+    const showDraft = (event: Event) =>
+      setCalendarDraft((event as CustomEvent<CalendarEventDraft>).detail);
+    window.addEventListener("google-calendar-draft", showDraft);
+    return () => window.removeEventListener("google-calendar-draft", showDraft);
+  }, []);
   const agentRoutines = useAgentRoutines(appUpdater.isInstallingRef, appUpdater.backgroundBusyRef);
 
   useEffect(() => {
@@ -403,6 +412,11 @@ export function ChatPage() {
         )}
       </main>
 
+      <CalendarEventDraftDialog
+        draft={calendarDraft}
+        onClose={() => setCalendarDraft(null)}
+        onCreated={() => window.dispatchEvent(new Event("google-calendar-updated"))}
+      />
       <EmailSettingsModal open={emailSettingsOpen} onClose={() => setEmailSettingsOpen(false)} />
       <ProvidersSettingModal
         settings={settings}

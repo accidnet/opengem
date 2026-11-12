@@ -197,7 +197,7 @@ export function AppHeader({
                   onOpenEmailSettings();
                 }}
               >
-                이메일 연동
+                Google 연동
               </button>
             </div>
           )}

@@ -8,33 +8,60 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  beginEmailLogin,
-  cancelEmailLogin,
-  disconnectEmail,
-  getEmailSettings,
-  saveEmailSettings,
-  type EmailSettings,
-} from "@/features/agent/api";
+  beginGoogleLogin,
+  cancelGoogleLogin,
+  disconnectGoogleService,
+  getGoogleSettings,
+  saveGoogleSettings,
+  type GoogleSettings,
+  type GoogleService,
+} from "@/features/agent/googleApi";
 import { openExternalUrl } from "@/features/backend/api";
-
+import { GoogleWorkspacePanel } from "./GoogleWorkspacePanel";
 import "./EmailSettingsModal.css";
 
 type EmailSettingsModalProps = { open: boolean; onClose: () => void };
+const SERVICES: { id: GoogleService; name: string; icon: string; description: string }[] = [
+  {
+    id: "gmail",
+    name: "Gmail",
+    icon: "mail",
+    description: "받은편지함의 새 메일을 읽고 요약해요. 메일을 보내거나 삭제하지 않아요.",
+  },
+  {
+    id: "drive",
+    name: "Google Drive",
+    icon: "folder",
+    description: "파일을 검색하고 지원하는 문서를 읽어요. 파일을 수정하거나 삭제하지 않아요.",
+  },
+  {
+    id: "calendar",
+    name: "Google Calendar",
+    icon: "calendar_month",
+    description:
+      "일정을 조회하고, 검토한 초안만 직접 등록해요. 참석자 초대나 이메일 알림은 보내지 않아요.",
+  },
+];
 
-function EmailSettingsContent() {
-  const [settings, setSettings] = useState<EmailSettings | null>(null);
+function GoogleSettingsContent() {
+  const [settings, setSettings] = useState<GoogleSettings | null>(null);
+  const [tab, setTab] = useState<"connections" | "drive" | "calendar">("connections");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const [authorizationUrl, setAuthorizationUrl] = useState("");
+  const [authorizationUrls, setAuthorizationUrls] = useState<
+    Partial<Record<GoogleService, string>>
+  >({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const alive = useRef(true);
+  const busyRef = useRef(false);
+  const loginPending = settings?.services.some((service) => service.loginPending) ?? false;
 
   useEffect(() => {
     alive.current = true;
-    void getEmailSettings()
+    void getGoogleSettings()
       .then((next) => {
         if (!alive.current) return;
         setSettings(next);
@@ -51,22 +78,40 @@ function EmailSettingsContent() {
     };
   }, []);
 
-  // 로그인 결과는 토큰을 받지 않고 연결 상태만 확인합니다.
   useEffect(() => {
-    if (!settings?.loginPending) return;
+    const refresh = () => {
+      void getGoogleSettings()
+        .then((next) => {
+          if (alive.current) setSettings(next);
+        })
+        .catch((cause) => {
+          if (alive.current) setError(String(cause));
+        });
+    };
+    window.addEventListener("google-connections-updated", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("google-connections-updated", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  // 인증 값 대신 서비스별 연결 상태만 주기적으로 확인합니다.
+  useEffect(() => {
+    if (!loginPending) return;
     let cancelled = false;
     let polling = false;
     const timer = window.setInterval(() => {
       if (polling) return;
       polling = true;
-      void getEmailSettings()
+      void getGoogleSettings()
         .then((next) => {
           if (cancelled) return;
           setSettings(next);
-          if (!next.loginPending) {
-            setAuthorizationUrl("");
-            if (next.connected)
-              setNotice("Gmail을 연결했어요. 에이전트에게 이메일 업무를 맡길 수 있어요.");
+          if (!next.services.some((service) => service.loginPending)) {
+            setAuthorizationUrls({});
+            setNotice("연결 결과를 아래 서비스 카드에서 확인해 주세요.");
+            window.dispatchEvent(new Event("google-connections-updated"));
           }
         })
         .catch((cause) => {
@@ -80,10 +125,11 @@ function EmailSettingsContent() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [settings?.loginPending]);
+  }, [loginPending]);
 
   const perform = async (operation: () => Promise<void>) => {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
@@ -92,67 +138,54 @@ function EmailSettingsContent() {
     } catch (cause) {
       if (alive.current) setError(String(cause));
     } finally {
+      busyRef.current = false;
       if (alive.current) setBusy(false);
     }
   };
-
+  const credentialsChanged = clientId.trim() !== settings?.clientId || Boolean(clientSecret.trim());
   const save = (event: FormEvent) => {
     event.preventDefault();
     void perform(async () => {
-      const next = await saveEmailSettings({
+      const next = await saveGoogleSettings({
         clientId: clientId.trim(),
         clientSecret: clientSecret.trim() || undefined,
       });
       if (!alive.current) return;
       setSettings(next);
       setClientSecret("");
-      setNotice("이메일 설정을 저장했어요. Gmail 연결을 눌러 계정을 연결해 주세요.");
+      setNotice("Google 설정을 저장했어요. 사용할 서비스를 각각 연결해 주세요.");
+      window.dispatchEvent(new Event("google-connections-updated"));
     });
   };
-
-  const connect = () =>
+  const connect = (service: GoogleService) =>
     void perform(async () => {
-      const result = await beginEmailLogin();
+      const result = await beginGoogleLogin(service);
       if (!alive.current) return;
-      setAuthorizationUrl(result.authorizationUrl);
-      setSettings(await getEmailSettings());
+      setAuthorizationUrls((previous) => ({ ...previous, [service]: result.authorizationUrl }));
+      setSettings(await getGoogleSettings());
       await openExternalUrl(result.authorizationUrl);
     });
 
-  const credentialsChanged = clientId.trim() !== settings?.clientId || Boolean(clientSecret.trim());
-
   return (
     <div className="email-settings-body">
-      <section className="email-settings-status" aria-label="이메일 연결 상태">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          mail
-        </span>
-        <div>
-          <strong>
-            {loading
-              ? "연결 상태 확인 중…"
-              : settings?.connected
-                ? "Gmail 연결됨"
-                : "Gmail 연결 필요"}
-          </strong>
-          <p>{settings?.email || "전체 에이전트가 이 계정의 연결을 사용해요."}</p>
-        </div>
-      </section>
-      <p className="email-settings-copy">
-        받은편지함의 새 메일을 읽어 요약하고 일정을 정리합니다. 요약할 메일 내용은 업무를 맡긴
-        에이전트의 AI 제공자에게 전달됩니다.
-      </p>
-      <p className="email-settings-copy">
-        메일은 읽기 전용으로 연결되며, 일정은 에이전트 보고서에 표시됩니다.
-      </p>
+      <div className="google-settings-tabs" role="group" aria-label="Google 서비스 설정">
+        <button
+          type="button"
+          aria-pressed={tab === "connections"}
+          onClick={() => setTab("connections")}
+        >
+          연결 설정
+        </button>
+        <button type="button" aria-pressed={tab === "drive"} onClick={() => setTab("drive")}>
+          Drive 파일
+        </button>
+        <button type="button" aria-pressed={tab === "calendar"} onClick={() => setTab("calendar")}>
+          Calendar 일정
+        </button>
+      </div>
       {error && (
         <p className="email-settings-error" role="alert">
           {error}
-        </p>
-      )}
-      {settings?.lastError && settings.lastError !== error && (
-        <p className="email-settings-error" role="alert">
-          {settings.lastError}
         </p>
       )}
       {notice && (
@@ -160,153 +193,214 @@ function EmailSettingsContent() {
           {notice}
         </p>
       )}
-      <details className="email-settings-guide" open={!settings?.clientId}>
-        <summary>처음 연결하는 방법</summary>
-        <ol>
-          <li>
-            <button
-              type="button"
-              className="email-settings-link"
-              onClick={() =>
-                void perform(() =>
-                  openExternalUrl(
-                    "https://console.cloud.google.com/apis/library/gmail.googleapis.com"
-                  )
-                )
-              }
-            >
-              Google Cloud Console
-            </button>
-            에서 프로젝트를 만들고 Gmail API를 사용 설정하세요.
-          </li>
-          <li>
-            Google Auth Platform의 동의 화면을 설정하세요. 테스트 상태라면 사용할 Gmail 주소를
-            테스트 사용자로 추가하세요.
-          </li>
-          <li>
-            클라이언트에서 <strong>데스크톱 앱</strong> 유형의 OAuth 클라이언트를 만들고, 아래에
-            클라이언트 ID와 보안 비밀을 입력하세요.
-          </li>
-          <li>
-            설정을 저장한 뒤 Gmail 연결을 눌러 브라우저에서 계정을 선택하고 읽기 권한을 허용하세요.
-          </li>
-        </ol>
-        <p>테스트 상태인 Google 앱의 연결은 만료되어 재연결이 필요할 수 있어요.</p>
-      </details>
-      <form className="email-settings-form" onSubmit={save}>
-        <fieldset disabled={loading || busy || settings?.loginPending}>
-          <legend>Google OAuth 설정</legend>
-          <label>
-            <span>클라이언트 ID</span>
-            <input
-              type="text"
-              value={clientId}
-              required
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="…apps.googleusercontent.com"
-              onChange={(event) => setClientId(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>클라이언트 보안 비밀</span>
-            <input
-              type="password"
-              value={clientSecret}
-              autoComplete="new-password"
-              placeholder={
-                settings?.hasClientSecret
-                  ? "저장됨 · 변경할 때만 입력"
-                  : "Google에서 발급한 보안 비밀"
-              }
-              onChange={(event) => setClientSecret(event.target.value)}
-            />
-          </label>
-          <p className="email-settings-copy">
-            계정 연결 정보는 이 기기에 안전하게 저장되며, 에이전트의 기억에는 포함되지 않아요.
-          </p>
-          <button
-            type="submit"
-            disabled={!clientId.trim() || (!credentialsChanged && Boolean(settings?.clientId))}
-          >
-            설정 저장
-          </button>
-        </fieldset>
-      </form>
-      <div className="email-settings-actions">
-        {settings?.loginPending ? (
-          <>
-            <p role="status">브라우저에서 Gmail 연결을 완료해 주세요.</p>
-            {authorizationUrl && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void perform(() => openExternalUrl(authorizationUrl))}
-              >
-                로그인 페이지 다시 열기
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void perform(async () => {
-                  await cancelEmailLogin();
-                  if (alive.current) {
-                    setSettings(await getEmailSettings());
-                    setAuthorizationUrl("");
-                  }
-                })
-              }
-            >
-              연결 취소
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="is-primary"
-            disabled={
-              busy ||
-              loading ||
-              !settings?.clientId ||
-              !settings?.hasClientSecret ||
-              credentialsChanged
-            }
-            onClick={connect}
-          >
-            {settings?.connected ? "Gmail 다시 연결" : "Gmail 연결"}
-          </button>
-        )}
-        {settings?.connected && !settings.loginPending && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (
-                window.confirm(
-                  "Gmail 연결을 해제할까요? 반복 이메일 업무는 다시 연결할 때까지 실행할 수 없어요."
-                )
-              )
-                void perform(async () => {
-                  const next = await disconnectEmail();
-                  if (alive.current) {
-                    setSettings(next);
-                    setNotice("Gmail 연결을 해제했어요.");
-                  }
-                });
-            }}
-          >
-            연결 해제
-          </button>
-        )}
-      </div>
-      {credentialsChanged && settings?.clientId && (
-        <p className="email-settings-copy">변경한 설정을 먼저 저장해 주세요.</p>
+      {loading && <p role="status">Google 연결 상태를 확인하고 있어요.</p>}
+      {tab !== "connections" && settings && (
+        <GoogleWorkspacePanel
+          key={
+            tab +
+            ":" +
+            (settings.services.find((service) => service.service === tab)?.email ?? "") +
+            ":" +
+            String(settings.services.find((service) => service.service === tab)?.connected)
+          }
+          service={tab}
+          settings={settings}
+          onOpenConnections={() => setTab("connections")}
+        />
       )}
-      <p className="email-settings-footnote">
-        앱이 실행 중일 때 반복 업무를 확인합니다. 앱을 다시 열면 놓친 새 메일부터 이어서 확인해요.
-      </p>
+      {tab === "connections" && (
+        <>
+          <p className="email-settings-copy">
+            연결은 모든 에이전트가 함께 사용해요. 필요한 서비스만 선택해서 연결할 수 있고, 각
+            서비스의 계정과 연결 상태를 따로 확인할 수 있어요.
+          </p>
+          <div className="google-service-list">
+            {SERVICES.map((service) => {
+              const status = settings?.services.find((item) => item.service === service.id);
+              return (
+                <section
+                  className="google-service-card"
+                  key={service.id}
+                  aria-label={service.name + " 연결"}
+                >
+                  <div className="email-settings-status">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {service.icon}
+                    </span>
+                    <div>
+                      <strong>
+                        {service.name} ·{" "}
+                        {status?.loginPending
+                          ? "연결 대기 중"
+                          : status?.connected
+                            ? "연결됨"
+                            : "연결 필요"}
+                      </strong>
+                      <p>{status?.email || "사용할 계정을 연결해 주세요."}</p>
+                    </div>
+                  </div>
+                  <p className="email-settings-copy">{service.description}</p>
+                  {status?.lastError && (
+                    <p className="email-settings-error" role="alert">
+                      {status.lastError}
+                    </p>
+                  )}
+                  <div className="email-settings-actions">
+                    {status?.loginPending ? (
+                      <>
+                        {authorizationUrls[service.id] && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void perform(() => openExternalUrl(authorizationUrls[service.id]!))
+                            }
+                          >
+                            로그인 페이지 다시 열기
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void perform(async () => {
+                              await cancelGoogleLogin(service.id);
+                              if (alive.current) setSettings(await getGoogleSettings());
+                            })
+                          }
+                        >
+                          연결 취소
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="is-primary"
+                        disabled={
+                          busy ||
+                          loading ||
+                          !settings?.clientId ||
+                          !settings?.hasClientSecret ||
+                          credentialsChanged
+                        }
+                        onClick={() => connect(service.id)}
+                      >
+                        {status?.connected ? "다시 연결" : service.name + " 연결"}
+                      </button>
+                    )}
+                    {status?.connected && !status.loginPending && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              service.name +
+                                " 연결을 해제할까요? 이 서비스를 사용하는 업무는 재연결 전까지 사용할 수 없어요."
+                            )
+                          )
+                            void perform(async () => {
+                              const next = await disconnectGoogleService(service.id);
+                              if (!alive.current) return;
+                              setSettings(next);
+                              setNotice(service.name + " 연결을 해제했어요.");
+                              window.dispatchEvent(new Event("google-connections-updated"));
+                            });
+                        }}
+                      >
+                        연결 해제
+                      </button>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+          <details className="email-settings-guide" open={!settings?.clientId}>
+            <summary>처음 연결하는 방법</summary>
+            <ol>
+              <li>
+                <button
+                  type="button"
+                  className="email-settings-link"
+                  onClick={() =>
+                    void perform(() =>
+                      openExternalUrl("https://console.cloud.google.com/apis/library")
+                    )
+                  }
+                >
+                  Google Cloud Console
+                </button>
+                에서 프로젝트를 만들고 사용할 Gmail API, Google Drive API, Google Calendar API를
+                사용 설정하세요.
+              </li>
+              <li>
+                Google Auth Platform의 동의 화면을 설정하세요. 테스트 상태라면 연결할 Google 계정을
+                테스트 사용자로 추가하세요.
+              </li>
+              <li>
+                클라이언트에서 <strong>데스크톱 앱</strong> 유형의 OAuth 클라이언트를 만들고 아래
+                공통 설정에 입력하세요.
+              </li>
+              <li>
+                설정을 저장한 뒤 사용할 서비스의 연결 버튼을 누르고 브라우저에서 표시된 권한을
+                확인하세요. 이미 연결한 Gmail만으로 Drive·Calendar가 자동 연결되지는 않아요.
+              </li>
+            </ol>
+            <p>테스트 상태인 Google 앱은 연결이 만료되어 재연결이 필요할 수 있어요.</p>
+          </details>
+          <form className="email-settings-form" onSubmit={save}>
+            <fieldset disabled={loading || busy || loginPending}>
+              <legend>공통 Google OAuth 설정</legend>
+              <label>
+                <span>클라이언트 ID</span>
+                <input
+                  type="text"
+                  value={clientId}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="…apps.googleusercontent.com"
+                  onChange={(event) => setClientId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>클라이언트 보안 비밀</span>
+                <input
+                  type="password"
+                  value={clientSecret}
+                  autoComplete="new-password"
+                  placeholder={
+                    settings?.hasClientSecret
+                      ? "저장됨 · 변경할 때만 입력"
+                      : "Google에서 발급한 보안 비밀"
+                  }
+                  onChange={(event) => setClientSecret(event.target.value)}
+                />
+              </label>
+              <p className="email-settings-copy">
+                Google 계정 비밀번호를 입력하는 곳이 아니에요. 인증 정보는 이 기기의 OS 자격 증명
+                저장소에 보관하며 에이전트 기억에 넣지 않아요. 클라이언트 설정을 바꾸면 서비스를
+                다시 연결해야 해요.
+              </p>
+              <button
+                type="submit"
+                disabled={!clientId.trim() || (!credentialsChanged && Boolean(settings?.clientId))}
+              >
+                공통 설정 저장
+              </button>
+            </fieldset>
+          </form>
+          {credentialsChanged && settings?.clientId && (
+            <p className="email-settings-copy">변경한 공통 설정을 먼저 저장해 주세요.</p>
+          )}
+          <p className="email-settings-footnote">
+            에이전트에게 요약·분석을 요청하면 읽은 메일, 문서, 일정 내용이 선택한 AI 제공자에게
+            전달됩니다. 반복 업무는 앱 실행 중에 동작하며 Calendar 등록은 검토 후 등록 버튼을 누른
+            초안만 처리합니다.
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -321,12 +415,12 @@ export function EmailSettingsModal({ open, onClose }: EmailSettingsModalProps) {
     >
       <DialogContent className="email-settings-dialog">
         <DialogHeader>
-          <DialogTitle>전체 환경설정 · 이메일</DialogTitle>
+          <DialogTitle>전체 환경설정 · Google 연동</DialogTitle>
           <DialogDescription>
-            한 번 연결하면 각 에이전트에게 이메일 요약과 일정 정리를 맡길 수 있어요.
+            Gmail, Drive, Calendar를 연결하고 각 에이전트에게 필요한 일을 맡겨 보세요.
           </DialogDescription>
         </DialogHeader>
-        {open && <EmailSettingsContent />}
+        {open && <GoogleSettingsContent />}
       </DialogContent>
     </Dialog>
   );

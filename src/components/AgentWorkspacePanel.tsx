@@ -254,7 +254,7 @@ function AgentWorkspaceContent({
           <div className="agent-email-connection">
             <strong>{connected ? "Gmail 연결됨" : "이메일 연결이 필요해요"}</strong>
             <button type="button" onClick={onOpenEmailSettings}>
-              전체 이메일 설정
+              Google 연동 설정
             </button>
           </div>
           <p className="agent-workspace-help">

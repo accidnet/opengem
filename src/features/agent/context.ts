@@ -15,6 +15,15 @@ import {
   notifyAgentWorkspace,
   type AgentScope,
 } from "./api";
+import { executeGoogleWorkspace } from "./googleExecution";
+import {
+  getGoogleSettings,
+  listGoogleDriveFiles,
+  readGoogleDriveFile,
+  listGoogleCalendars,
+  listGoogleCalendarEvents,
+  type CalendarEventDraft,
+} from "./googleApi";
 import MANAGEMENT_SKILL from "./skills/manage-agent.txt?raw";
 
 export async function loadAgentContext(scope: AgentScope, name: string) {
@@ -36,7 +45,7 @@ export async function loadAgentContext(scope: AgentScope, name: string) {
       latestReports: reports.slice(0, 3).map((r) => ({ ...r, content: r.content.slice(0, 6000) })),
     }),
     "Long-term memory is Markdown in the agent memory panel. In normal chat, a separate harness manages facts and recurring tasks. Development execution receives read-only context and does not save memory or manage tasks. Only claim changes shown in explicit harness results. The user can edit/delete memory in that panel.",
-    "Email integration is global: user menu → 이메일 연동. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under this agent's 반복 업무/보고서. Proposed schedules are not calendar events. Only interval schedules (5 minutes–7 days) are supported, not exact clock times.",
+    "Google integrations are global: user menu → Google 연동. Drive supports search/read and Calendar supports viewing schedules and proposing event drafts. Calendar events are created only by the user clicking the review dialog registration button; no invitations are sent. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under this agent's 반복 업무/보고서. Proposed schedules are not calendar events. Only interval schedules (5 minutes–7 days) are supported, not exact clock times.",
   ].join("\n\n");
 }
 
@@ -47,7 +56,11 @@ export async function manageAgentRequest(
   settings: ResolvedLLMSettings,
   apiBaseUrl: string
 ) {
-  const [memory, routines] = await Promise.all([getAgentMemory(scope), listAgentRoutines(scope)]);
+  const [memory, routines, googleSettings] = await Promise.all([
+    getAgentMemory(scope),
+    listAgentRoutines(scope),
+    getGoogleSettings().catch(() => null),
+  ]);
   const response = await request({
     ...settings,
     apiBaseUrl,
@@ -59,6 +72,13 @@ export async function manageAgentRequest(
         role: "user",
         content: JSON.stringify({
           latestUserMessage: userText,
+          currentDateTime: new Date().toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          googleServices:
+            googleSettings?.services.map((service) => ({
+              service: service.service,
+              connected: service.connected,
+            })) ?? [],
           memory: memory.content,
           routine: routines[0] ?? null,
         }),
@@ -86,11 +106,11 @@ export async function manageAgentRequest(
         const email = await getEmailSettings();
         if (!email.connected)
           outcomes.push(
-            "아직 이메일이 연결되지 않았습니다. 사용자 메뉴 → 이메일 연동에서 Gmail을 연결해야 실행됩니다. 업무는 저장되어 있습니다."
+            "아직 이메일이 연결되지 않았습니다. 사용자 메뉴 → Google 연동에서 Gmail을 연결해야 실행됩니다. 업무는 저장되어 있습니다."
           );
       } catch {
         outcomes.push(
-          "업무는 저장했지만 이메일 연결 상태를 읽지 못했습니다. 사용자 메뉴 → 이메일 연동을 확인해 주세요."
+          "업무는 저장했지만 이메일 연결 상태를 읽지 못했습니다. 사용자 메뉴 → Google 연동을 확인해 주세요."
         );
       }
     } else if (!current) {
@@ -126,8 +146,31 @@ export async function manageAgentRequest(
       "기억은 저장하지 못했습니다. 에이전트의 기억 편집기에서 용량 또는 최신 내용을 확인해 주세요."
     );
   }
+  let googleContext = "";
+  let calendarDraft: CalendarEventDraft | null = null;
+  if (plan.google) {
+    try {
+      const result = await executeGoogleWorkspace(plan.google, googleSettings?.services ?? [], {
+        listGoogleDriveFiles,
+        readGoogleDriveFile,
+        listGoogleCalendars,
+        listGoogleCalendarEvents,
+        newDraftId: () => crypto.randomUUID(),
+      });
+      outcomes.push(result.text);
+      googleContext = result.data;
+      calendarDraft = result.draft;
+    } catch {
+      outcomes.push(
+        "Google 작업을 완료하지 못했습니다. 사용자 메뉴 → Google 연동에서 연결 상태를 확인해 주세요. 일정 등록은 수행하지 않았습니다."
+      );
+    }
+  }
   notifyAgentWorkspace(scope);
   return {
+    googleContext,
+    calendarDraft,
+    hasGoogleRequest: Boolean(plan.google),
     text: outcomes.join("\n") || "이번 요청에서 기억이나 반복 업무를 변경하지 않았습니다.",
     totalTokens: response.usage?.totalTokens ?? 0,
   };

@@ -43,7 +43,7 @@ export function useAgentRoutines(
             const email = await getEmailSettings();
             if (!email.connected)
               throw new Error(
-                "이메일 연결이 필요합니다. 사용자 메뉴 → 이메일 연동에서 Gmail을 연결해 주세요."
+                "이메일 연결이 필요합니다. 사용자 메뉴 → Google 연동에서 Gmail을 연결해 주세요."
               );
             if (job.mailboxEmail && job.mailboxEmail !== email.email)
               throw new Error(
