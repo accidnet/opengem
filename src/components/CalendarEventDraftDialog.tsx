@@ -23,6 +23,8 @@ import {
 import { openExternalUrl } from "@/features/backend/api";
 import "./GoogleWorkspacePanel.css";
 
+const WRITABLE_CALENDAR_ROLES = ["owner", "writer", "writerWithoutPrivateAccess"];
+
 type CalendarEventDraftDialogProps = {
   draft: CalendarEventDraft | null;
   onClose: () => void;
@@ -56,6 +58,15 @@ function CalendarEventDraftContent({
   const [created, setCreated] = useState<GoogleCalendarEvent | null>(null);
   const alive = useRef(true);
   const submitting = useRef(false);
+  const selectedCalendar = calendars.find((calendar) => calendar.id === calendarId);
+  // 초안 대상이 아직 목록에 없으면 기본 캘린더로 보이거나 등록되지 않게 합니다.
+  const calendarMissing = calendarId !== "primary" && !selectedCalendar;
+  const calendarWritable =
+    calendarId === "primary" ||
+    Boolean(selectedCalendar && WRITABLE_CALENDAR_ROLES.includes(selectedCalendar.accessRole));
+  const calendarError = calendarMissing
+    ? "초안의 캘린더를 아직 확인하지 못했어요. 캘린더를 더 불러오거나 등록할 대상을 선택해 주세요."
+    : "이 캘린더에는 일정을 등록할 권한이 없어요. 등록할 다른 캘린더를 선택해 주세요.";
 
   useEffect(() => {
     alive.current = true;
@@ -97,11 +108,12 @@ function CalendarEventDraftContent({
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (submitting.current || !account || created) return;
+    if (submitting.current || loading || busy || !account || created) return;
     submitting.current = true;
     setBusy(true);
     setError("");
     try {
+      if (!calendarWritable) throw new Error(calendarError);
       if (!title.trim()) throw new Error("일정 제목을 입력해 주세요.");
       if (allDay) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start)
@@ -216,27 +228,29 @@ function CalendarEventDraftContent({
                   changed();
                 }}
               >
+                {calendarMissing && (
+                  <option value={calendarId} disabled>
+                    확인하지 못한 캘린더: {calendarId}
+                  </option>
+                )}
                 <option value="primary">기본 캘린더</option>
                 {calendars.map((calendar) => (
                   <option
                     key={calendar.id}
                     value={calendar.id}
-                    disabled={
-                      !["owner", "writer", "writerWithoutPrivateAccess"].includes(
-                        calendar.accessRole
-                      )
-                    }
+                    disabled={!WRITABLE_CALENDAR_ROLES.includes(calendar.accessRole)}
                   >
                     {calendar.summary}
-                    {!["owner", "writer", "writerWithoutPrivateAccess"].includes(
-                      calendar.accessRole
-                    )
-                      ? " (읽기 전용)"
-                      : ""}
+                    {!WRITABLE_CALENDAR_ROLES.includes(calendar.accessRole) ? " (읽기 전용)" : ""}
                   </option>
                 ))}
               </select>
             </label>
+            {!loading && !calendarWritable && (
+              <p className="google-workspace-error" role="alert">
+                {calendarError}
+              </p>
+            )}
             {pageToken && (
               <button type="button" onClick={() => void loadMore()}>
                 캘린더 더 불러오기
@@ -330,7 +344,11 @@ function CalendarEventDraftContent({
                 }}
               />
             </label>
-            <button type="submit" className="is-primary" disabled={!title.trim() || !start || !end}>
+            <button
+              type="submit"
+              className="is-primary"
+              disabled={!calendarWritable || !title.trim() || !start || !end}
+            >
               {busy ? "등록 중…" : "검토한 일정 등록"}
             </button>
           </fieldset>
