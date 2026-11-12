@@ -90,7 +90,7 @@ Three.js 기반 3D 오피스에서 팀원을 선택하고 직접 움직일 수 �
 
 ## 배포
 
-`main`의 변경을 반영한 새 버전은 `pnpm run release -- 0.1.1`처럼 아직 사용하지 않은 버전으로 배포합니다. 스크립트가 버전 변경을 커밋하고 `main`과 태그를 푸시하면 GitHub Actions가 서명된 설치 파일과 업데이트 정보를 릴리즈에 게시합니다. 실행 조건과 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
+GitHub의 **Actions → release → Run workflow**에서 `main`과 `patch` / `minor` / `major`를 선택해 배포합니다. 검사를 통과하면 버전 PR을 자동 생성·병합하고, 태그에 해당하는 Windows 설치 파일을 빌드해 서명 및 업데이트 정보와 함께 공개합니다. 최초 PR 생성 권한 설정, 실패 시 재시도, 기존 로컬 명령과 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
 
 ## 에이전트 기억과 Google 연동
 

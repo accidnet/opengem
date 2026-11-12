@@ -1,25 +1,45 @@
 name: release
 
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "버전 증가 종류 (patch: 수정 / minor: 기능 / major: 큰 변경)"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
   push:
     tags:
       - "v*"
+
+# 버전 커밋과 latest.json 게시가 서로 겹치지 않게 순서대로 실행합니다.
+concurrency:
+  group: opengem-release
+  cancel-in-progress: false
 
 jobs:
   release:
     permissions:
       contents: write
+      pull-requests: write
 
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: 11.7.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -29,6 +49,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
@@ -38,20 +60,105 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare next version
+        if: github.event_name == 'workflow_dispatch'
+        id: version
+        run: node scripts/prepare-release.mjs prepare
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Verify release configuration
         run: node scripts/check-release.mjs
         env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag || github.ref_name }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
-      - name: Build and publish release
+      - name: Check published release
+        id: existing
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag || github.ref_name }}
+        with:
+          script: |
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo,
+              per_page: 100,
+            });
+            const release = releases.find(({ tag_name }) => tag_name === process.env.RELEASE_TAG);
+            // 공개한 설치 파일을 재실행으로 덮어쓰지 않습니다.
+            core.setOutput('published', Boolean(release && !release.draft));
+            if (release && !release.draft) {
+              await core.summary.addLink('이미 공개된 릴리스', release.html_url).write();
+            }
+
+      - name: Frontend checks
+        if: steps.existing.outputs.published != 'true'
+        shell: bash
+        run: |
+          pnpm run typecheck
+          pnpm run lint
+          pnpm run format:check
+          pnpm test
+          pnpm run build
+
+      - name: Rust checks
+        if: steps.existing.outputs.published != 'true'
+        shell: bash
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Merge version PR and push tag
+        if: github.event_name == 'workflow_dispatch' && steps.existing.outputs.published != 'true'
+        run: node scripts/prepare-release.mjs publish
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # GITHUB_TOKEN의 태그 push는 새 workflow를 시작하지 않으므로 여기서 빌드합니다.
+      - name: Build and upload release draft
+        if: steps.existing.outputs.published != 'true'
+        id: build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "OpenGem ${{ github.ref_name }}"
+          tagName: ${{ steps.version.outputs.tag || github.ref_name }}
+          releaseName: "OpenGem ${{ steps.version.outputs.tag || github.ref_name }}"
           releaseBody: "OpenGem desktop release."
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
+          generateReleaseNotes: true
+
+      - name: Publish complete release
+        if: steps.existing.outputs.published != 'true'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.build.outputs.releaseId }}
+        with:
+          script: |
+            const release_id = Number(process.env.RELEASE_ID);
+            if (!Number.isSafeInteger(release_id) || release_id <= 0) {
+              throw new Error('릴리스 ID를 확인할 수 없습니다.');
+            }
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              ...context.repo,
+              release_id,
+              per_page: 100,
+            });
+            const installer = assets.find(({ name }) => name.endsWith('-setup.exe'));
+            if (!installer || !assets.some(({ name }) => name === `${installer.name}.sig`) ||
+                !assets.some(({ name }) => name === 'latest.json')) {
+              throw new Error('설치 파일, 서명 또는 latest.json이 없어 초안으로 유지합니다.');
+            }
+            const { data: release } = await github.rest.repos.updateRelease({
+              ...context.repo,
+              release_id,
+              draft: false,
+              prerelease: false,
+              make_latest: 'legacy',
+            });
+            await core.summary.addLink('배포한 릴리스', release.html_url).write();
