@@ -1,0 +1,168 @@
+/* 이메일 연결은 모든 에이전트가 공유하는 앱 설정입니다. */
+.email-settings-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: 620px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--text-main);
+  border-color: var(--border);
+}
+.email-settings-body {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.email-settings-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.email-settings-status > span {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--primary);
+}
+.email-settings-status strong {
+  font-size: 14px;
+}
+.email-settings-status p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.email-settings-copy,
+.email-settings-footnote {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.email-settings-footnote {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.email-settings-guide {
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.email-settings-guide summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.email-settings-guide ol {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  margin: 12px 0 8px;
+}
+.email-settings-guide p {
+  color: var(--text-muted);
+  margin: 8px 0 0;
+}
+.email-settings-form fieldset {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.email-settings-form legend {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.email-settings-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.email-settings-form input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text-main);
+  font: inherit;
+}
+.email-settings-body button {
+  justify-self: start;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.email-settings-body button:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+.email-settings-body button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.email-settings-body button.is-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.email-settings-body button.email-settings-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--primary);
+  text-decoration: underline;
+}
+.email-settings-body button:focus-visible,
+.email-settings-body input:focus-visible,
+.email-settings-body summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.email-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.email-settings-actions p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.email-settings-error,
+.email-settings-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.email-settings-error {
+  color: #c75d6a;
+}
+.email-settings-notice {
+  color: var(--primary);
+}

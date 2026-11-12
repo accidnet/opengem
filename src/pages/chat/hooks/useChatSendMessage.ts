@@ -2,6 +2,8 @@ import { useRef, useState, type Dispatch, type SetStateAction, type MutableRefOb
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+import { loadAgentContext, manageAgentRequest } from "@/features/agent/context";
+
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
 import { getChatSession, getProviderCredential } from "@/features/backend/api";
 import { resolveProviderApiUrl } from "@/config/loadModels";
@@ -207,6 +209,7 @@ async function runMainAgentLoop(input: {
   activeSettings: ResolvedLLMSettings;
   runtimeApiUrl: string;
   baseMessages: LLMMessage[];
+  agentContext?: string;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   activeAssistantMessageId: string;
@@ -219,6 +222,7 @@ async function runMainAgentLoop(input: {
     model: input.mainAgent.model?.trim() || input.activeSettings.model,
     providerId: input.activeSettings.providerId,
     agentPrompt: input.mainAgent.prompt,
+    agentContext: input.agentContext,
     projectPaths: input.projectPaths,
     tools: toolDefinitions,
   });
@@ -483,6 +487,9 @@ export function useChatSendMessage({
       if ((sessionDetail.session.agentId ?? null) !== targetAgentId) {
         throw new Error("대화 대상이 일치하지 않습니다. 대화를 다시 열어 주세요.");
       }
+      const agentScope = targetAgentId
+        ? { modeName: sessionDetail.session.modeName, agentId: targetAgentId }
+        : null;
       if (executionMode === "codex") {
         if (!targetAgentId) throw new Error("개발 실행은 개별 에이전트 대화에서 선택해 주세요.");
         const requestId = crypto.randomUUID();
@@ -544,7 +551,16 @@ export function useChatSendMessage({
         activeCodexRequest.current = requestId;
         try {
           const result = await invoke<{ output: string }>("run_codex_task", {
-            input: { sessionId: session.id, agentId: targetAgentId, requestId, prompt: text },
+            input: {
+              sessionId: session.id,
+              agentId: targetAgentId,
+              requestId,
+              prompt: [
+                agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
+                "Current user request:",
+                text,
+              ].join("\n\n"),
+            },
           });
           const assistantMessage = createAssistantMessage(
             typingMessage,
@@ -674,7 +690,26 @@ export function useChatSendMessage({
 
       moveMessageToBottom(setMessages, typingMessage.id, activeAssistantMessage);
 
+      let agentContext =
+        "This is general chat, without an assigned personal agent workspace. To remember facts or set recurring email tasks, guide the user to select an agent and start that agent conversation. Do not claim any task or memory has been saved in this general chat. Global email settings are under 사용자 메뉴 → 이메일 연동.";
+      let managementTokens = 0;
+      if (agentScope) {
+        let managementResult: string;
+        try {
+          const result = await manageAgentRequest(agentScope, text, activeSettings, runtimeApiUrl);
+          managementResult = result.text;
+          managementTokens = result.totalTokens;
+        } catch {
+          managementResult =
+            "기억·반복 업무 자동 처리를 완료하지 못했습니다. 저장 또는 실행 성공을 주장하지 말고, 에이전트 패널에서 등록 상태를 확인하도록 안내하세요.";
+        }
+        agentContext = await loadAgentContext(agentScope, mainAgent.name);
+        agentContext +=
+          "\n\nHarness results for this request (authoritative):\n" + managementResult;
+      }
+
       const response = await runMainAgentLoop({
+        agentContext,
         sessionId: session.id,
         projectPaths: sessionDetail.session.projectPaths || [],
         mainAgent,
@@ -692,7 +727,11 @@ export function useChatSendMessage({
 
       await persistMessage(session.id, assistantMessage);
       await refreshSessions(modes, session.id);
-      updateUsageMetrics(response.totalTokens, setResourceToken, setResourceCost);
+      updateUsageMetrics(
+        response.totalTokens + managementTokens,
+        setResourceToken,
+        setResourceCost
+      );
     } catch (error) {
       const reason = getErrorMessage(error);
       const errorMessage: Message = {

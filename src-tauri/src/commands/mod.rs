@@ -1,5 +1,7 @@
+pub mod agent_workspace;
 pub mod characters;
 pub mod codex;
+pub mod email;
 pub mod operation_mode;
 pub mod session;
 pub mod settings;

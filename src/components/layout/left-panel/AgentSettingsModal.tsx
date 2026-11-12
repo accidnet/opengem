@@ -175,10 +175,7 @@ export function AgentSettingsModal({
                 <>
                   <div className="panel-modal-main-copy">
                     <h4>Agent 추가</h4>
-                    <p>
-                      기본 정보와 모델, 프롬프트, 연결 리소스를 함께 설정해서 새 에이전트를
-                      만들어요.
-                    </p>
+                    <p>기본 정보와 모델, 성격·말투·역할을 함께 설정해서 새 에이전트를 만들어요.</p>
                   </div>
 
                   <section className="settings-card agent-create-card">
@@ -276,19 +273,22 @@ export function AgentSettingsModal({
                     <div className="settings-card-head settings-card-head-column">
                       <div>
                         <h4>작업 컨텍스트</h4>
-                        <p>프롬프트와 연결 항목은 줄바꿈 단위로 여러 값을 입력할 수 있어요.</p>
+                        <p>
+                          성격과 말투, 잘하는 일을 적어 주세요. 각 에이전트는 자기 기억을 따로
+                          보관해요.
+                        </p>
                       </div>
                     </div>
 
                     <label className="settings-field settings-field-wide">
-                      <span>프롬프트 설정</span>
+                      <span>성격·말투·역할</span>
                       <textarea
                         className="settings-input settings-textarea"
                         rows={5}
                         placeholder="이 에이전트가 맡을 역할과 작업 방식을 적어 주세요."
                         value={newAgentPrompt}
                         onChange={(event) => onNewAgentPromptChange(event.target.value)}
-                        aria-label="새 에이전트 프롬프트 설정"
+                        aria-label="새 에이전트 성격·말투·역할"
                       />
                     </label>
 
@@ -339,9 +339,7 @@ export function AgentSettingsModal({
                 <>
                   <div className="panel-modal-main-copy">
                     <h4>Agent 목록</h4>
-                    <p>
-                      순서 변경, 삭제, 그리고 각 에이전트의 이름과 아이콘을 바로 정리할 수 있어요.
-                    </p>
+                    <p>각 에이전트의 이름과 캐릭터, 성격과 말투를 정하고 순서를 관리해요.</p>
                   </div>
 
                   <section className="settings-card agent-list-card">
@@ -505,6 +503,22 @@ export function AgentSettingsModal({
                               delete
                             </span>
                           </button>
+                          <label
+                            className="settings-field"
+                            style={{ gridColumn: "1 / -1", width: "100%" }}
+                          >
+                            <span>성격·말투·역할</span>
+                            <textarea
+                              className="settings-input settings-textarea"
+                              rows={3}
+                              value={agent.prompt ?? ""}
+                              placeholder="예: 차분하고 꼼꼼한 일정 도우미. 중요한 내용부터 짧게 설명해 줘."
+                              aria-label={`${agent.name || "agent"} 성격·말투·역할 수정`}
+                              onChange={(event) =>
+                                onDraftAgentChange(agent.id, "prompt", event.target.value)
+                              }
+                            />
+                          </label>
                         </div>
                       ))}
                     </div>

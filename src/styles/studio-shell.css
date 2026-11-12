@@ -131,3 +131,25 @@
     display: none;
   }
 }
+
+.routine-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--panel-bg, #eef2ff);
+  color: var(--text-primary, #1e293b);
+  border-bottom: 1px solid #cbd5e1;
+  flex-wrap: wrap;
+}
+.routine-notice span {
+  flex: 1;
+}
+.routine-notice button {
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}

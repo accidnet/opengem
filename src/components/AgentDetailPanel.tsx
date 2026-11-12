@@ -1,3 +1,4 @@
+import { AgentWorkspacePanel } from "@/components/AgentWorkspacePanel";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import type { ActivityItem, ActivityState, AgentItem } from "@/types/chat";
 
@@ -5,6 +6,9 @@ import "./AgentDetailPanel.css";
 
 type AgentDetailPanelProps = {
   agent: AgentItem;
+  modeName?: string;
+  onOpenEmailSettings?: () => void;
+  initialWorkspaceTab?: "memory" | "routines" | "reports";
   activity: ActivityItem[];
   onClose: () => void;
   onStartChat: () => void;
@@ -21,6 +25,9 @@ const activityLabels: Record<ActivityState, string> = {
 
 export function AgentDetailPanel({
   agent,
+  modeName,
+  onOpenEmailSettings,
+  initialWorkspaceTab,
   activity,
   onClose,
   onStartChat,
@@ -97,6 +104,23 @@ export function AgentDetailPanel({
           <strong>{agent.model?.trim() || "기본 모델"}</strong>
         </div>
       </div>
+
+      <div className="agent-detail-section">
+        <h4>성격·말투·역할</h4>
+        <p className="agent-detail-persona">
+          {agent.prompt?.trim() ||
+            "이 에이전트만의 기억과 대화를 바탕으로 함께하는 동료예요. 에이전트 설정에서 성격과 말투를 정할 수 있어요."}
+        </p>
+      </div>
+
+      {modeName && onOpenEmailSettings && (
+        <AgentWorkspacePanel
+          initialTab={initialWorkspaceTab}
+          modeName={modeName}
+          agent={agent}
+          onOpenEmailSettings={onOpenEmailSettings}
+        />
+      )}
 
       {capabilities.length > 0 && (
         <div className="agent-detail-section">

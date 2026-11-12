@@ -32,6 +32,7 @@ export function useAppUpdater() {
   );
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const isCheckingRef = useRef(false);
+  const backgroundBusyRef = useRef(false);
   const isInstallingRef = useRef(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
 
@@ -39,6 +40,11 @@ export function useAppUpdater() {
     if (!isTauri()) {
       setStatus("unsupported");
       setMessage("데스크톱 앱에서 사용 가능");
+      return;
+    }
+
+    if (install && backgroundBusyRef.current) {
+      setMessage("이메일 반복 업무가 끝난 뒤 업데이트를 설치해 주세요.");
       return;
     }
 
@@ -129,6 +135,7 @@ export function useAppUpdater() {
 
   return useMemo(
     () => ({
+      backgroundBusyRef,
       canCheck: status !== "unsupported",
       checkForUpdate,
       isBusy: status === "checking" || status === "downloading" || status === "installing",

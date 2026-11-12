@@ -17,6 +17,7 @@ type AppHeaderProps = {
   onClearContext: () => void;
   onThemeToggle: () => void;
   onOpenPanelModal: () => void;
+  onOpenEmailSettings: () => void;
   openPanel: "left" | "right" | null;
   onTogglePanel: (panel: "left" | "right") => void;
 };
@@ -32,6 +33,7 @@ export function AppHeader({
   onClearContext,
   onThemeToggle,
   onOpenPanelModal,
+  onOpenEmailSettings,
   openPanel,
   onTogglePanel,
 }: AppHeaderProps) {
@@ -185,6 +187,17 @@ export function AppHeader({
                 }}
               >
                 Provider
+              </button>
+              <button
+                className="profile-menu-item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onOpenEmailSettings();
+                }}
+              >
+                이메일 연동
               </button>
             </div>
           )}
