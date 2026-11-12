@@ -4,7 +4,7 @@ const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
 const tauriVersion = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).version;
 const cargoToml = readFileSync("src-tauri/Cargo.toml", "utf8");
 const cargoVersion = cargoToml.match(/\[package\][\s\S]*?\nversion\s*=\s*"([^"]+)"/)?.[1];
-// 버튼 실행의 ref는 main이므로 준비 단계에서 만든 태그를 우선 사용합니다.
+// 버튼에서 확정한 태그와 빌드 작업트리에 주입한 버전을 비교합니다.
 const tag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME;
 
 // 태그와 설치 파일의 버전이 다르면 업데이트 매니페스트도 잘못 생성된다.

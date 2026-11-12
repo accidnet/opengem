@@ -90,7 +90,7 @@ Three.js 기반 3D 오피스에서 팀원을 선택하고 직접 움직일 수 �
 
 ## 배포
 
-GitHub의 **Actions → release → Run workflow**에서 `main`과 `patch` / `minor` / `major`를 선택해 배포합니다. 검사를 통과하면 버전 PR을 자동 생성·병합하고, 태그에 해당하는 Windows 설치 파일을 빌드해 서명 및 업데이트 정보와 함께 공개합니다. 최초 PR 생성 권한 설정, 실패 시 재시도, 기존 로컬 명령과 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
+GitHub의 **Actions → release → Run workflow**에서 `main`을 선택하고 배포 버전(예: `0.1.3`)과 대상 커밋 SHA를 입력합니다. SHA를 비우면 실행 시점의 main 커밋을 사용합니다. 선택한 커밋에 태그를 붙여 Windows 설치 파일을 빌드·공개하며, main에 버전 커밋이나 PR을 만들지 않습니다. 버전 주입, 재시도 및 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
 
 ## 에이전트 기억과 Google 연동
 
