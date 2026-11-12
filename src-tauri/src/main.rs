@@ -386,6 +386,12 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::computer::list_computer_windows,
+            commands::computer::get_computer_status,
+            commands::computer::start_computer_session,
+            commands::computer::observe_computer_session,
+            commands::computer::act_computer_session,
+            commands::computer::stop_computer_session,
             commands::google_auth::get_google_settings,
             commands::google_auth::save_google_settings,
             commands::google_auth::begin_google_login,

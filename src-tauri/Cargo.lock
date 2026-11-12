@@ -2869,6 +2869,7 @@ dependencies = [
  "keyring",
  "libc",
  "open",
+ "png",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "rfd",
@@ -2885,6 +2886,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "walkdir",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

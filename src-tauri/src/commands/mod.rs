@@ -10,3 +10,5 @@ pub mod workspace;
 
 pub mod google_auth;
 pub mod google_workspace;
+
+pub mod computer;

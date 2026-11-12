@@ -1,3 +1,8 @@
+import {
+  buildGeminiImageMessage,
+  validateMessageImages,
+  imageRequestError,
+} from "@/features/ai/imageMessages";
 import { normalizeBaseUrl } from "@/lib/utils";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
@@ -6,6 +11,7 @@ import { extractFinishReason, extractTextChunk, extractUsage } from "@/features/
 import { parseSSEStream } from "@/features/ai/stream";
 
 export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
+  validateMessageImages(input.messages);
   const shouldStream = input.stream ?? true;
   const { system, messages } = splitSystemMessages(input.messages);
   const apiKey = input.apiKey?.trim();
@@ -26,10 +32,7 @@ export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
               parts: [{ text: system }],
             }
           : undefined,
-        contents: messages.map((message) => ({
-          role: message.role === "assistant" ? "model" : "user",
-          parts: [{ text: message.content }],
-        })),
+        contents: messages.map(buildGeminiImageMessage),
         generationConfig: {
           temperature: 0.4,
         },
@@ -39,7 +42,9 @@ export async function sendToGemini(input: LLMRequest): Promise<LLMResponse> {
   );
 
   if (!response.ok) {
-    const detail = response.text();
+    if (input.messages.some((message) => message.images?.length))
+      throw imageRequestError("Gemini", response.status);
+    const detail = await response.text();
     throw new Error(`Gemini API error (${response.status}): ${detail || response.statusText}`);
   }
 

@@ -20,6 +20,8 @@ export type LLMToolDefinition = {
 export type LLMMessage = {
   role: LLMRole;
   content: string;
+  // 화면 이미지는 저장할 대화 본문과 분리해 요청 중에만 전달합니다.
+  images?: { mimeType: "image/png" | "image/jpeg"; data: string }[];
   name?: string;
   toolCallId?: string;
   toolCalls?: LLMToolCall[];
