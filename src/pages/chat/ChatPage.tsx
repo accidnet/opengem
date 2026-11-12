@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ComputerUseDialog } from "@/components/ComputerUseDialog";
+import { CalendarEventDraftDialog } from "@/components/CalendarEventDraftDialog";
+import type { CalendarEventDraft } from "@/features/agent/googleApi";
+import { EmailSettingsModal } from "@/components/EmailSettingsModal";
+import { useAgentRoutines } from "@/features/agent/useAgentRoutines";
+
 import { AppHeader } from "./components/layout/AppHeader";
 import { ChatPanel } from "./components/layout/ChatPanel";
 import { ProvidersSettingModal } from "./components/ProvidersSettingModal";
@@ -25,7 +31,19 @@ export function ChatPage() {
   const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<"office" | "chat">("office");
+  const pendingAgentIdRef = useRef<string | null>(null);
+  const [agentPanelTab, setAgentPanelTab] = useState<"memory" | "reports">("memory");
+  const [agentPanelOpenCount, setAgentPanelOpenCount] = useState(0);
   const appUpdater = useAppUpdater();
+  const [emailSettingsOpen, setEmailSettingsOpen] = useState(false);
+  const [calendarDraft, setCalendarDraft] = useState<CalendarEventDraft | null>(null);
+  useEffect(() => {
+    const showDraft = (event: Event) =>
+      setCalendarDraft((event as CustomEvent<CalendarEventDraft>).detail);
+    window.addEventListener("google-calendar-draft", showDraft);
+    return () => window.removeEventListener("google-calendar-draft", showDraft);
+  }, []);
+  const agentRoutines = useAgentRoutines(appUpdater.isInstallingRef, appUpdater.backgroundBusyRef);
 
   useEffect(() => {
     if (!openPanel) return undefined;
@@ -59,6 +77,8 @@ export function ChatPage() {
     setExecutionMode,
     cancelCodexTask,
     isCodexRunning,
+    cancelComputerTask,
+    isComputerRunning,
     canSend,
     clearContext,
     costPercent,
@@ -107,7 +127,8 @@ export function ChatPage() {
   const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
 
   useEffect(() => {
-    setSelectedAgentId(null);
+    setSelectedAgentId(pendingAgentIdRef.current);
+    pendingAgentIdRef.current = null;
   }, [selectedMode]);
 
   useEffect(() => {
@@ -116,6 +137,7 @@ export function ChatPage() {
 
   const openAgentConversation = async (agent: AgentItem) => {
     if (await startAgentChat(agent)) {
+      setAgentPanelTab("memory");
       setWorkspaceView("chat");
       setSelectedAgentId(agent.agentId ?? null);
       setOpenPanel(null);
@@ -212,8 +234,42 @@ export function ChatPage() {
           }
           setOpenPanel((current) => (current === panel ? null : panel));
         }}
+        onOpenEmailSettings={() => setEmailSettingsOpen(true)}
         onOpenPanelModal={() => setIsPanelModalOpen(true)}
       />
+
+      {agentRoutines.notice && (
+        <div className="routine-notice" role="status">
+          <span>
+            {agentRoutines.notice.agentName}: {agentRoutines.notice.text}
+          </span>
+          <button
+            type="button"
+            disabled={isConversationBusy}
+            onClick={async () => {
+              const notice = agentRoutines.notice;
+              if (!notice) return;
+              if (notice.modeName !== selectedMode) {
+                pendingAgentIdRef.current = notice.agentId;
+                if (!(await selectOperationMode(notice.modeName))) {
+                  pendingAgentIdRef.current = null;
+                  return;
+                }
+              }
+              setAgentPanelTab("reports");
+              setAgentPanelOpenCount((count) => count + 1);
+              setSelectedAgentId(notice.agentId);
+              setOpenPanel("right");
+              agentRoutines.clearNotice();
+            }}
+          >
+            실행 기록 보기
+          </button>
+          <button type="button" aria-label="알림 닫기" onClick={agentRoutines.clearNotice}>
+            닫기
+          </button>
+        </div>
+      )}
 
       <main
         ref={bodyGridRef}
@@ -288,6 +344,8 @@ export function ChatPage() {
           canUseCodex={Boolean(currentAgentId)}
           isCodexRunning={isCodexRunning}
           onCancelCodex={cancelCodexTask}
+          isComputerRunning={isComputerRunning}
+          onCancelComputer={cancelComputerTask}
           isConversationBusy={isConversationBusy}
           onStartAgentChat={(index) => {
             if (agents[index]) void openAgentConversation(agents[index]);
@@ -297,6 +355,7 @@ export function ChatPage() {
           onSelectAgent={(index) => {
             const agent = agents[index];
             if (!agent) return;
+            setAgentPanelTab("memory");
             setSelectedAgentId(agent.agentId ?? null);
             if (window.innerWidth <= 1280) setOpenPanel("right");
           }}
@@ -334,6 +393,10 @@ export function ChatPage() {
 
         {selectedAgent ? (
           <AgentDetailPanel
+            key={selectedMode + ":" + selectedAgent.agentId + ":" + agentPanelOpenCount}
+            initialWorkspaceTab={agentPanelTab}
+            modeName={selectedMode}
+            onOpenEmailSettings={() => setEmailSettingsOpen(true)}
             isConversationBusy={isConversationBusy}
             onStartChat={() => void openAgentConversation(selectedAgent)}
             agent={selectedAgent}
@@ -354,6 +417,13 @@ export function ChatPage() {
         )}
       </main>
 
+      <ComputerUseDialog />
+      <CalendarEventDraftDialog
+        draft={calendarDraft}
+        onClose={() => setCalendarDraft(null)}
+        onCreated={() => window.dispatchEvent(new Event("google-calendar-updated"))}
+      />
+      <EmailSettingsModal open={emailSettingsOpen} onClose={() => setEmailSettingsOpen(false)} />
       <ProvidersSettingModal
         settings={settings}
         isOpen={isPanelModalOpen}

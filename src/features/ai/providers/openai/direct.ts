@@ -1,3 +1,8 @@
+import {
+  buildOpenAIImageMessage,
+  validateMessageImages,
+  imageRequestError,
+} from "@/features/ai/imageMessages";
 import type { AIRequest, AIResponse } from "@/features/ai/types/common";
 import {
   extractFinishReason,
@@ -27,19 +32,8 @@ function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
 }
 
 function buildMessages(input: AIRequest) {
-  return input.messages.map((message) => {
-    if (message.role === "assistant") {
-      return {
-        role: "assistant",
-        content: [{ type: "output_text", text: message.content }],
-      };
-    }
-
-    return {
-      role: message.role,
-      content: [{ type: "input_text", text: message.content }],
-    };
-  });
+  validateMessageImages(input.messages);
+  return input.messages.map(buildOpenAIImageMessage);
 }
 
 function buildRequestBody(input: AIRequest) {
@@ -78,6 +72,8 @@ export async function sendToOpenAICompatible(input: AIRequest): Promise<AIRespon
   const response = await send(input, input.apiKey);
 
   if (!response.ok) {
+    if (input.messages.some((message) => message.images?.length))
+      throw imageRequestError("OpenAI", response.status);
     const detail = await response.text();
     throw new Error(
       `${input.apiBaseUrl} error (${response.status}): ${detail || response.statusText}`
@@ -112,6 +108,8 @@ export async function sendToOpenAIOAuth(input: AIRequest): Promise<AIResponse> {
   );
 
   if (!response.ok) {
+    if (input.messages.some((message) => message.images?.length))
+      throw imageRequestError("OpenAI", response.status);
     const detail = await response.text();
     throw new Error(`ChatGPT API error (${response.status}): ${detail || response.statusText}`);
   }

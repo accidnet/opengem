@@ -832,6 +832,20 @@ fn save_mode_agents_in_connection(
             .map_err(|error| error.to_string())?;
     }
 
+    // 설정 저장은 에이전트 행을 재생성하므로 재삽입 후 실제로 삭제된 에이전트의 개인 자료만 지웁니다.
+    transaction
+        .execute(
+            "DELETE FROM agent_routines WHERE mode_id = ?1 AND NOT EXISTS (SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = agent_routines.mode_id AND a.agent_id = agent_routines.agent_id)",
+            params![mode_id],
+        )
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute(
+            "DELETE FROM agent_memories WHERE mode_id = ?1 AND NOT EXISTS (SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = agent_memories.mode_id AND a.agent_id = agent_memories.agent_id)",
+            params![mode_id],
+        )
+        .map_err(|error| error.to_string())?;
+
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -901,5 +915,49 @@ mod agent_identity_tests {
         let reloaded = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
         assert!(reloaded[0].character_id.is_none());
         assert_eq!(reloaded[1].character_id.as_deref(), Some("hachiware"));
+    }
+
+    #[test]
+    fn removing_agent_cleans_only_its_memories_routines_and_reports() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON")
+            .unwrap();
+        run_migrations(&mut connection).unwrap();
+        let mut agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        let mode_id = resolve_mode_id(&connection, "Orchestration").unwrap();
+        let kept_id = agents[0].agent_id.clone().unwrap();
+        let removed_id = agents[1].agent_id.clone().unwrap();
+        for (index, agent_id) in [&kept_id, &removed_id].into_iter().enumerate() {
+            let routine_id = format!("routine-{index}");
+            connection.execute("INSERT INTO agent_memories (mode_id, agent_id, content, updated_at) VALUES (?1, ?2, '기억', 1)", params![mode_id, agent_id]).unwrap();
+            connection.execute("INSERT INTO agent_routines (id, mode_id, agent_id, instruction, interval_minutes, checkpoint, next_run_at) VALUES (?1, ?2, ?3, '이메일 요약', 60, 1, 1)", params![routine_id, mode_id, agent_id]).unwrap();
+            connection.execute("INSERT INTO agent_reports (id, routine_id, content, status, created_at) VALUES (?1, ?2, '보고', 'success', 1)", params![format!("report-{index}"), routine_id]).unwrap();
+            connection.execute("INSERT INTO agent_routine_seen_messages (routine_id, mailbox_email, message_id, checked_until) VALUES (?1, 'owner@example.com', 'message', 1)", [&routine_id]).unwrap();
+        }
+        agents.remove(1);
+        save_mode_agents_in_connection(&mut connection, "Orchestration", agents).unwrap();
+        let kept_memory: String = connection
+            .query_row("SELECT agent_id FROM agent_memories", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(kept_memory, kept_id);
+        let kept_routine: String = connection
+            .query_row("SELECT agent_id FROM agent_routines", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(kept_routine, kept_id);
+        for table in [
+            "agent_memories",
+            "agent_routines",
+            "agent_reports",
+            "agent_routine_seen_messages",
+        ] {
+            assert_eq!(
+                connection
+                    .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row
+                        .get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+        }
     }
 }

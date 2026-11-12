@@ -1,0 +1,215 @@
+/* Google 원문은 HTML로 실행하지 않고 텍스트로만 표시합니다. */
+.google-workspace {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text-main);
+  font-size: 13px;
+}
+.google-workspace-account {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--panel-soft);
+  border-radius: 9px;
+  overflow-wrap: anywhere;
+}
+.google-workspace-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+.google-workspace-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.google-workspace-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.google-search-form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.google-search-form label {
+  flex: 1;
+  min-width: 0;
+}
+.google-workspace label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.google-workspace input,
+.google-workspace select,
+.google-workspace textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text-main);
+  font: inherit;
+}
+.google-workspace textarea {
+  resize: vertical;
+}
+.google-workspace button {
+  justify-self: start;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.google-workspace button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.google-workspace button:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+.google-workspace button.is-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.google-workspace :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.google-workspace-form fieldset {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.google-workspace-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.google-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.google-result-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.google-result-list li {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.google-result-list strong {
+  display: block;
+  font-size: 13px;
+}
+.google-result-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+.google-result-list p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.google-event-description {
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.google-document-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.google-document-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px;
+  background: var(--panel-soft);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.google-workspace-error,
+.google-workspace-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.google-workspace-error {
+  color: #c75d6a;
+}
+.google-workspace-notice {
+  color: var(--primary);
+}
+.google-event-draft-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-width: 640px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--text-main);
+  border-color: var(--border);
+}
+.google-workspace label.google-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.google-checkbox input {
+  width: auto;
+}
+@media (max-width: 540px) {
+  .google-workspace-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .google-search-form {
+    flex-wrap: wrap;
+  }
+  .google-search-form label {
+    flex-basis: 100%;
+  }
+}

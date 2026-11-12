@@ -1,4 +1,5 @@
 import type { ElementType, ReactNode } from "react";
+import { parseMarkdownTable } from "./markdownTable";
 
 type MarkdownTextProps = {
   text: string;
@@ -11,7 +12,8 @@ type Block =
   | { type: "unordered-list"; items: string[] }
   | { type: "ordered-list"; items: string[] }
   | { type: "code"; text: string }
-  | { type: "paragraph"; text: string };
+  | { type: "paragraph"; text: string }
+  | ({ type: "table" } & NonNullable<ReturnType<typeof parseMarkdownTable>>);
 
 const ORDERED_LIST_PATTERN = /^(\d+)\.\s+(.*)$/;
 const UNORDERED_LIST_PATTERN = /^[-*+]\s+(.*)$/;
@@ -95,6 +97,13 @@ function parseBlocks(source: string): Block[] {
       continue;
     }
 
+    const table = parseMarkdownTable(lines, index);
+    if (table) {
+      blocks.push({ type: "table", ...table });
+      index = table.nextIndex;
+      continue;
+    }
+
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch) {
       blocks.push({
@@ -162,6 +171,7 @@ function parseBlocks(source: string): Block[] {
         next.startsWith("```") ||
         next.startsWith(">") ||
         /^#{1,6}\s+/.test(next) ||
+        parseMarkdownTable(lines, index) ||
         UNORDERED_LIST_PATTERN.test(next) ||
         ORDERED_LIST_PATTERN.test(next)
       ) {
@@ -198,6 +208,44 @@ export function MarkdownText({ text, className }: MarkdownTextProps) {
         const key = `${block.type}-${index}`;
 
         switch (block.type) {
+          case "table":
+            return (
+              <div
+                key={key}
+                className="markdown-table-scroll"
+                role="region"
+                aria-label="표"
+                tabIndex={0}
+                style={{ maxWidth: "100%", overflowX: "auto" }}
+              >
+                <table className="markdown-table">
+                  <thead>
+                    <tr>
+                      {block.headers.map((cell, cellIndex) => (
+                        <th
+                          key={cellIndex}
+                          scope="col"
+                          style={{ textAlign: block.alignments[cellIndex] }}
+                        >
+                          {parseInline(cell)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} style={{ textAlign: block.alignments[cellIndex] }}>
+                            {parseInline(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
           case "heading": {
             const HeadingTag = `h${block.level}` as ElementType;
             return <HeadingTag key={key}>{parseInline(block.text)}</HeadingTag>;

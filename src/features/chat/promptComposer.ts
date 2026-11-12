@@ -8,6 +8,7 @@ type ComposeChatSystemPromptInput = {
   model: string;
   providerId?: LLMConfig["providerId"];
   agentPrompt?: string;
+  agentContext?: string;
   projectPaths: string[];
   tools: LLMToolDefinition[];
 };
@@ -49,6 +50,7 @@ export function composeChatSystemPrompt(input: ComposeChatSystemPromptInput) {
   const sections = [
     getPromptForModel(input.model, input.providerId),
     input.agentPrompt?.trim(),
+    input.agentContext,
     TOOL_USE_POLICY.trim(),
     buildEnvironmentSection(input.projectPaths),
     buildToolSection(input.tools),
