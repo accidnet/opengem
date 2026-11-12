@@ -1,0 +1,44 @@
+:root {
+  font-family: Arial, sans-serif;
+  --border: #e4e2dd;
+  --message-bubble-bg: #ffffff;
+  --panel-soft: #f7f6f2;
+  --text-main: #263c3a;
+  --text-muted: #74807b;
+  --primary: #507f72;
+}
+body {
+  margin: 0;
+  background: #f3f2ed;
+  color: var(--text-main);
+}
+button,
+input,
+select {
+  font: inherit;
+}
+.fixture {
+  max-width: 1120px;
+  margin: 28px auto;
+  padding: 0 16px;
+}
+.fixture-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+}
+.fixture-controls input,
+.fixture-controls select,
+.fixture-controls button {
+  padding: 8px;
+}
+.fixture-controls output {
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+
+* {
+  box-sizing: border-box;
+}

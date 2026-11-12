@@ -18,3 +18,7 @@ temp*
 *.key
 *.key.pub
 *.key.password
+
+# Browser test artifacts
+/test-results/
+/playwright-report/
