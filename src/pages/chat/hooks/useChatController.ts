@@ -52,7 +52,7 @@ export function useChatController({
   const [currentSessionProjectPaths, setCurrentSessionProjectPaths] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [executionMode, setExecutionMode] = useState<"chat" | "codex">("chat");
+  const [executionMode, setExecutionMode] = useState<"chat" | "codex" | "computer">("chat");
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
@@ -291,6 +291,8 @@ export function useChatController({
     sendMessage: sendChatMessage,
     cancelCodexTask,
     isCodexRunning,
+    cancelComputerTask,
+    isComputerRunning,
   } = useChatSendMessage({
     executionMode,
     agents,
@@ -395,6 +397,8 @@ export function useChatController({
     setExecutionMode,
     cancelCodexTask,
     isCodexRunning,
+    cancelComputerTask,
+    isComputerRunning,
     canSend,
     clearContext,
     costPercent,

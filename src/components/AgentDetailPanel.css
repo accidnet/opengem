@@ -254,3 +254,12 @@
   font-size: 11px;
   line-height: 1.5;
 }
+
+.agent-detail-persona {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

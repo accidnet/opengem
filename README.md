@@ -91,3 +91,17 @@ Three.js 기반 3D 오피스에서 팀원을 선택하고 직접 움직일 수 �
 ## 배포
 
 `main`의 변경을 반영한 새 버전은 `pnpm run release -- 0.1.1`처럼 아직 사용하지 않은 버전으로 배포합니다. 스크립트가 버전 변경을 커밋하고 `main`과 태그를 푸시하면 GitHub Actions가 서명된 설치 파일과 업데이트 정보를 릴리즈에 게시합니다. 실행 조건과 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
+
+## 에이전트 기억과 Google 연동
+
+각 에이전트의 성격과 Markdown 기억을 따로 관리하고, 대화로 Gmail 새 메일 요약·일정 정리를 맡길 수 있습니다. Gmail·Drive·Calendar 연결은 사용자 메뉴의 **Google 연동**에서 서비스별로 설정합니다. Drive 문서를 검색·읽고 Calendar 일정을 조회하거나 초안을 검토해 등록할 수 있습니다. 반복 업무는 앱 실행 중 동작합니다.
+
+- [에이전트 기억과 반복 업무 사용 안내](docs/agent-workspace.md)
+- [Gmail 연결 설정](docs/email-setup.md)
+- [Google Drive·Calendar 연결과 사용](docs/google-workspace.md)
+
+## 컴퓨터 제어
+
+개별 에이전트 대화에서 **컴퓨터 제어** 모드를 선택하면, 지정한 Windows 창의 화면을 보고 클릭·입력·스크롤을 수행합니다. 기본적으로 동작마다 검토하며, 이번 요청의 일반 동작 자동 실행을 선택할 수 있습니다. 중지 버튼이나 F8로 멈춥니다. 이미지 입력을 지원하는 모델이 필요합니다.
+
+- [컴퓨터 제어 사용법과 구현 구조](docs/computer-use.md)
