@@ -66,67 +66,21 @@ pub struct OperationModeState {
     items: Vec<OperationModeItem>,
 }
 
-fn default_orchestration_agents() -> Vec<AgentPayload> {
-    vec![
-        AgentPayload {
-            agent_id: None,
-            character_id: None,
-            name: "오케스트레이터".to_string(),
-            icon: "account_tree".to_string(),
-            color: "indigo".to_string(),
-            active: true,
-            role: "main".to_string(),
-            model: Some("gpt-5.4".to_string()),
-            prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 작업을 분배해.".to_string()),
-            tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
-            mcp_servers: Some(vec!["linear".to_string()]),
-            skills: Some(vec!["task-routing".to_string()]),
-        },
-        AgentPayload {
-            agent_id: None,
-            character_id: None,
-            name: "프론트엔드 개발자".to_string(),
-            icon: "travel_explore".to_string(),
-            color: "emerald".to_string(),
-            active: true,
-            role: "sub".to_string(),
-            model: Some("gpt-5.4".to_string()),
-            prompt: Some("프론트엔드 UI와 상호작용을 구현하고 시각 완성도를 높여.".to_string()),
-            tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
-            mcp_servers: Some(vec!["figma".to_string()]),
-            skills: Some(vec!["design-review".to_string()]),
-        },
-        AgentPayload {
-            agent_id: None,
-            character_id: None,
-            name: "백엔드 개발자".to_string(),
-            icon: "code".to_string(),
-            color: "amber".to_string(),
-            active: true,
-            role: "sub".to_string(),
-            model: Some("gpt-5.4-mini".to_string()),
-            prompt: Some("서버 로직, API, 데이터 흐름을 설계하고 구현해.".to_string()),
-            tools: Some(vec!["파일 시스템".to_string()]),
-            mcp_servers: Some(vec!["postgres".to_string()]),
-            skills: Some(vec!["api-design".to_string()]),
-        },
-    ]
-}
-
+// 모든 모드는 다른 에이전트 없이도 작업할 수 있는 기본 에이전트 한 명으로 시작합니다.
 fn default_mode_agents() -> Vec<AgentPayload> {
     vec![AgentPayload {
         agent_id: None,
         character_id: None,
-        name: "오케스트레이터".to_string(),
+        name: "젬".to_string(),
         icon: "account_tree".to_string(),
         color: "indigo".to_string(),
         active: true,
         role: "main".to_string(),
         model: Some("gpt-5.4".to_string()),
-        prompt: Some("전체 작업을 조율하고 필요한 에이전트에게 작업을 분배해.".to_string()),
+        prompt: Some("사용자의 요청을 이해하고 조사, 계획, 구현 등 필요한 작업을 직접 수행해. 다른 에이전트가 있으면 필요에 따라 협업해.".to_string()),
         tools: Some(vec!["웹 브라우저".to_string(), "파일 시스템".to_string()]),
-        mcp_servers: Some(vec!["linear".to_string()]),
-        skills: Some(vec!["task-routing".to_string()]),
+        mcp_servers: Some(vec![]),
+        skills: Some(vec![]),
     }]
 }
 
@@ -191,16 +145,8 @@ fn deserialize_json(value: Option<String>) -> Result<Option<Vec<String>>, rusqli
     }
 }
 
-fn seed_agents_for_mode(
-    connection: &rusqlite::Connection,
-    mode_id: i64,
-    mode_name: &str,
-) -> Result<(), String> {
-    let default_agents = if mode_name == DEFAULT_OPERATION_MODES[0] {
-        default_orchestration_agents()
-    } else {
-        default_mode_agents()
-    };
+fn seed_agents_for_mode(connection: &rusqlite::Connection, mode_id: i64) -> Result<(), String> {
+    let default_agents = default_mode_agents();
 
     for (index, agent) in default_agents.iter().enumerate() {
         let tools = serialize_json(&agent.tools)?;
@@ -287,7 +233,7 @@ fn ensure_default_operation_mode(
         .map_err(|error| error.to_string())?;
 
     if agent_count == 0 {
-        seed_agents_for_mode(connection, mode_id, &default_mode)?;
+        seed_agents_for_mode(connection, mode_id)?;
     }
 
     Ok(OperationModeState {
@@ -352,7 +298,7 @@ pub fn load_operation_mode(state: State<AppState>) -> Result<OperationModeState,
         .map_err(|error| error.to_string())?;
 
     if agent_count == 0 {
-        seed_agents_for_mode(&connection, mode_id, &resolved_selected_mode)?;
+        seed_agents_for_mode(&connection, mode_id)?;
     }
 
     Ok(OperationModeState {
@@ -499,7 +445,7 @@ pub fn save_operation_mode(
             .map_err(|error| error.to_string())?;
 
         let mode_id = transaction.last_insert_rowid();
-        seed_agents_for_mode(&transaction, mode_id, &mode.name)?;
+        seed_agents_for_mode(&transaction, mode_id)?;
         kept_mode_ids.push(mode_id);
     }
 
@@ -855,6 +801,60 @@ mod agent_identity_tests {
     use super::*;
     use crate::migrations::run_migrations;
 
+    // 여러 에이전트가 필요한 테스트는 설치 기본값에 의존하지 않고 직접 추가합니다.
+    fn add_second_agent(connection: &mut rusqlite::Connection) -> Vec<AgentPayload> {
+        let mut agents = load_mode_agents_from_connection(connection, "Orchestration").unwrap();
+        let mut second_agent = agents[0].clone();
+        second_agent.agent_id = None;
+        second_agent.name = "추가 에이전트".to_string();
+        second_agent.role = "sub".to_string();
+        second_agent.character_id = Some("hachiware".to_string());
+        agents.push(second_agent);
+        save_mode_agents_in_connection(connection, "Orchestration", agents).unwrap();
+        load_mode_agents_from_connection(connection, "Orchestration").unwrap()
+    }
+
+    #[test]
+    fn fresh_install_starts_with_one_main_agent() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut connection).unwrap();
+        let agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "젬");
+        assert_eq!(agents[0].role, "main");
+        assert!(agents[0].active);
+        assert!(agents[0].agent_id.as_ref().is_some_and(|id| !id.is_empty()));
+
+        // 초기 SQL 시드와 실행 중 초기화가 동일한 기본 설정을 사용해야 합니다.
+        let mut seeded = serde_json::to_value(&agents[0]).unwrap();
+        seeded["agentId"] = serde_json::Value::Null;
+        seeded["characterId"] = serde_json::Value::Null;
+        assert_eq!(
+            seeded,
+            serde_json::to_value(&default_mode_agents()[0]).unwrap()
+        );
+    }
+
+    #[test]
+    fn empty_workspace_starts_with_one_main_agent() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON")
+            .unwrap();
+        run_migrations(&mut connection).unwrap();
+        connection
+            .execute("DELETE FROM operation_modes", [])
+            .unwrap();
+
+        ensure_default_operation_mode(&connection).unwrap();
+        let agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "젬");
+        assert_eq!(agents[0].role, "main");
+        assert!(agents[0].active);
+        assert!(agents[0].agent_id.as_ref().is_some_and(|id| !id.is_empty()));
+    }
+
     #[test]
     fn agent_ids_survive_rename_save_and_new_agent_creation() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
@@ -876,7 +876,11 @@ mod agent_identity_tests {
         let stable_ids: Vec<_> = saved.iter().map(|agent| agent.agent_id.clone()).collect();
 
         save_mode_agents_in_connection(&mut connection, "Orchestration", saved).unwrap();
+        run_migrations(&mut connection).unwrap();
         let reloaded = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        assert_eq!(reloaded.len(), 2);
+        assert_eq!(reloaded[0].name, "새 이름");
+        assert_eq!(reloaded[1].name, "새 에이전트");
         assert_eq!(
             stable_ids,
             reloaded
@@ -887,7 +891,7 @@ mod agent_identity_tests {
     }
 
     #[test]
-    fn newly_seeded_mode_has_agent_id() {
+    fn newly_seeded_mode_has_one_main_agent_with_id() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         run_migrations(&mut connection).unwrap();
         connection
@@ -897,8 +901,12 @@ mod agent_identity_tests {
             )
             .unwrap();
         let mode_id = connection.last_insert_rowid();
-        seed_agents_for_mode(&connection, mode_id, "New mode").unwrap();
+        seed_agents_for_mode(&connection, mode_id).unwrap();
         let agents = load_mode_agents_from_connection(&connection, "New mode").unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "젬");
+        assert_eq!(agents[0].role, "main");
+        assert!(agents[0].active);
         assert!(agents[0].agent_id.as_ref().is_some_and(|id| !id.is_empty()));
     }
 
@@ -906,7 +914,7 @@ mod agent_identity_tests {
     fn stale_deleted_character_is_cleared_when_agents_are_saved() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         run_migrations(&mut connection).unwrap();
-        let agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        let agents = add_second_agent(&mut connection);
         assert_eq!(agents[0].character_id.as_deref(), Some("chiikawa"));
         connection
             .execute("DELETE FROM characters WHERE id = 'chiikawa'", [])
@@ -924,7 +932,7 @@ mod agent_identity_tests {
             .execute_batch("PRAGMA foreign_keys = ON")
             .unwrap();
         run_migrations(&mut connection).unwrap();
-        let mut agents = load_mode_agents_from_connection(&connection, "Orchestration").unwrap();
+        let mut agents = add_second_agent(&mut connection);
         let mode_id = resolve_mode_id(&connection, "Orchestration").unwrap();
         let kept_id = agents[0].agent_id.clone().unwrap();
         let removed_id = agents[1].agent_id.clone().unwrap();
