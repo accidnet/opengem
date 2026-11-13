@@ -9,22 +9,10 @@ export const getModelSystemPrompt = (model?: string, providerId?: LLMSettings["p
 
 export const LLM_SYSTEM_PROMPT = getModelSystemPrompt(LLM_CONFIG.model, LLM_CONFIG.providerId);
 
-const ORCHESTRATOR_PROMPT_SECTIONS = [
-  "You are the primary coding agent for this workspace.",
-  "Own the conversation end-to-end, inspect the project carefully, and answer the user directly.",
-  "Use the available structured tools when they materially improve correctness or speed.",
-];
-
-const FRONTEND_PROMPT_SECTIONS = [
-  "You are a frontend specialist subagent.",
-  "Focus on UI structure, interaction flow, accessibility, visual polish, and frontend implementation details.",
-  "Return concise implementation guidance or findings for the main agent to synthesize.",
-];
-
-const BACKEND_PROMPT_SECTIONS = [
-  "You are a backend specialist subagent.",
-  "Focus on server behavior, APIs, data flow, persistence, validation, and reliability concerns.",
-  "Return concise implementation guidance or findings for the main agent to synthesize.",
+// 기본 에이전트는 특정 개발 역할에 한정하지 않고 사용자 요청을 직접 수행합니다.
+const DEFAULT_AGENT_PROMPT_SECTIONS = [
+  "사용자의 요청을 이해하고 조사, 계획, 구현 등 필요한 작업을 직접 수행해.",
+  "다른 에이전트가 있으면 필요에 따라 협업해.",
 ];
 
 export const composeSystemPrompt = (...sections: Array<string | undefined>) => {
@@ -68,43 +56,17 @@ export const DEFAULT_MODE_ICONS: Record<Mode, ModeIcon> = {
 
 export const AGENTS: AgentItem[] = [
   {
-    name: "Orchestrator",
+    name: "젬",
     icon: "account_tree",
     status: "Active",
     color: "indigo",
     active: true,
     role: "main",
     model: "gpt-5.4",
-    prompt: composeSystemPrompt(...ORCHESTRATOR_PROMPT_SECTIONS),
+    prompt: composeSystemPrompt(...DEFAULT_AGENT_PROMPT_SECTIONS),
     tools: ["Web Search", "File System"],
-    mcpServers: ["linear"],
-    skills: ["task-routing"],
-  },
-  {
-    name: "Frontend Developer",
-    icon: "travel_explore",
-    status: "Active",
-    color: "emerald",
-    active: true,
-    role: "sub",
-    model: "gpt-5.4",
-    prompt: composeSystemPrompt(...FRONTEND_PROMPT_SECTIONS),
-    tools: ["Web Search", "File System"],
-    mcpServers: ["figma"],
-    skills: ["design-review"],
-  },
-  {
-    name: "Backend Developer",
-    icon: "code",
-    status: "Active",
-    color: "amber",
-    active: true,
-    role: "sub",
-    model: "gpt-5.4-mini",
-    prompt: composeSystemPrompt(...BACKEND_PROMPT_SECTIONS),
-    tools: ["File System"],
-    mcpServers: ["postgres"],
-    skills: ["api-design"],
+    mcpServers: [],
+    skills: [],
   },
 ];
 

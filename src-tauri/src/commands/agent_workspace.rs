@@ -598,6 +598,15 @@ mod tests {
             .execute_batch("PRAGMA foreign_keys = ON")
             .unwrap();
         run_migrations(&mut connection).unwrap();
+        // 에이전트별 격리 검증에 필요한 두 번째 에이전트는 테스트에서 직접 추가합니다.
+        connection
+            .execute(
+                "INSERT INTO operation_mode_agents (mode_id, agent_name, icon, color, agent_role, display_order, agent_id)
+                 SELECT id, '보조 에이전트', 'code', 'emerald', 'sub', 1, 'test-secondary-agent'
+                 FROM operation_modes WHERE mode_name = 'Orchestration'",
+                [],
+            )
+            .unwrap();
         let ids = connection
             .prepare("SELECT agent_id FROM operation_mode_agents ORDER BY id")
             .unwrap()
