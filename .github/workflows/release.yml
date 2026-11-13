@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       commit:
-        description: "대상 커밋의 전체 SHA (비우면 실행 시점 main 커밋)"
+        description: "대상 커밋의 전체 SHA (비우면 최신 main 커밋)"
         required: false
         type: string
   push:
