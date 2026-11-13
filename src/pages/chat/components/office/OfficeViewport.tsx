@@ -2,7 +2,9 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { AgentItem } from "@/types/chat";
-import { buildOfficeEnvironment, createOfficeAvatar } from "./office-models";
+import { useCharacters } from "@/lib/characters";
+import { buildOfficeEnvironment } from "./office-models";
+import { createCharacterOfficeAvatar } from "./office-character-avatars";
 import { getOfficeAgentId } from "./office-identity";
 import { OfficeIcon } from "./OfficeIcon";
 import {
@@ -56,6 +58,7 @@ function disposeScene(scene: THREE.Scene) {
 }
 
 export default function OfficeViewport({ ref, agents, selectedId, onSelect, onReady }: Props) {
+  const { characters } = useCharacters();
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<OfficeViewportHandle | null>(null);
   const current = useRef({ selectedId, onSelect, onReady });
@@ -165,7 +168,8 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
     element.appendChild(labels);
     const avatars = agents.map((agent, index) => {
       const id = getOfficeAgentId(agent, index);
-      const model = createOfficeAvatar(agent.color, index);
+      const character = characters.find((item) => item.id === agent.characterId) ?? characters[0];
+      const model = createCharacterOfficeAvatar(character, agent.color, index, () => wake());
       const position = saved[id] ?? layout.spawns[index];
       positions[id] = { ...position };
       model.group.position.set(position.x, 0, position.z);
@@ -183,7 +187,18 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
         canvas.focus({ preventScroll: true });
       });
       labels.appendChild(label);
-      return { ...model, id, label, index };
+      return {
+        model,
+        group: model.group,
+        body: model.body,
+        leftLeg: model.leftLeg,
+        rightLeg: model.rightLeg,
+        ring: model.ring,
+        id,
+        label,
+        index,
+        characterName: character?.name,
+      };
     });
 
     let dirty = true;
@@ -281,7 +296,14 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
         const height = element.clientHeight;
         scene.updateMatrixWorld();
         for (const avatar of avatars) {
-          projected.set(avatar.group.position.x, 1.8, avatar.group.position.z).project(camera);
+          avatar.label.dataset.avatarKind = avatar.model.kind;
+          avatar.label.title =
+            avatar.model.kind === "robot"
+              ? "기본 로봇"
+              : avatar.characterName +
+                (avatar.model.kind === "image" ? " · 이미지 기반 3D 캐릭터" : " · 3D 캐릭터");
+          projected.set(0, avatar.model.labelHeight, 0);
+          projected.add(avatar.group.position).project(camera);
           const inView =
             Math.abs(projected.x) < 0.96 &&
             Math.abs(projected.y) < 0.95 &&
@@ -359,10 +381,20 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
         ),
         camera
       );
-      const hit = raycaster.intersectObjects(
-        avatars.map((avatar) => avatar.group),
-        true
-      )[0];
+      const hit = raycaster
+        .intersectObjects(
+          avatars.map((avatar) => avatar.group),
+          true
+        )
+        .find(({ object }) => {
+          // 숨긴 이미지 대체 모델과 선택 링은 클릭을 가로채지 않습니다.
+          let candidate: THREE.Object3D | null = object;
+          while (candidate) {
+            if (!candidate.visible) return false;
+            candidate = candidate.parent;
+          }
+          return true;
+        });
       if (hit) {
         let object: THREE.Object3D | null = hit.object;
         while (object && !object.userData.agentId) object = object.parent;
@@ -459,6 +491,7 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("webglcontextlost", onContextLost);
       document.removeEventListener("visibilitychange", onVisibility);
+      avatars.forEach((avatar) => avatar.model.dispose());
       disposeScene(scene);
       sun.shadow.dispose();
       renderer.dispose();
@@ -466,7 +499,7 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
       canvas.remove();
       labels.remove();
     };
-  }, [agents, retry]);
+  }, [agents, characters, retry]);
 
   return (
     <div className="office-viewport" ref={host}>

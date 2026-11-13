@@ -1,5 +1,6 @@
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { putCharacter, removeCharacter, useCharacters } from "@/lib/characters";
 import { AgentOffice } from "@/pages/chat/components/office/AgentOffice";
 import type { AgentItem } from "@/types/chat";
 import "./fixture.css";
@@ -24,10 +25,29 @@ function Fixture() {
   const [reversed, setReversed] = useState(false);
   const [detail, setDetail] = useState("");
   const [chat, setChat] = useState("");
-  const agents = useMemo(
-    () => (reversed ? team.slice(0, count).reverse() : team.slice(0, count)),
-    [count, reversed]
-  );
+  const [firstCharacter, setFirstCharacter] = useState("chiikawa");
+  const { characters } = useCharacters();
+  const agents = useMemo(() => {
+    const members = team
+      .slice(0, count)
+      .map((agent, index) => (index === 0 ? { ...agent, characterId: firstCharacter } : agent));
+    return reversed ? members.reverse() : members;
+  }, [count, reversed, firstCharacter]);
+  // 공유 저장소를 통해 이미지를 바꿔 실제 라이브러리의 갱신 경로를 검증합니다.
+  const replaceCharacterImage = async (broken = false) => {
+    const image = document.createElement("canvas");
+    image.width = image.height = 64;
+    const context = image.getContext("2d")!;
+    context.fillStyle = "#f000cc";
+    context.fillRect(0, 0, 64, 64);
+    context.fillStyle = "#ffffff";
+    context.fillRect(16, 16, 32, 32);
+    await putCharacter({
+      id: "chiikawa",
+      name: "테스트 이미지",
+      image: broken ? "data:image/png;base64,broken" : image.toDataURL("image/png"),
+    });
+  };
   return (
     <main className="fixture">
       <AgentOffice
@@ -56,12 +76,35 @@ function Fixture() {
             onChange={(event) => setCount(Number(event.target.value))}
           >
             <option value={0}>0명</option>
+            <option value={1}>1명</option>
             <option value={3}>3명</option>
             <option value={12}>12명</option>
           </select>
         </label>
         <button onClick={() => setGeneration((value) => value + 1)}>오피스 다시 열기</button>
         <button onClick={() => setReversed((value) => !value)}>목록 순서 바꾸기</button>
+        <label>
+          첫 팀원 캐릭터
+          <select
+            aria-label="첫 팀원 캐릭터"
+            value={firstCharacter}
+            onChange={(event) => setFirstCharacter(event.target.value)}
+          >
+            <option value="chiikawa">치이카와</option>
+            <option value="hachiware">하치와레</option>
+            <option value="usagi">우사기</option>
+          </select>
+        </label>
+        <button onClick={() => void replaceCharacterImage()}>캐릭터 이미지 교체</button>
+        <button onClick={() => void replaceCharacterImage(true)}>깨진 캐릭터 이미지</button>
+        <button onClick={() => void removeCharacter("chiikawa")}>치이카와 삭제</button>
+        <button
+          onClick={async () => {
+            for (const character of characters) await removeCharacter(character.id);
+          }}
+        >
+          캐릭터 라이브러리 비우기
+        </button>
         <output aria-label="상세 콜백">{detail || "없음"}</output>
         <output aria-label="대화 콜백">{chat || "없음"}</output>
       </section>
