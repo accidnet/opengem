@@ -1,4 +1,6 @@
 name: release
+# 실행 목록 제목에 수동 입력 버전 또는 push한 태그를 표시합니다.
+run-name: Release ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
 
 on:
   workflow_dispatch:
