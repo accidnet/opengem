@@ -12,6 +12,14 @@ const builtins: Record<string, string> = {
   "builtin:hachiware": hachiware,
   "builtin:usagi": usagi,
 };
+// 이미지가 교체된 기본 항목은 업로드 이미지로 취급합니다.
+export function getBuiltinCharacterKind(image: string) {
+  if (image === chiikawa || image === "builtin:chiikawa") return "chiikawa";
+  if (image === hachiware || image === "builtin:hachiware") return "hachiware";
+  if (image === usagi || image === "builtin:usagi") return "usagi";
+  return null;
+}
+
 const browserKey = "opengem.characters.v1";
 const browserDefaults: CharacterItem[] = [
   { id: "chiikawa", name: "치이카와", image: "builtin:chiikawa" },
