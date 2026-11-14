@@ -88,9 +88,7 @@ export function AgentsSection({
                     >
                       {agent.name}
                     </button>
-                    {isCurrent && (
-                      <span style={{ color: "#c8b9ff", fontSize: "10px" }}>대화 중</span>
-                    )}
+                    {isCurrent && <span className="agent-chat-status">대화 중</span>}
                     {agent.role === "main" && (
                       <span
                         className="material-symbols-outlined agent-main-badge"
