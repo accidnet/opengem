@@ -36,6 +36,12 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
     };
     let base_url = if selection.provider_id == DEFAULT_PROVIDER_KEY && provider_kind == "oauth" {
         default_base_url_for(&selection.provider_id, &provider_kind).to_string()
+    } else if selection.provider_id == "custom" {
+        // 설정 창에도 같은 행에서 읽은 주소와 키를 표시합니다.
+        selected
+            .base_url
+            .clone()
+            .unwrap_or(selection.base_url.clone())
     } else if provider_kind != selection.provider_kind {
         load_provider_settings(connection, &selection.provider_id, &provider_kind)?
             .map(|settings| settings.api_url)

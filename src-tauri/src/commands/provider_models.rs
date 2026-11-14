@@ -1,9 +1,7 @@
 use super::{settings::resolve_oauth_credential, settings_types::GetProviderCredentialInput};
 use crate::{
     app_state::AppState,
-    repositories::settings_repository::{
-        default_base_url_for, load_credential, load_provider_settings,
-    },
+    repositories::settings_repository::{default_base_url_for, load_credential},
 };
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -267,7 +265,7 @@ pub async fn list_provider_models(
         let provider = input.provider_id.as_str();
         let kind = input.credential_type.as_str();
         let catalog = Catalog::for_connection(provider, kind)?;
-        let mut db = app.state::<AppState>().open_connection()?;
+        let db = app.state::<AppState>().open_connection()?;
         // ChatGPT 로그인 토큰은 고정된 ChatGPT 서버로만 보냅니다.
         let (base, secret, account) = if catalog == Catalog::ChatGpt {
             let credential = resolve_oauth_credential(&db)?;
@@ -277,12 +275,10 @@ pub async fn list_provider_models(
                 credential.account_id,
             )
         } else {
-            // 저장 요청과 겹쳐도 한 시점의 서버 주소와 키만 가져옵니다.
-            let snapshot = db.transaction().map_err(|error| error.to_string())?;
-            let settings = load_provider_settings(&snapshot, provider, kind)?
-                .ok_or("연결되지 않은 공급자입니다.")?;
-            let credential = load_credential(&snapshot, provider, kind)?;
-            (settings.api_url, credential.api_key, None)
+            // 주소와 키를 같은 행에서 한 번에 읽어 설정 변경 중에도 연결을 일치시킵니다.
+            let credential = load_credential(&db, provider, kind)?;
+            let base = credential.base_url.ok_or("연결되지 않은 공급자입니다.")?;
+            (base, credential.api_key, None)
         };
         drop(db);
         let secret = secret.as_deref().map(str::trim).filter(|s| !s.is_empty());
