@@ -33,16 +33,10 @@
   font-size: 28px;
   flex: none;
 }
-.office-eyebrow {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  font-weight: 700;
-  color: var(--text-muted);
-}
 .office-title h2 {
   margin: 0;
+  /* 긴 모드 이름은 팀원 수 옆에서 줄바꿈합니다. */
+  overflow-wrap: anywhere;
   font-size: 18px;
   line-height: 1.4;
   letter-spacing: -0.045em;

@@ -55,6 +55,7 @@ function CharacterUploadFixture() {
         에이전트 설정 열기
       </button>
       <AgentOffice
+        modeName="Orchestration"
         agents={agents}
         selectedAgentIndex={null}
         isConversationBusy={false}

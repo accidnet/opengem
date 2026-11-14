@@ -8,6 +8,7 @@ import { getErrorMessage } from "@/features/app/appHelpers";
 import type { AgentItem, Message } from "@/types/chat";
 
 type ChatPanelProps = {
+  modeName: string;
   conversationLabel: string;
   conversationModel: string;
   conversationError: string;
@@ -41,6 +42,7 @@ type ChatPanelProps = {
 };
 
 export function ChatPanel({
+  modeName,
   conversationLabel,
   conversationModel,
   conversationError,
@@ -209,7 +211,7 @@ export function ChatPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             space_dashboard
           </span>{" "}
-          에이전트 오피스
+          에이전트 라운지
         </button>
         <button
           type="button"
@@ -245,6 +247,7 @@ export function ChatPanel({
         >
           {workspaceView === "office" ? (
             <AgentOffice
+              modeName={modeName}
               onStartChat={onStartAgentChat}
               isConversationBusy={isConversationBusy}
               agents={agents}

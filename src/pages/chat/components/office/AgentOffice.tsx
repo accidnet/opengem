@@ -9,6 +9,7 @@ import "./AgentOffice.css";
 const OfficeViewport = lazy(() => import("./OfficeViewport"));
 
 type AgentOfficeProps = {
+  modeName: string;
   agents: AgentItem[];
   selectedAgentIndex: number | null;
   onSelectAgent: (index: number) => void;
@@ -17,6 +18,7 @@ type AgentOfficeProps = {
 };
 
 export function AgentOffice({
+  modeName,
   agents,
   selectedAgentIndex,
   onSelectAgent,
@@ -41,16 +43,13 @@ export function AgentOffice({
   };
 
   return (
-    <section className="agent-office" aria-label="에이전트 오피스">
+    <section className="agent-office" aria-label="에이전트 라운지">
       <header className="office-header">
         <div className="office-title">
           <span className="office-brand-mark" aria-hidden="true">
             ✳
           </span>
-          <div>
-            <span className="office-eyebrow">OPENGEM WORKSPACE</span>
-            <h2>우리 팀의 작은 오피스</h2>
-          </div>
+          <h2>{modeName}</h2>
         </div>
         <span className="office-live">
           <i /> {agents.length}명의 팀원
@@ -60,7 +59,7 @@ export function AgentOffice({
         <Suspense
           fallback={
             <div className="office-loading" role="status">
-              3D 오피스를 준비하고 있어요…
+              라운지를 준비하고 있어요…
             </div>
           }
         >
@@ -182,14 +181,14 @@ export function AgentOffice({
               </strong>
               <span>
                 {agents.length
-                  ? "오피스나 아래 목록에서 팀원을 더블클릭하면 대화가 열려요"
+                  ? "라운지나 아래 목록에서 팀원을 더블클릭하면 대화가 열려요"
                   : "왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요"}
               </span>
             </div>
           </>
         )}
       </div>
-      <div className="office-keyboard-guide" aria-label="오피스 조작 안내">
+      <div className="office-keyboard-guide" aria-label="에이전트 라운지 조작 안내">
         <span>
           <kbd>W</kbd>
           <kbd>A</kbd>
