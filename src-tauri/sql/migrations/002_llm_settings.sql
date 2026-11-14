@@ -42,7 +42,7 @@ VALUES (
 CREATE TABLE IF NOT EXISTS llm_settings (
   id INTEGER PRIMARY KEY CHECK(id = 1),
   provider_settings_id INTEGER NOT NULL,
-  model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  model TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(provider_settings_id) REFERENCES provider_settings(id)
 );
@@ -55,5 +55,5 @@ VALUES (
     FROM provider_settings
     WHERE id = 1
   ),
-  'gpt-4o-mini'
+  ''
 );

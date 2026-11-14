@@ -443,6 +443,7 @@ fn main() {
             commands::settings::get_global_prompt,
             commands::settings::save_global_prompt,
             commands::settings::get_available_providers,
+            commands::provider_models::list_provider_models,
             commands::settings::get_providers,
             commands::settings::get_provider_credential,
             commands::settings::save_llm_settings,

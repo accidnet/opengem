@@ -22,7 +22,6 @@ export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
       system,
       messages: messages.map(buildAnthropicImageMessage),
       max_tokens: 4096,
-      temperature: 0.4,
       stream: shouldStream,
     }),
     signal: input.signal,

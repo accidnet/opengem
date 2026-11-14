@@ -22,6 +22,7 @@ pub struct LlmSettingsPayload {
 pub struct SaveLlmSettingsInput {
     pub provider_id: String,
     pub provider_kind: String,
+    pub api_url: Option<String>,
     pub model: String,
     pub api_key: Option<String>,
     pub openai_oauth_enabled: bool,
@@ -66,6 +67,10 @@ pub struct ResolvedLlmSettingsPayload {
     pub api_key: Option<String>,
     pub access_token: Option<String>,
     pub account_id: Option<String>,
+    pub openai_oauth_enabled: bool,
+    pub openai_oauth_priority: i64,
+    pub openai_api_key_enabled: bool,
+    pub openai_api_key_priority: i64,
 }
 
 #[derive(Serialize)]
@@ -99,6 +104,7 @@ pub struct ProviderPayload {
 pub struct ProviderCredentialPayload {
     pub provider_id: String,
     pub credential_type: String,
+    pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub access_token: Option<String>,
     pub account_id: Option<String>,
@@ -125,6 +131,7 @@ pub(crate) struct StoredLlmSettings {
 pub(crate) struct StoredProviderCredential {
     pub provider_id: String,
     pub credential_type: String,
+    pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,

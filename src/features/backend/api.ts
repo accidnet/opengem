@@ -3,11 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { StartChatgptLoginPayload } from "@/features/app/appHelpers";
 import type { CharacterItem, LLMSettings, ResolvedLLMSettings, SessionDetail } from "@/types/chat";
 
-import type { AvailableProviderInfo, ProviderInfo } from "@/features/ai/types";
+import type { AIModel, AvailableProviderInfo, ProviderInfo } from "@/features/ai/types";
 
 export type SaveLlmSettingsParams = {
   providerId: LLMSettings["providerId"];
   providerKind: LLMSettings["providerKind"];
+  apiUrl?: string;
   model: string;
   apiKey?: string;
   openaiOauthEnabled: boolean;
@@ -48,6 +49,7 @@ export type ProviderCredentialValue =
   | {
       providerId: string;
       credentialType: "api-key";
+      baseUrl?: string | null;
       apiKey?: string;
     };
 
@@ -57,6 +59,10 @@ export async function getLlmSettings(): Promise<LLMSettings> {
 
 export async function getAvailableProviders(): Promise<AvailableProviderInfo[]> {
   return invoke<AvailableProviderInfo[]>("get_available_providers");
+}
+
+export function listProviderModels(input: GetProviderCredentialParams): Promise<AIModel[]> {
+  return invoke("list_provider_models", { input });
 }
 
 export async function getProviders(): Promise<ProviderInfo[]> {

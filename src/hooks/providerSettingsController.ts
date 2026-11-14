@@ -1,19 +1,16 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/features/app/config/appData";
-import { resolveProviderApiUrl } from "@/config/loadModels";
 import {
   beginChatgptLogin,
-  getAvailableProviders,
   getLlmSettings,
   logoutChatgpt,
   openExternalUrl,
   saveLlmSettings,
-  saveProviderSettings,
 } from "@/features/backend/api";
-import { AIQueryKeys } from "@/hooks/useAI";
+import { AIQueryKeys, preloadAvailableModels } from "@/hooks/useAI";
 import { queryClient } from "@/lib/queryClient";
-import { normalizeLlmSettings, syncProviderCatalogWithModelsDev } from "@/features/ai/catalog";
+import { normalizeLlmSettings } from "@/features/ai/catalog";
 import type { LLMSettings } from "@/types/chat";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -39,59 +36,22 @@ export function createProviderSettingsController({
   setPanelModalError,
   setSettings,
 }: ProviderSettingsControllerParams) {
-  const saveProviderConfiguration = async (
-    nextSettings: Pick<LLMSettings, "providerId" | "providerKind" | "baseUrl">
-  ) => {
-    if (nextSettings.providerId === "openai") {
-      const oauthUrl = resolveProviderApiUrl("openai", "oauth", nextSettings.baseUrl);
-      const apiKeyUrl = resolveProviderApiUrl("openai", "api-key", nextSettings.baseUrl);
-
-      await Promise.all([
-        saveProviderSettings({
-          providerId: "openai",
-          providerKind: "oauth",
-          apiUrl: oauthUrl,
-        }),
-        saveProviderSettings({
-          providerId: "openai",
-          providerKind: "api-key",
-          apiUrl: apiKeyUrl,
-        }),
-      ]);
-      return;
-    }
-
-    const apiUrl = resolveProviderApiUrl(
-      nextSettings.providerId,
-      nextSettings.providerKind,
-      nextSettings.baseUrl
-    );
-
-    if (!apiUrl) {
-      return;
-    }
-
-    await saveProviderSettings({
-      providerId: nextSettings.providerId,
-      providerKind: nextSettings.providerKind,
-      apiUrl,
-    });
-  };
-
   const refreshAvailableProviderQueries = async () => {
+    // 같은 공급자의 키만 교체한 경우에도 이전 계정에서 진행 중인 조회를 폐기합니다.
+    await queryClient.cancelQueries({ queryKey: AIQueryKeys.availableModels });
+    await queryClient.invalidateQueries({
+      queryKey: AIQueryKeys.availableModels,
+      refetchType: "none",
+    });
     await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableProviders });
-    await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableModels });
+    void preloadAvailableModels().catch(() => {});
   };
 
   const loadProviderSettings = async () => {
     try {
-      const [next] = await Promise.all([getLlmSettings(), getAvailableProviders()]);
+      const next = await getLlmSettings();
       setSettings(normalizeLlmSettings(next));
-      await refreshAvailableProviderQueries();
-      const changed = syncProviderCatalogWithModelsDev();
-      if (changed) {
-        setSettings((current) => normalizeLlmSettings({ ...current }));
-      }
+      void preloadAvailableModels().catch(() => {});
       setPanelModalError("");
     } catch {
       setSettings(normalizeLlmSettings(LLM_CONFIG));
@@ -101,10 +61,10 @@ export function createProviderSettingsController({
   const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
-      await saveProviderConfiguration(settings);
       const next = await saveLlmSettings({
         providerId: settings.providerId,
         providerKind: settings.providerKind,
+        apiUrl: settings.providerId === "custom" ? settings.baseUrl.trim() : undefined,
         model: settings.model,
         apiKey: settings.apiKey,
         openaiOauthEnabled: settings.openaiOauthEnabled,
@@ -148,11 +108,6 @@ export function createProviderSettingsController({
         const next = await getLlmSettings();
         setSettings(normalizeLlmSettings(next));
         if (next.loggedIn) {
-          await saveProviderConfiguration({
-            providerId: next.providerId,
-            providerKind: next.providerKind,
-            baseUrl: next.baseUrl,
-          });
           await refreshAvailableProviderQueries();
           setChatGPTLoginUrl("");
           return;

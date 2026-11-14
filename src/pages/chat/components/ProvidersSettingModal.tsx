@@ -18,6 +18,10 @@ type ProvidersSettingModalProps = {
 
 type OpenAICredentialMode = "oauth" | "api-key";
 
+function customServerOrigin(value: string) {
+  return URL.canParse(value) ? new URL(value).origin : undefined;
+}
+
 const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   openai: "auto_awesome",
   anthropic: "psychiatry",
@@ -172,11 +176,20 @@ export function ProvidersSettingModal({
                   className={`panel-modal-nav-item ${isActive ? "is-active" : ""}`}
                   type="button"
                   aria-current={isActive ? "true" : undefined}
-                  onClick={() =>
-                    onChange(
-                      applyProviderSelection(settings, provider.key as LLMSettings["providerId"])
-                    )
-                  }
+                  onClick={() => {
+                    if (isActive) return;
+                    const next = applyProviderSelection(
+                      settings,
+                      provider.key as LLMSettings["providerId"]
+                    );
+                    const connected = availableProviders.find(
+                      (item) => item.providerId === next.providerId
+                    );
+                    onChange({
+                      ...next,
+                      baseUrl: connected?.apiUrls[next.providerKind] ?? next.baseUrl,
+                    });
+                  }}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     {PROVIDER_ICONS[provider.key as LLMSettings["providerId"]]}
@@ -255,7 +268,17 @@ export function ProvidersSettingModal({
                     className="settings-input"
                     type="url"
                     value={settings.baseUrl}
-                    onChange={(event) => onChange({ baseUrl: event.target.value })}
+                    onChange={(event) => {
+                      const baseUrl = event.target.value;
+                      // 새 서버에 쓸 키는 사용자가 그 주소에서 직접 입력합니다.
+                      onChange({
+                        baseUrl,
+                        apiKey:
+                          customServerOrigin(baseUrl) === customServerOrigin(settings.baseUrl)
+                            ? settings.apiKey
+                            : undefined,
+                      });
+                    }}
                     placeholder="https://your-endpoint.example/v1"
                   />
                 </label>

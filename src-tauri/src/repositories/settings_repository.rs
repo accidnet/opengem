@@ -5,7 +5,6 @@ use crate::commands::settings_types::{
 use rusqlite::{params, OptionalExtension};
 
 const DEFAULT_PROVIDER_KEY: &str = "openai";
-const DEFAULT_MODEL: &str = "gpt-4o-mini";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com/v1";
 const DEFAULT_GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
@@ -35,16 +34,30 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
         let selected = load_credential(connection, &selection.provider_id, &provider_kind)?;
         (provider_kind, selected)
     };
-    let base_url = if selection.provider_id == DEFAULT_PROVIDER_KEY {
+    let base_url = if selection.provider_id == DEFAULT_PROVIDER_KEY && provider_kind == "oauth" {
         default_base_url_for(&selection.provider_id, &provider_kind).to_string()
+    } else if selection.provider_id == "custom" {
+        // 설정 창에도 같은 행에서 읽은 주소와 키를 표시합니다.
+        selected
+            .base_url
+            .clone()
+            .unwrap_or(selection.base_url.clone())
+    } else if provider_kind != selection.provider_kind {
+        load_provider_settings(connection, &selection.provider_id, &provider_kind)?
+            .map(|settings| settings.api_url)
+            .unwrap_or_else(|| {
+                default_base_url_for(&selection.provider_id, &provider_kind).to_string()
+            })
     } else {
         selection.base_url.clone()
     };
 
+    let model = normalize_text(&selection.model)
+        .unwrap_or_else(|| default_model_for(&selection.provider_id, &provider_kind).to_string());
     Ok(StoredLlmSettings {
         provider_id: selection.provider_id,
         provider_kind,
-        model: selection.model,
+        model,
         base_url,
         api_key: selected.api_key,
         access_token: selected.access_token,
@@ -64,6 +77,7 @@ pub fn load_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSetti
 pub fn load_available_providers(
     connection: &rusqlite::Connection,
 ) -> Result<Vec<AvailableProviderPayload>, String> {
+    let selection = load_selection(connection)?;
     let mut statement = connection
         .prepare(
             "
@@ -123,7 +137,19 @@ pub fn load_available_providers(
             .as_ref()
             .is_some_and(|value| !value.trim().is_empty());
 
-        if has_api_key || has_refresh_token {
+        let enabled = match (provider_id.as_str(), credential_type.as_str()) {
+            ("openai", "oauth") => selection.openai_oauth_enabled,
+            ("openai", "api-key") => selection.openai_api_key_enabled,
+            _ => true,
+        };
+        // 키가 필요 없는 로컬 서버도 저장한 기본 주소로 목록을 조회할 수 있습니다.
+        let keyless_custom = provider_id == "custom"
+            && credential_type == "api-key"
+            && api_url.as_deref().is_some_and(|url| {
+                let url = url.trim().trim_end_matches('/');
+                !url.is_empty() && url != DEFAULT_OPENAI_BASE_URL
+            });
+        if enabled && (has_api_key || has_refresh_token || keyless_custom) {
             entry.credential_types.push(credential_type.clone());
         }
         if let Some(api_url) = api_url.filter(|value| !value.trim().is_empty()) {
@@ -232,7 +258,8 @@ pub fn load_credential(
               provider_settings.refresh_token,
               provider_settings.expires_at,
               provider_settings.account_id,
-              provider_settings.email
+              provider_settings.email,
+              provider_settings.api_url
             FROM provider_settings
             INNER JOIN providers ON providers.id = provider_settings.provider_id
             WHERE providers.key = ?1 AND provider_settings.credential_type = ?2
@@ -249,6 +276,7 @@ pub fn load_credential(
                     expires_at: row.get(5)?,
                     account_id: row.get(6)?,
                     email: row.get(7)?,
+                    base_url: row.get(8)?,
                 })
             },
         )
@@ -274,12 +302,25 @@ pub fn save_provider_settings(
     let provider_settings_id =
         resolve_or_create_provider_setting_id(connection, provider_id, credential_type)?;
 
+    let mut clear_api_key = false;
+    if provider_id == "custom" {
+        let new_url = url::Url::parse(api_url)
+            .ok()
+            .filter(|url| matches!(url.scheme(), "http" | "https") && url.host().is_some())
+            .ok_or("지정 서버의 HTTP 또는 HTTPS 주소를 입력해 주세요.")?;
+        let previous = load_provider_settings(connection, provider_id, credential_type)?;
+        let old_origin = previous
+            .and_then(|settings| url::Url::parse(&settings.api_url).ok())
+            .map(|url| url.origin());
+        clear_api_key = old_origin != Some(new_url.origin());
+    }
     connection
         .execute(
             "UPDATE provider_settings
-             SET name = ?1, api_url = ?2, updated_at = CURRENT_TIMESTAMP
+             SET name = ?1, api_url = ?2, api_key = CASE WHEN ?4 THEN NULL ELSE api_key END,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?3",
-            params![name, api_url, provider_settings_id],
+            params![name, api_url, provider_settings_id, clear_api_key],
         )
         .map_err(|error| error.to_string())?;
 
@@ -338,6 +379,35 @@ pub fn clear_credential(
     )
 }
 
+pub(crate) fn save_refreshed_oauth_credential(
+    connection: &rusqlite::Connection,
+    previous_refresh_token: &str,
+    credential: &StoredProviderCredential,
+) -> Result<(), String> {
+    // 요청 중 로그아웃하거나 계정이 바뀐 경우 이전 세션의 토큰을 저장하지 않습니다.
+    let updated = connection
+        .execute(
+            "UPDATE provider_settings
+         SET access_token = ?1, refresh_token = ?2, expires_at = ?3, account_id = ?4, email = ?5,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE provider_id = (SELECT id FROM providers WHERE key = 'openai')
+           AND credential_type = 'oauth' AND refresh_token = ?6",
+            params![
+                credential.access_token,
+                credential.refresh_token,
+                credential.expires_at,
+                credential.account_id,
+                credential.email,
+                previous_refresh_token
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    if updated == 0 {
+        return Err("ChatGPT 연결이 변경되었습니다. 다시 시도해 주세요.".to_string());
+    }
+    Ok(())
+}
+
 fn load_selection(connection: &rusqlite::Connection) -> Result<StoredSelection, String> {
     connection
         .query_row(
@@ -382,8 +452,7 @@ fn load_selection(connection: &rusqlite::Connection) -> Result<StoredSelection, 
             Ok(StoredSelection {
                 provider_id: provider_id.clone(),
                 provider_kind,
-                model: normalize_text(&selection.model)
-                    .unwrap_or_else(|| default_model_for(&provider_id).to_string()),
+                model: selection.model,
                 base_url: normalize_text(&selection.base_url).unwrap_or_else(|| {
                     default_base_url_for(&provider_id, &selection.provider_kind).to_string()
                 }),
@@ -397,7 +466,7 @@ fn load_selection(connection: &rusqlite::Connection) -> Result<StoredSelection, 
             Ok(StoredSelection {
                 provider_id: DEFAULT_PROVIDER_KEY.to_string(),
                 provider_kind: "api-key".to_string(),
-                model: DEFAULT_MODEL.to_string(),
+                model: String::new(),
                 base_url: DEFAULT_OPENAI_BASE_URL.to_string(),
                 openai_oauth_enabled: true,
                 openai_oauth_priority: 1,
@@ -407,7 +476,7 @@ fn load_selection(connection: &rusqlite::Connection) -> Result<StoredSelection, 
         })
 }
 
-fn load_provider_settings(
+pub(crate) fn load_provider_settings(
     connection: &rusqlite::Connection,
     provider_id: &str,
     credential_type: &str,
@@ -540,6 +609,13 @@ fn resolve_active_provider_credential(
         return (provider_kind.clone(), credential.clone());
     }
 
+    // 최초 실행처럼 연결된 인증이 없으면 선택한 방식의 모델과 주소를 표시합니다.
+    if let Some((kind, _, _, credential)) = candidates
+        .iter()
+        .find(|(kind, enabled, _, _)| *enabled && kind == &selection.provider_kind)
+    {
+        return (kind.clone(), credential.clone());
+    }
     if let Some((provider_kind, _, _, credential)) =
         candidates.iter().find(|(_, enabled, _, _)| *enabled)
     {
@@ -565,16 +641,17 @@ fn normalize_provider_kind(provider_id: &str, value: &str) -> String {
     "api-key".to_string()
 }
 
-fn default_model_for(provider_id: &str) -> &'static str {
-    match provider_id {
-        "anthropic" => "claude-3-5-sonnet-latest",
-        "google" => "gemini-2.5-pro",
-        "openrouter" => "openai/gpt-4o-mini",
-        _ => DEFAULT_MODEL,
+fn default_model_for(provider_id: &str, credential_type: &str) -> &'static str {
+    match (provider_id, credential_type) {
+        ("openai", "oauth") => "gpt-6.1-sol",
+        ("anthropic", _) => "claude-sonnet-4-6",
+        ("google", _) => "gemini-flash-latest",
+        ("openrouter", _) => "openai/gpt-5.4-mini",
+        _ => "gpt-5.4-mini",
     }
 }
 
-fn default_base_url_for(provider_id: &str, credential_type: &str) -> &'static str {
+pub(crate) fn default_base_url_for(provider_id: &str, credential_type: &str) -> &'static str {
     if provider_id == DEFAULT_PROVIDER_KEY && credential_type == "oauth" {
         return CHATGPT_BASE_URL;
     }

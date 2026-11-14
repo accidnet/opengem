@@ -130,6 +130,8 @@ src-tauri\target\release\bundle\nsis\opengem_0.1.0_x64-setup.exe.sig
 
 배포 버전의 기준은 `v0.1.3` 같은 태그입니다. 빌드 과정에서만 `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`의 앱 버전을 `0.1.3`으로 맞춥니다. 이 변경은 커밋하거나 main에 push하지 않으며 버전 PR도 만들지 않습니다. 설치 파일, 앱 버전 표시와 updater metadata에는 주입한 배포 버전이 들어갑니다.
 
+ChatGPT 로그인은 모델 목록을 요청할 때 Codex 호환 버전을 함께 보냅니다. 배포 빌드는 OpenAI Codex의 최신 정식 버전을 확인해 `OPENGEM_CODEX_CATALOG_VERSION`으로 기록합니다. 조회에 실패하면 소스에 지정한 호환 버전을 사용합니다. 앱은 시작할 때와 공급자 연결이 바뀔 때 계정별 모델 목록을 다시 조회합니다.
+
 따라서 태그의 GitHub **Source code** ZIP에는 원본 커밋의 개발 버전이 남습니다. 같은 버전으로 재현 빌드하려면 해당 커밋을 checkout한 뒤 이 workflow의 동일한 버전 주입·빌드 절차를 사용합니다. 버튼에서 동일한 커밋과 버전을 입력하면 기존 태그를 재사용할 수 있습니다.
 
 ### 필요한 권한
