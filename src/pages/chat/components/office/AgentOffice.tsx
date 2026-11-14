@@ -27,11 +27,17 @@ export function AgentOffice({
   const [controlledId, setControlledId] = useState<string | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const viewport = useRef<OfficeViewportHandle>(null);
-  const index = agents.findIndex((agent, i) => getOfficeAgentId(agent, i) === controlledId);
+  const findAgentIndex = (id: string | null) =>
+    agents.findIndex((agent, i) => getOfficeAgentId(agent, i) === id);
+  const index = findAgentIndex(controlledId);
   const selected = agents[index];
   const selectAgent = (id: string | null) => {
     setControlledId(id);
     if (id) viewport.current?.focus();
+  };
+  const startChat = (id: string) => {
+    const agentIndex = findAgentIndex(id);
+    if (!isConversationBusy && agentIndex >= 0) onStartChat(agentIndex);
   };
 
   return (
@@ -63,6 +69,7 @@ export function AgentOffice({
             agents={agents}
             selectedId={selected ? controlledId : null}
             onSelect={selectAgent}
+            onStartChat={startChat}
             onReady={setSceneReady}
           />
         </Suspense>
@@ -175,7 +182,7 @@ export function AgentOffice({
               </strong>
               <span>
                 {agents.length
-                  ? "오피스 또는 아래 목록에서 에이전트를 선택하세요"
+                  ? "오피스나 아래 목록에서 팀원을 더블클릭하면 대화가 열려요"
                   : "왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요"}
               </span>
             </div>
@@ -209,6 +216,7 @@ export function AgentOffice({
                 aria-label={agent.name + " 선택"}
                 aria-pressed={controlledId === id}
                 onClick={() => selectAgent(id)}
+                onDoubleClick={() => startChat(id)}
               >
                 <span className={"office-card-avatar office-color-" + agent.color}>
                   <CharacterAvatar agent={agent} className="agent-character-avatar" />

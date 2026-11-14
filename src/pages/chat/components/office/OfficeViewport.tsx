@@ -27,6 +27,7 @@ type Props = {
   agents: AgentItem[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  onStartChat: (id: string) => void;
   onReady: (ready: boolean) => void;
 };
 const STORAGE_KEY = "opengem.office.positions.v1";
@@ -57,17 +58,24 @@ function disposeScene(scene: THREE.Scene) {
   materials.forEach((material) => material.dispose());
 }
 
-export default function OfficeViewport({ ref, agents, selectedId, onSelect, onReady }: Props) {
+export default function OfficeViewport({
+  ref,
+  agents,
+  selectedId,
+  onSelect,
+  onStartChat,
+  onReady,
+}: Props) {
   const { characters } = useCharacters();
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<OfficeViewportHandle | null>(null);
-  const current = useRef({ selectedId, onSelect, onReady });
+  const current = useRef({ selectedId, onSelect, onStartChat, onReady });
   const invalidate = useRef<(() => void) | null>(null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    current.current = { selectedId, onSelect, onReady };
-  }, [selectedId, onSelect, onReady]);
+    current.current = { selectedId, onSelect, onStartChat, onReady };
+  }, [selectedId, onSelect, onStartChat, onReady]);
   useEffect(() => {
     invalidate.current?.();
   }, [selectedId]);
@@ -103,7 +111,7 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
     canvas.setAttribute("aria-label", "3D 에이전트 오피스");
     canvas.setAttribute(
       "aria-description",
-      "에이전트를 클릭한 뒤 WASD 또는 방향키로 이동하세요. Escape로 선택을 해제합니다."
+      "에이전트를 더블클릭하면 대화가 열립니다. 한 번 클릭한 뒤 WASD 또는 방향키로 이동하세요. Escape로 선택을 해제합니다."
     );
     element.appendChild(canvas);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -186,6 +194,7 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
         current.current.onSelect(id);
         canvas.focus({ preventScroll: true });
       });
+      label.addEventListener("dblclick", () => current.current.onStartChat(id));
       labels.appendChild(label);
       return {
         model,
@@ -360,19 +369,28 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
       keys.delete(event.code);
       if (!keys.size) save();
     };
-    let pointerStart = { x: 0, y: 0 };
+    let pointerStart: { x: number; y: number } | null = null;
+    let lastClickedId: string | null = null;
     const onPointerDown = (event: PointerEvent) => {
       stopMovement();
-      pointerStart = { x: event.clientX, y: event.clientY };
+      pointerStart =
+        event.isPrimary && event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
       canvas.focus({ preventScroll: true });
     };
-    const raycaster = new THREE.Raycaster();
-    const onPointerUp = (event: PointerEvent) => {
+    const cancelDragClick = (event: MouseEvent) => {
       if (
-        event.button !== 0 ||
+        pointerStart &&
         Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6
-      )
-        return;
+      ) {
+        pointerStart = null;
+        lastClickedId = null;
+      }
+    };
+    const raycaster = new THREE.Raycaster();
+    const onClick = (event: MouseEvent) => {
+      cancelDragClick(event);
+      if (!pointerStart || event.button !== 0) return;
+      pointerStart = null;
       const rect = canvas.getBoundingClientRect();
       raycaster.setFromCamera(
         new THREE.Vector2(
@@ -395,11 +413,15 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
           }
           return true;
         });
-      if (hit) {
-        let object: THREE.Object3D | null = hit.object;
-        while (object && !object.userData.agentId) object = object.parent;
-        if (object) current.current.onSelect(object.userData.agentId as string);
+      let object = hit?.object ?? null;
+      while (object && !object.userData.agentId) object = object.parent;
+      const id: string | null = object?.userData.agentId ?? null;
+      if (id) {
+        current.current.onSelect(id);
+        // 캔버스는 모든 캐릭터가 공유하므로 두 클릭이 같은 에이전트에 맞았는지 확인합니다.
+        if (event.detail === 2 && lastClickedId === id) current.current.onStartChat(id);
       }
+      lastClickedId = id;
       wake();
     };
     const onVisibility = () => {
@@ -437,7 +459,8 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
     window.addEventListener("blur", stopMovement);
     canvas.addEventListener("blur", stopMovement);
     canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointermove", cancelDragClick);
+    canvas.addEventListener("click", onClick);
     canvas.addEventListener("webglcontextlost", onContextLost);
     document.addEventListener("visibilitychange", onVisibility);
     api.current = {
@@ -488,7 +511,8 @@ export default function OfficeViewport({ ref, agents, selectedId, onSelect, onRe
       window.removeEventListener("blur", stopMovement);
       canvas.removeEventListener("blur", stopMovement);
       canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointermove", cancelDragClick);
+      canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("webglcontextlost", onContextLost);
       document.removeEventListener("visibilitychange", onVisibility);
       avatars.forEach((avatar) => avatar.model.dispose());
