@@ -1,79 +1,14 @@
-import type { LLMConfig } from "@/types/chat";
-
-export type LLMRole = "user" | "assistant" | "system" | "developer" | "tool";
-
-export type LLMToolCall = {
-  id: string;
-  name: string;
-  arguments: string;
-};
-
-export type LLMToolDefinition = {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-};
-
-export type LLMMessage = {
-  role: LLMRole;
-  content: string;
-  // 화면 이미지는 요청 중에만 보유하고 대화 본문과 분리합니다.
-  images?: { mimeType: "image/png" | "image/jpeg"; data: string }[];
-  name?: string;
-  toolCallId?: string;
-  toolCalls?: LLMToolCall[];
-};
-
-export type LLMUsage = {
-  promptTokens?: number;
-  completionTokens?: number;
-  totalTokens?: number;
-};
-
-export type LLMStreamEvent = {
-  event: string;
-  data: string;
-  id?: string;
-};
-
-export type AIRequest = {
-  apiBaseUrl: string;
-  apiKey?: string;
-  accessToken?: string;
-  accountId?: string;
-  model: string;
-  messages: LLMMessage[];
-  providerId?: LLMConfig["providerId"];
-  providerKind?: LLMConfig["providerKind"];
-  tools?: LLMToolDefinition[];
-  toolChoice?: "auto" | "none" | "required";
-  stream?: boolean;
-  signal?: AbortSignal;
-  temperature?: number;
-  onChunk?: (chunk: string) => void;
-  onEvent?: (event: LLMStreamEvent) => void;
-};
-
-export type AIResponse = {
-  text: string;
-  usage?: LLMUsage;
-  toolCalls?: LLMToolCall[];
-  finishReason?: string;
-};
-
-export type OpenAIUsage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-};
-
-export type GoogleUsage = {
-  promptTokenCount?: number;
-  candidatesTokenCount?: number;
-  totalTokenCount?: number;
-};
-
-export type JsonRecord = Record<string, unknown>;
+// 공급자와 대화 실행기가 동일한 요청·응답 계약을 사용합니다.
+export type {
+  JsonRecord,
+  LLMMessage,
+  LLMRequest as AIRequest,
+  LLMResponse as AIResponse,
+  LLMRole,
+  LLMStreamEvent,
+  LLMToolCall,
+  LLMToolDefinition,
+  LLMUsage,
+  GoogleUsage,
+  OpenAIUsage,
+} from "@/lib/llm/types";

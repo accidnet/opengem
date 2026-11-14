@@ -23,6 +23,17 @@ async function openOffice(page: Page) {
   await expect(label(page)).toBeVisible();
 }
 
+async function firstCharacterPosition(page: Page) {
+  const nameBounds = await label(page).boundingBox();
+  const canvasBounds = await page.locator(".office-viewport canvas").boundingBox();
+  if (!nameBounds || !canvasBounds) throw new Error("3D 캐릭터의 위치를 확인할 수 없습니다.");
+  // 이름표 바로 아래의 머리 부분을 캔버스 좌표로 환산해 실제 메시를 클릭합니다.
+  return {
+    x: nameBounds.x + nameBounds.width / 2 - canvasBounds.x,
+    y: nameBounds.y + nameBounds.height + canvasBounds.height * 0.04 - canvasBounds.y,
+  };
+}
+
 async function walk(page: Page, key = "s") {
   await page.keyboard.down(key);
   // 일정 시간 키를 누르는 실제 이동 동작을 재현합니다.
@@ -86,12 +97,28 @@ test("대화와 상세 동작을 분리하고 처리 중 대화 전환을 막는
   const chatButton = page.getByRole("button", { name: firstName + "와 대화하기", exact: true });
   await page.getByRole("checkbox", { name: "대화 처리 중" }).check();
   await expect(chatButton).toBeDisabled();
+  const canvas = page.locator(".office-viewport canvas");
+  await canvas.dblclick({ position: await firstCharacterPosition(page) });
+  await label(page, "office-agent-2").dblclick();
+  await rosterAgent(page).dblclick();
   await page.getByRole("button", { name: firstName + " 상세 정보", exact: true }).click();
   await expect(page.getByLabel("상세 콜백", { exact: true })).toHaveText(firstName);
   await expect(page.getByLabel("대화 콜백", { exact: true })).toHaveText("없음");
   await page.getByRole("checkbox", { name: "대화 처리 중" }).uncheck();
   await chatButton.click();
   await expect(page.getByLabel("대화 콜백", { exact: true })).toHaveText(firstName);
+});
+
+test("캐릭터와 이름표, 목록에서 더블클릭한 팀원의 대화를 연다", async ({ page }) => {
+  await openOffice(page);
+  const chat = page.getByLabel("대화 콜백", { exact: true });
+  await rosterAgent(page, "Backend").dblclick();
+  await expect(chat).toHaveText("Backend");
+  await label(page, "office-agent-2").dblclick();
+  await expect(chat).toHaveText("Frontend");
+  const canvas = page.locator(".office-viewport canvas");
+  await canvas.dblclick({ position: await firstCharacterPosition(page) });
+  await expect(chat).toHaveText(firstName);
 });
 
 test("목록 순서와 팀 규모가 달라져도 에이전트 ID로 선택과 위치를 구분한다", async ({ page }) => {
@@ -153,16 +180,12 @@ test("실제 3D 캐릭터 클릭과 카메라 드래그 후에도 렌더 루프�
     Object.defineProperty(window, "officePendingFrames", { get: () => pending.size });
   });
   await openOffice(page);
-  const nameBounds = await label(page).boundingBox();
-  const canvasBounds = await page.locator(".office-viewport canvas").boundingBox();
-  expect(nameBounds).not.toBeNull();
+  const canvas = page.locator(".office-viewport canvas");
+  const canvasBounds = await canvas.boundingBox();
   expect(canvasBounds).not.toBeNull();
-  // 이름표 바로 아래의 머리 부분을 클릭해 실제 mesh raycast를 확인합니다.
-  await page.mouse.click(
-    nameBounds!.x + nameBounds!.width / 2,
-    nameBounds!.y + nameBounds!.height + canvasBounds!.height * 0.04
-  );
+  await canvas.click({ position: await firstCharacterPosition(page) });
   await expect(rosterAgent(page)).toHaveAttribute("aria-pressed", "true");
+  await canvas.dblclick({ position: { x: 8, y: 8 } });
   await page.mouse.move(
     canvasBounds!.x + canvasBounds!.width * 0.65,
     canvasBounds!.y + canvasBounds!.height * 0.65
@@ -174,6 +197,7 @@ test("실제 3D 캐릭터 클릭과 카메라 드래그 후에도 렌더 루프�
     { steps: 12 }
   );
   await page.mouse.up();
+  await expect(page.getByLabel("대화 콜백", { exact: true })).toHaveText("없음");
   const pendingFrames = () =>
     page.evaluate(() => Reflect.get(window, "officePendingFrames") as number);
   await expect.poll(pendingFrames).toBeLessThanOrEqual(1);

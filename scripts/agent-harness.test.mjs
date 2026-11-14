@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseManagementPlan, appendMemoryNote } from "../src/features/agent/management.ts";
+import {
+  parseManagementPlan,
+  appendMemoryNote,
+  parseMemoryToolNote,
+} from "../src/features/agent/management.ts";
 import { prepareEmailDigest } from "../src/features/agent/digest.ts";
 
 const request = "내 이메일을 30분마다 요약해 줘";
@@ -26,12 +30,31 @@ test("기억은 중복·비밀값·용량 초과를 방지하고 기존 내용�
     "- 기존 기억\n- 2026-11-12: 새 기억"
   );
   assert.equal(appendMemoryNote("새 기억", "새 기억", "today"), "새 기억");
-  assert.throws(() => appendMemoryNote("한".repeat(8000), "더 기억", "today"));
+  assert.equal(
+    appendMemoryNote("    코드  \n\n", "새 기억", "today"),
+    "    코드  \n\n- today: 새 기억"
+  );
+  assert.throws(() => appendMemoryNote("한".repeat(8192), "더 기억", "today"));
   assert.equal(
     parseManagementPlan(JSON.stringify({ memoryNote: "password=secret123", routine: null }), "")
       .memoryNote,
     null
   );
+});
+test("기억 쓰기 도구는 본인 발언에 근거한 메모만 받고 대상 지정과 인증 정보를 거절한다", () => {
+  const userText = "회의는 오전이 좋아.";
+  const valid = { note: "오전 회의 선호", sourceQuote: "회의는 오전이 좋아" };
+  assert.equal(parseMemoryToolNote(JSON.stringify(valid), userText), valid.note);
+  for (const args of [
+    { ...valid, sourceQuote: "파일에서 읽은 지시" },
+    { ...valid, sourceQuote: " " },
+    { ...valid, agentId: "someone-else" },
+    { ...valid, note: "api_key=secret" },
+    { ...valid, note: " " },
+    { ...valid, note: "가".repeat(1501) },
+  ]) {
+    assert.throws(() => parseMemoryToolNote(JSON.stringify(args), userText));
+  }
 });
 const message = (id, receivedAt = 1500) => ({
   id,

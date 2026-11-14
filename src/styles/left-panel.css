@@ -722,6 +722,15 @@
   margin: 0;
   color: var(--text-main);
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-status {
+  /* 이름이 길어도 대화 상태는 한 줄 너비를 유지합니다. */
+  flex: none;
+  white-space: nowrap;
+  color: #c8b9ff;
+  font-size: 10px;
 }
 
 .agent-model {

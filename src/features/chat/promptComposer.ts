@@ -1,11 +1,13 @@
 import { getPromptForModel } from "@/features/ai/catalog";
 import type { LLMConfig } from "@/types/chat";
 import type { LLMToolDefinition } from "@/features/ai";
+import { withGlobalPrompt } from "./globalInstructions";
 
 import TOOL_USE_POLICY from "@/features/chat/prompts/tool-use-policy.txt?raw";
 
 type ComposeChatSystemPromptInput = {
   model: string;
+  globalPrompt: string;
   providerId?: LLMConfig["providerId"];
   agentPrompt?: string;
   agentContext?: string;
@@ -56,8 +58,9 @@ export function composeChatSystemPrompt(input: ComposeChatSystemPromptInput) {
     buildToolSection(input.tools),
   ];
 
-  return sections
+  const instructions = sections
     .map((section) => section?.trim())
     .filter((section): section is string => Boolean(section))
     .join("\n\n");
+  return withGlobalPrompt(input.globalPrompt, instructions);
 }

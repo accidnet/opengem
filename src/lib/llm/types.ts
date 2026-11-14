@@ -25,6 +25,8 @@ export type LLMMessage = {
   name?: string;
   toolCallId?: string;
   toolCalls?: LLMToolCall[];
+  // 도구를 호출한 Responses 모델의 추론·호출 항목은 해당 실행 안에서만 되돌려 줍니다.
+  responseOutput?: JsonRecord[];
 };
 
 export type LLMUsage = {
@@ -61,6 +63,7 @@ export type LLMResponse = {
   text: string;
   usage?: LLMUsage;
   toolCalls?: LLMToolCall[];
+  responseOutput?: JsonRecord[];
   finishReason?: string;
 };
 

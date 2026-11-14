@@ -1,18 +1,19 @@
 import { request } from "@/features/ai";
+import { withGlobalPrompt } from "@/features/chat/globalInstructions";
 import type { ResolvedLLMSettings } from "@/types/chat";
-import { appendMemoryNote, parseManagementPlan } from "./management";
+import { parseManagementPlan } from "./management";
 import {
   getAgentMemory,
   getAgentRecentContext,
   listAgentRoutines,
   listAgentReports,
-  saveAgentMemory,
   saveEmailRoutine,
   setAgentRoutineEnabled,
   deleteAgentRoutine,
   runAgentRoutineNow,
   getEmailSettings,
   notifyAgentWorkspace,
+  appendAgentMemory,
   type AgentScope,
 } from "./api";
 import { executeGoogleWorkspace } from "./googleExecution";
@@ -44,7 +45,7 @@ export async function loadAgentContext(scope: AgentScope, name: string) {
       recurringTasks: routines,
       latestReports: reports.slice(0, 3).map((r) => ({ ...r, content: r.content.slice(0, 6000) })),
     }),
-    "Long-term memory is Markdown in the agent memory panel. In normal chat, a separate harness manages facts and recurring tasks. Development execution receives read-only context and does not save memory or manage tasks. Only claim changes shown in explicit harness results. The user can edit/delete memory in that panel.",
+    "MEMORY.md is this agent's stored Markdown, editable through its MEMORY.md dialog. In personal chat, append_agent_memory is available on supported turns; otherwise the management step can record notes. Only claim a change after a successful tool or management result. Development and computer execution receive read-only memory.",
     "Google integrations are global: user menu → Google 연동. Drive supports search/read and Calendar supports viewing schedules and proposing event drafts. Calendar events are created only by the user clicking the review dialog registration button; no invitations are sent. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under this agent's 반복 업무/보고서. Proposed schedules are not calendar events. Only interval schedules (5 minutes–7 days) are supported, not exact clock times.",
   ].join("\n\n");
 }
@@ -54,7 +55,9 @@ export async function manageAgentRequest(
   scope: AgentScope,
   userText: string,
   settings: ResolvedLLMSettings,
-  apiBaseUrl: string
+  apiBaseUrl: string,
+  globalPrompt: string,
+  useMemoryTool: boolean
 ) {
   const [memory, routines, googleSettings] = await Promise.all([
     getAgentMemory(scope),
@@ -67,7 +70,7 @@ export async function manageAgentRequest(
     stream: true,
     signal: AbortSignal.timeout(60000),
     messages: [
-      { role: "system", content: MANAGEMENT_SKILL },
+      { role: "system", content: withGlobalPrompt(globalPrompt, MANAGEMENT_SKILL) },
       {
         role: "user",
         content: JSON.stringify({
@@ -132,14 +135,10 @@ export async function manageAgentRequest(
   }
   // 기억 충돌/용량 오류가 이미 저장한 반복 업무의 성공 여부를 가리지 않습니다.
   try {
-    const content = appendMemoryNote(
-      memory.content,
-      plan.memoryNote,
-      new Date().toISOString().slice(0, 10)
-    );
-    if (content !== memory.content) {
-      await saveAgentMemory({ ...scope, content, expectedUpdatedAt: memory.updatedAt });
-      outcomes.push("이 에이전트의 기억에 저장했습니다: " + plan.memoryNote);
+    // 도구가 없는 턴만 관리 단계가 기록해 같은 발언을 두 모델이 중복 저장하지 않습니다.
+    if (plan.memoryNote && (!useMemoryTool || plan.google)) {
+      const added = await appendAgentMemory(scope, plan.memoryNote, memory);
+      if (added) outcomes.push("이 에이전트의 기억에 저장했습니다: " + plan.memoryNote);
     }
   } catch {
     outcomes.push(

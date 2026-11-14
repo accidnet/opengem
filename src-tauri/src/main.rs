@@ -440,6 +440,8 @@ fn main() {
             commands::session::update_chat_session_project_paths,
             commands::session::open_folder_in_explorer,
             commands::settings::get_llm_settings,
+            commands::settings::get_global_prompt,
+            commands::settings::save_global_prompt,
             commands::settings::get_available_providers,
             commands::provider_models::list_provider_models,
             commands::settings::get_providers,

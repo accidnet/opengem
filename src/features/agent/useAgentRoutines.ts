@@ -1,6 +1,8 @@
 import { useEffect, useState, type RefObject, type MutableRefObject } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { request } from "@/features/ai";
+import { getGlobalPrompt } from "@/features/app/globalPrompt";
+import { withGlobalPrompt } from "@/features/chat/globalInstructions";
 import {
   claimDueEmailRoutines,
   completeEmailRoutine,
@@ -50,7 +52,10 @@ export function useAgentRoutines(
                 "이메일 계정이 변경되었습니다. 기존 업무를 삭제하고 새 계정의 업무를 등록해 주세요."
               );
             const settings = await resolveAgentModel(job.agentModel);
-            const memory = await getAgentMemory(scope);
+            const [memory, globalPrompt] = await Promise.all([
+              getAgentMemory(scope),
+              getGlobalPrompt(),
+            ]);
             const scanUntil = Date.now();
             const result = await prepareEmailDigest(job, scanUntil, {
               fetchPage: async (input) => {
@@ -72,7 +77,7 @@ export function useAgentRoutines(
                   stream: true,
                   signal: controller.signal,
                   messages: [
-                    { role: "system", content: EMAIL_DIGEST_SKILL },
+                    { role: "system", content: withGlobalPrompt(globalPrompt, EMAIL_DIGEST_SKILL) },
                     {
                       role: "user",
                       content: JSON.stringify({
