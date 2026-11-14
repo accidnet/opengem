@@ -13,6 +13,7 @@ use crate::repositories::settings_repository::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
 use reqwest::blocking::Client;
+use rusqlite::OptionalExtension;
 use sha2::{Digest, Sha256};
 use std::{
     io::{Read, Write},
@@ -65,6 +66,32 @@ fn resolve_preferred_provider_kind(input: &SaveLlmSettingsInput) -> String {
     } else {
         "api-key".to_string()
     }
+}
+
+#[tauri::command]
+pub fn get_global_prompt(state: State<AppState>) -> Result<Option<String>, String> {
+    state
+        .open_connection()?
+        .query_row(
+            "SELECT global_prompt FROM app_settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_global_prompt(state: State<AppState>, prompt: String) -> Result<(), String> {
+    state
+        .open_connection()?
+        .execute(
+            "INSERT INTO app_settings (id, global_prompt) VALUES (1, ?1)
+             ON CONFLICT(id) DO UPDATE SET global_prompt = excluded.global_prompt",
+            [prompt],
+        )
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

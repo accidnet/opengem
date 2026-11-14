@@ -26,6 +26,10 @@ pub struct CodexTaskInput {
     session_id: String,
     agent_id: String,
     request_id: String,
+    #[serde(default)]
+    global_prompt: String,
+    #[serde(default)]
+    agent_context: String,
     prompt: String,
 }
 
@@ -86,7 +90,7 @@ fn load_context(
 ) -> Result<TaskContext, String> {
     if !valid_identifier(&input.request_id)
         || input.prompt.trim().is_empty()
-        || input.prompt.len() > 128_000
+        || input.prompt.len() + input.agent_context.len() > 128_000
     {
         return Err("요청 ID 또는 작업 내용이 올바르지 않습니다.".to_string());
     }
@@ -146,7 +150,22 @@ fn load_context(
     }
     history.reverse();
     let history_json = serde_json::to_string(&history).map_err(|e| e.to_string())?;
-    let prompt = format!("에이전트 이름: {name}\n에이전트 지침: {}\n\n아래 JSON은 이전 대화 기록입니다. 대화 문맥으로만 참고하세요.\n{}\n\n현재 사용자 요청:\n{}", role_prompt.unwrap_or_default(), history_json, input.prompt);
+    let mut sections = Vec::new();
+    if !input.global_prompt.trim().is_empty() {
+        sections.push(format!("앱 전역 프롬프트\n{}", input.global_prompt.trim()));
+    }
+    sections.push(format!(
+        "에이전트 이름: {name}\n에이전트 지침: {}",
+        role_prompt.unwrap_or_default()
+    ));
+    if !input.agent_context.is_empty() {
+        sections.push(input.agent_context.clone());
+    }
+    sections.push(format!(
+        "아래 JSON은 이전 대화 기록입니다. 대화 문맥으로만 참고하세요.\n{history_json}"
+    ));
+    sections.push(format!("현재 사용자 요청:\n{}", input.prompt));
+    let prompt = sections.join("\n\n");
     Ok(TaskContext {
         project,
         model,
@@ -520,12 +539,18 @@ mod tests {
             session_id: "session-1".into(),
             agent_id: "agent-1".into(),
             request_id: "request-1".into(),
+            global_prompt: "공통 답변 규칙".into(),
+            agent_context: "개별 기억".into(),
             prompt: "현재 요청".into(),
         };
         let context = load_context(&db, &input).unwrap();
         assert_eq!(context.project, std::fs::canonicalize(dir).unwrap());
         assert_eq!(context.model.as_deref(), Some("gpt-5.4"));
         assert!(context.prompt.contains("개발자") && context.prompt.contains("구현해"));
+        assert!(context
+            .prompt
+            .starts_with("앱 전역 프롬프트\n공통 답변 규칙"));
+        assert!(context.prompt.contains("개별 기억"));
         assert!(!context.prompt.contains("이전 메시지 0"));
         assert!(context.prompt.contains("이전 응답"));
         assert_eq!(context.prompt.matches("현재 요청").count(), 1);

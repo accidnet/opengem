@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import { loadAgentContext, manageAgentRequest } from "@/features/agent/context";
+import type { AgentScope } from "@/features/agent/api";
 import { runComputerTask } from "@/features/computer/runtime";
 
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
@@ -17,8 +18,9 @@ import { getChatSession, getProviderCredential } from "@/features/backend/api";
 import { resolveProviderApiUrl } from "@/config/loadModels";
 import { getProviderCatalog, listProviders } from "@/features/ai/catalog";
 import { getErrorMessage } from "@/features/app/appHelpers";
+import { getGlobalPrompt } from "@/features/app/globalPrompt";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
-import { getPermittedToolCalls } from "@/features/chat/toolPolicy";
+import { getPermittedToolCalls, toolsAfterCall } from "@/features/chat/toolPolicy";
 import {
   createChatToolDefinitions,
   executeChatToolCall,
@@ -201,34 +203,25 @@ function shouldContinueAgentLoop(input: {
 
 async function runMainAgentLoop(input: {
   sessionId: string;
+  globalPrompt: string;
   projectPaths: string[];
   mainAgent: AgentItem;
   activeSettings: ResolvedLLMSettings;
   runtimeApiUrl: string;
   baseMessages: LLMMessage[];
   agentContext?: string;
+  memoryTarget: { scope: AgentScope; userText: string } | null;
   allowWorkspaceTools?: boolean;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   persistMessage: (sessionId: string, message: Message) => Promise<void>;
   activeAssistantMessageId: string;
   maxAgentSteps?: number | null;
 }): Promise<AgentLoopResult> {
-  const toolDefinitions =
+  let toolDefinitions =
     input.allowWorkspaceTools !== false && supportsStructuredToolLoop(input.activeSettings)
-      ? createChatToolDefinitions()
+      ? createChatToolDefinitions(Boolean(input.memoryTarget))
       : [];
-  const systemPrompt = composeChatSystemPrompt({
-    model: input.mainAgent.model?.trim() || input.activeSettings.model,
-    providerId: input.activeSettings.providerId,
-    agentPrompt: input.mainAgent.prompt,
-    agentContext: input.agentContext,
-    projectPaths: input.projectPaths,
-    tools: toolDefinitions,
-  });
-  const workingMessages: LLMMessage[] = [
-    { role: "system", content: systemPrompt },
-    ...input.baseMessages,
-  ];
+  const workingMessages: LLMMessage[] = [...input.baseMessages];
 
   let totalTokens = 0;
   let finalText = "";
@@ -256,6 +249,15 @@ async function runMainAgentLoop(input: {
       accumulatedText || (toolDefinitions.length > 0 ? "Thinking with tools..." : "Thinking...")
     );
 
+    const systemPrompt = composeChatSystemPrompt({
+      globalPrompt: input.globalPrompt,
+      model: input.mainAgent.model?.trim() || input.activeSettings.model,
+      providerId: input.activeSettings.providerId,
+      agentPrompt: input.mainAgent.prompt,
+      agentContext: input.agentContext,
+      projectPaths: input.projectPaths,
+      tools: toolDefinitions,
+    });
     const response = await request({
       providerId: input.activeSettings.providerId,
       providerKind: input.activeSettings.providerKind,
@@ -264,7 +266,7 @@ async function runMainAgentLoop(input: {
       accessToken: input.activeSettings.accessToken,
       accountId: input.activeSettings.accountId,
       model: input.activeSettings.model,
-      messages: workingMessages,
+      messages: [{ role: "system", content: systemPrompt }, ...workingMessages],
       tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
       toolChoice: toolDefinitions.length > 0 ? "auto" : undefined,
       stream: true,
@@ -288,7 +290,9 @@ async function runMainAgentLoop(input: {
     workingMessages.push({
       role: "assistant",
       content: responseText,
-      ...(usableToolCalls.length > 0 ? { toolCalls: usableToolCalls } : {}),
+      ...(usableToolCalls.length > 0
+        ? { toolCalls: usableToolCalls, responseOutput: response.responseOutput }
+        : {}),
     });
 
     if (
@@ -321,7 +325,10 @@ async function runMainAgentLoop(input: {
       );
 
       try {
-        const result = await executeChatToolCall(toolCall, input.projectPaths);
+        // 한 응답에 여러 호출이 있으면 직전 도구 실행으로 달라진 허용 범위도 확인합니다.
+        getPermittedToolCalls([toolCall], toolDefinitions);
+        toolDefinitions = toolsAfterCall(toolDefinitions, toolCall.name);
+        const result = await executeChatToolCall(toolCall, input.projectPaths, input.memoryTarget);
         const toolMessage = createToolLogMessage(input.mainAgent.name, result);
         input.setMessages((prev) => [...prev, toolMessage]);
         await input.persistMessage(input.sessionId, toolMessage);
@@ -493,7 +500,11 @@ export function useChatSendMessage({
       activeSessionId = session.id;
       await persistMessage(session.id, userMessage);
 
-      const sessionDetail = await getChatSession(session.id);
+      // 한 요청의 관리·응답 단계는 같은 버전의 전역 지침을 사용합니다.
+      const [sessionDetail, globalPrompt] = await Promise.all([
+        getChatSession(session.id),
+        getGlobalPrompt(),
+      ]);
       if ((sessionDetail.session.agentId ?? null) !== targetAgentId) {
         throw new Error("대화 대상이 일치하지 않습니다. 대화를 다시 열어 주세요.");
       }
@@ -565,11 +576,9 @@ export function useChatSendMessage({
               sessionId: session.id,
               agentId: targetAgentId,
               requestId,
-              prompt: [
-                agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
-                "Current user request:",
-                text,
-              ].join("\n\n"),
+              globalPrompt,
+              agentContext: agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
+              prompt: text,
             },
           });
           const assistantMessage = createAssistantMessage(
@@ -707,6 +716,7 @@ export function useChatSendMessage({
         try {
           const result = await runComputerTask({
             text,
+            globalPrompt,
             agentName: mainAgent.name,
             agentPrompt: mainAgent.prompt,
             agentContext: agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
@@ -737,7 +747,14 @@ export function useChatSendMessage({
       if (agentScope) {
         let managementResult: string;
         try {
-          const result = await manageAgentRequest(agentScope, text, activeSettings, runtimeApiUrl);
+          const result = await manageAgentRequest(
+            agentScope,
+            text,
+            activeSettings,
+            runtimeApiUrl,
+            globalPrompt,
+            supportsStructuredToolLoop(activeSettings)
+          );
           managementResult = result.text;
           managementTokens = result.totalTokens;
           googleContext = result.googleContext;
@@ -760,7 +777,9 @@ export function useChatSendMessage({
       }
 
       const response = await runMainAgentLoop({
+        globalPrompt,
         agentContext,
+        memoryTarget: agentScope ? { scope: agentScope, userText: text } : null,
         allowWorkspaceTools: !hasGoogleRequest,
         sessionId: session.id,
         projectPaths: sessionDetail.session.projectPaths || [],

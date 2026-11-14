@@ -10,6 +10,12 @@ type ToolCallDelta = {
 };
 
 export function extractTextChunk(payload: JsonRecord, protocol: ProviderProtocol): string {
+  // 함수 인자와 추론 델타는 대화 본문에 표시하지 않습니다.
+  if (typeof payload.type === "string" && payload.type.startsWith("response.")) {
+    const visible =
+      payload.type === "response.output_text.delta" || payload.type === "response.refusal.delta";
+    return visible && typeof payload.delta === "string" ? payload.delta : "";
+  }
   if (protocol === "anthropic") {
     const delta = readPath(payload, ["delta", "text"]);
     if (typeof delta === "string") {
@@ -149,6 +155,17 @@ export function extractToolCalls(
     return undefined;
   }
 
+  const output = payload.output;
+  if (Array.isArray(output)) {
+    return output.flatMap((item) =>
+      item?.type === "function_call" &&
+      typeof item.call_id === "string" &&
+      typeof item.name === "string" &&
+      typeof item.arguments === "string"
+        ? [{ id: item.call_id, name: item.name, arguments: item.arguments }]
+        : []
+    );
+  }
   const messageToolCalls = readPath(payload, ["choices", 0, "message", "tool_calls"]);
   if (Array.isArray(messageToolCalls)) {
     return messageToolCalls

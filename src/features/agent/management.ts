@@ -11,6 +11,39 @@ export type ManagementPlan = {
   };
 };
 
+function normalizeMemoryNote(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const note = value.trim();
+  if (note.length > 1500) throw new Error("기억 내용이 너무 깁니다.");
+  if (
+    /(?:sk-[a-zA-Z0-9_-]{10,}|Bearer\s+\S+|-----BEGIN .*PRIVATE KEY|(?:비밀번호|password|api[_ -]?key|access[_ -]?token|refresh[_ -]?token)\s*[:=])/i.test(
+      note
+    )
+  ) {
+    return null;
+  }
+  return note;
+}
+
+// 도구 인자에 대상 에이전트를 받지 않고 현재 사용자 발언에 근거한 메모만 허용합니다.
+export function parseMemoryToolNote(raw: string, userText: string): string {
+  const args: unknown = JSON.parse(raw);
+  if (!args || typeof args !== "object" || Array.isArray(args))
+    throw new Error("기억 도구의 입력 형식이 올바르지 않습니다.");
+  const item = args as Record<string, unknown>;
+  if (
+    Object.keys(item).some((key) => key !== "note" && key !== "sourceQuote") ||
+    typeof item.sourceQuote !== "string" ||
+    !item.sourceQuote.trim() ||
+    !userText.includes(item.sourceQuote)
+  ) {
+    throw new Error("현재 사용자 발언에서 이 기억의 근거를 확인할 수 없습니다.");
+  }
+  const note = normalizeMemoryNote(item.note);
+  if (!note) throw new Error("빈 내용이나 인증 정보는 기억에 저장할 수 없습니다.");
+  return note;
+}
+
 // 모델이 요청하지 않은 도구나 다른 에이전트 ID를 만들어 내도 실행하지 않습니다.
 export function parseManagementPlan(text: string, userText: string): ManagementPlan {
   const cleaned = text
@@ -21,18 +54,7 @@ export function parseManagementPlan(text: string, userText: string): ManagementP
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("기억·반복 업무 응답 형식 오류");
   const record = value as Record<string, unknown>;
-  let memoryNote: string | null = null;
-  if (typeof record.memoryNote === "string" && record.memoryNote.trim()) {
-    memoryNote = record.memoryNote.trim();
-    if (memoryNote.length > 1500) throw new Error("기억 내용이 너무 깁니다.");
-    if (
-      /(?:sk-[a-zA-Z0-9_-]{10,}|Bearer\s+\S+|-----BEGIN .*PRIVATE KEY|(?:비밀번호|password|api[_ -]?key|access[_ -]?token|refresh[_ -]?token)\s*[:=])/i.test(
-        memoryNote
-      )
-    ) {
-      memoryNote = null;
-    }
-  }
+  const memoryNote = normalizeMemoryNote(record.memoryNote);
   let routine: ManagementPlan["routine"] = null;
   if (record.routine != null) {
     if (typeof record.routine !== "object" || Array.isArray(record.routine))
@@ -72,8 +94,9 @@ export function parseManagementPlan(text: string, userText: string): ManagementP
 
 export function appendMemoryNote(current: string, note: string | null, date: string): string {
   if (!note || current.includes(note)) return current;
-  const next = [current.trim(), "- " + date + ": " + note].filter(Boolean).join("\n");
-  if (new TextEncoder().encode(next).length > 24000)
+  const separator = current && !current.endsWith("\n") ? "\n" : "";
+  const next = current + separator + "- " + date + ": " + note;
+  if (new TextEncoder().encode(next).length > 24 * 1024)
     throw new Error("기억 저장 공간이 가득 찼습니다. 에이전트의 기억 편집기에서 정리해 주세요.");
   return next;
 }

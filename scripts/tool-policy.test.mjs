@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getPermittedToolCalls } from "../src/features/chat/toolPolicy.ts";
+import {
+  getPermittedToolCalls,
+  toolsAfterCall,
+  MEMORY_TOOL_NAME,
+} from "../src/features/chat/toolPolicy.ts";
 
 const call = (name) => ({ id: "call-1", name, arguments: "{}" });
 const definition = (name) => ({
@@ -28,4 +32,14 @@ test("이번 턴에 제공한 도구만 허용하고 섞인 미허용 호출은 
 });
 test("이름이 없는 불완전한 스트리밍 도구 호출은 실행하지 않는다", () => {
   assert.deepEqual(getPermittedToolCalls([call(""), call("  ")], []), []);
+});
+test("파일과 셸 도구를 사용한 뒤에는 기억 도구 호출을 거절한다", () => {
+  const memory = call(MEMORY_TOOL_NAME);
+  for (const name of ["workspace_read_file", "shell_command"]) {
+    const tools = [definition(name), definition(MEMORY_TOOL_NAME)];
+    assert.deepEqual(getPermittedToolCalls([memory], toolsAfterCall(tools, memory.name)), [memory]);
+    const afterExternalCall = toolsAfterCall(tools, name);
+    assert.throws(() => getPermittedToolCalls([memory], afterExternalCall), /허용하지 않은/);
+    assert.deepEqual(getPermittedToolCalls([call(name)], afterExternalCall), [call(name)]);
+  }
 });

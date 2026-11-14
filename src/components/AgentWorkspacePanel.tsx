@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
+import { AgentMemoryDialog } from "@/components/AgentMemoryDialog";
 import { MarkdownText } from "@/components/MarkdownText";
 import {
   deleteAgentRoutine,
-  getAgentMemory,
   getEmailSettings,
   listAgentReports,
   listAgentRoutines,
   runAgentRoutineNow,
-  saveAgentMemory,
   saveEmailRoutine,
   setAgentRoutineEnabled,
   type AgentReport,
@@ -37,9 +36,6 @@ function AgentWorkspaceContent({
 }: AgentWorkspacePanelProps & { agent: AgentItem & { agentId: string } }) {
   const agentId = agent.agentId;
   const [tab, setTab] = useState<"memory" | "routines" | "reports">(initialTab);
-  const [memory, setMemory] = useState("");
-  const [savedMemory, setSavedMemory] = useState("");
-  const [memoryUpdatedAt, setMemoryUpdatedAt] = useState<number | null>(null);
   const [routines, setRoutines] = useState<AgentRoutine[]>([]);
   const [reports, setReports] = useState<AgentReport[]>([]);
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -53,10 +49,6 @@ function AgentWorkspaceContent({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const alive = useRef(true);
-  const memoryVersion = useRef(0);
-  const dirty = memory !== savedMemory;
-  const memoryBytes = new TextEncoder().encode(memory).length;
-  const memoryTooLarge = memoryBytes > 24 * 1024;
 
   // 에이전트를 바꾸면 컴포넌트가 다시 만들어져 이전 응답이 새 에이전트에 섞이지 않습니다.
   const reloadOverview = useCallback(async () => {
@@ -71,18 +63,9 @@ function AgentWorkspaceContent({
     setConnected(email.connected);
   }, [modeName, agentId]);
 
-  const reloadMemory = useCallback(async () => {
-    const version = memoryVersion.current;
-    const next = await getAgentMemory({ modeName, agentId });
-    if (!alive.current || version !== memoryVersion.current) return;
-    setMemory(next.content);
-    setSavedMemory(next.content);
-    setMemoryUpdatedAt(next.updatedAt);
-  }, [modeName, agentId]);
-
   useEffect(() => {
     alive.current = true;
-    void Promise.all([reloadMemory(), reloadOverview()])
+    void reloadOverview()
       .catch((cause) => {
         if (alive.current) setError(String(cause));
       })
@@ -96,27 +79,27 @@ function AgentWorkspaceContent({
       alive.current = false;
       window.clearInterval(timer);
     };
-  }, [reloadMemory, reloadOverview]);
+  }, [reloadOverview]);
 
   useEffect(() => {
     const handleUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ modeName: string; agentId: string }>).detail;
       if (detail?.modeName !== modeName || detail.agentId !== agentId) return;
-      void Promise.all([reloadOverview(), ...(!dirty ? [reloadMemory()] : [])]).catch((cause) => {
+      void reloadOverview().catch((cause) => {
         if (alive.current) setError(String(cause));
       });
     };
     window.addEventListener("agent-workspace-updated", handleUpdate);
     return () => window.removeEventListener("agent-workspace-updated", handleUpdate);
-  }, [modeName, agentId, dirty, reloadMemory, reloadOverview]);
+  }, [modeName, agentId, reloadOverview]);
 
-  const perform = async (operation: () => Promise<unknown>, message: string) => {
+  const perform = async (operation: (() => Promise<unknown>) | null, message: string) => {
     if (busy) return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      await operation();
+      await operation?.();
       await reloadOverview();
       if (alive.current) setNotice(message);
     } catch (cause) {
@@ -124,19 +107,6 @@ function AgentWorkspaceContent({
     } finally {
       if (alive.current) setBusy(false);
     }
-  };
-
-  const saveMemory = async () => {
-    const next = await saveAgentMemory({
-      modeName,
-      agentId,
-      content: memory,
-      expectedUpdatedAt: memoryUpdatedAt,
-    });
-    if (!alive.current) return;
-    setSavedMemory(next.content);
-    setMemory(next.content);
-    setMemoryUpdatedAt(next.updatedAt);
   };
 
   const saveRoutine = (event: FormEvent) => {
@@ -166,11 +136,7 @@ function AgentWorkspaceContent({
         <button
           type="button"
           disabled={busy || loading}
-          onClick={() =>
-            void perform(async () => {
-              if (!dirty) await reloadMemory();
-            }, "최신 기록을 불러왔어요.")
-          }
+          onClick={() => void perform(null, "최신 기록을 불러왔어요.")}
           aria-label="기억과 업무 새로고침"
         >
           새로고침
@@ -201,53 +167,13 @@ function AgentWorkspaceContent({
           {notice}
         </p>
       )}
-      {!loading && tab === "memory" && (
-        <div className="agent-workspace-memory">
-          <label>
-            <span>MEMORY.md</span>
-            <textarea
-              value={memory}
-              disabled={busy}
-              rows={10}
-              onChange={(event) => {
-                memoryVersion.current += 1;
-                setMemory(event.target.value);
-              }}
-              placeholder="예: 나는 오전 회의를 선호해. 일정은 한국 시간으로 알려 줘."
-            />
-          </label>
-          <p className="agent-workspace-help">
-            선호하는 방식, 맡긴 일, 기억할 내용을 Markdown으로 저장해요. 직접 수정하거나 지울 수
-            있어요.
-          </p>
-          <small className={memoryTooLarge ? "agent-workspace-error" : undefined}>
-            기억 저장 용량: {(memoryBytes / 1024).toFixed(1)} / 24 KB
-          </small>
-          {memoryUpdatedAt && <small>마지막 수정: {formatTime(memoryUpdatedAt)}</small>}
-          <div className="agent-workspace-actions">
-            {dirty && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  memoryVersion.current += 1;
-                  setMemory(savedMemory);
-                  setError("");
-                }}
-              >
-                수정 취소
-              </button>
-            )}
-            <button
-              type="button"
-              className="is-primary"
-              disabled={busy || !dirty || memoryTooLarge}
-              onClick={() => void perform(saveMemory, "기억을 저장했어요.")}
-            >
-              {busy ? "저장 중…" : "기억 저장"}
-            </button>
-          </div>
-        </div>
+      {tab === "memory" && (
+        <AgentMemoryDialog
+          modeName={modeName}
+          agentId={agentId}
+          agentName={agent.name}
+          onSaved={() => setNotice("기억을 저장했어요.")}
+        />
       )}
       {!loading && tab === "routines" && (
         <div className="agent-workspace-routines">
