@@ -1,17 +1,17 @@
 import * as Dialog from "@radix-ui/react-dialog";
 
-// 비모달 팝업으로 열어 바깥을 클릭하면 바로 오피스 조작을 이어갈 수 있습니다.
+// 비모달 팝업으로 열어 바깥을 클릭하면 바로 라운지 조작을 이어갈 수 있습니다.
 export function OfficeControlsHelp() {
   return (
     <Dialog.Root modal={false}>
       <Dialog.Trigger className="office-help-trigger">조작법</Dialog.Trigger>
       <Dialog.Content className="office-help-popover">
         <div className="office-help-header">
-          <Dialog.Title>오피스 조작법</Dialog.Title>
+          <Dialog.Title>라운지 조작법</Dialog.Title>
           <Dialog.Close aria-label="조작법 닫기">×</Dialog.Close>
         </div>
         <Dialog.Description>
-          오피스나 아래 목록에서 팀원을 클릭하면 선택하고, 더블클릭하면 대화를 열어요.
+          라운지나 아래 목록에서 팀원을 클릭하면 선택하고, 더블클릭하면 대화를 열어요.
         </Dialog.Description>
         <dl>
           <dt>이동</dt>

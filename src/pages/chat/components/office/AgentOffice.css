@@ -33,16 +33,10 @@
   font-size: 28px;
   flex: none;
 }
-.office-eyebrow {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  font-weight: 700;
-  color: var(--text-muted);
-}
 .office-title h2 {
   margin: 0;
+  /* 긴 모드 이름은 팀원 수 옆에서 줄바꿈합니다. */
+  overflow-wrap: anywhere;
   font-size: 18px;
   line-height: 1.4;
   letter-spacing: -0.045em;
@@ -111,6 +105,8 @@
 }
 .office-camera-tools {
   position: absolute;
+  /* 3D 화면을 복구하는 동안에도 조작법을 열 수 있습니다. */
+  z-index: 3;
   right: 18px;
   top: 16px;
   display: flex;
@@ -327,7 +323,7 @@
   gap: 9px;
   padding: 16px 22px 22px;
 }
-.office-control-bar + .office-roster {
+.office-roster + .office-control-bar {
   padding-top: 0;
 }
 .office-agent-card {

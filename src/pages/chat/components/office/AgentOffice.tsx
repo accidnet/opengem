@@ -10,6 +10,7 @@ import "./AgentOffice.css";
 const OfficeViewport = lazy(() => import("./OfficeViewport"));
 
 type AgentOfficeProps = {
+  modeName: string;
   agents: AgentItem[];
   selectedAgentIndex: number | null;
   onSelectAgent: (index: number) => void;
@@ -18,6 +19,7 @@ type AgentOfficeProps = {
 };
 
 export function AgentOffice({
+  modeName,
   agents,
   selectedAgentIndex,
   onSelectAgent,
@@ -42,16 +44,13 @@ export function AgentOffice({
   };
 
   return (
-    <section className="agent-office" aria-label="에이전트 오피스">
+    <section className="agent-office" aria-label="에이전트 라운지">
       <header className="office-header">
         <div className="office-title">
           <span className="office-brand-mark" aria-hidden="true">
             ✳
           </span>
-          <div>
-            <span className="office-eyebrow">OPENGEM WORKSPACE</span>
-            <h2>우리 팀의 작은 오피스</h2>
-          </div>
+          <h2>{modeName}</h2>
         </div>
         <span className="office-live">
           <i /> {agents.length}명의 팀원
@@ -61,7 +60,7 @@ export function AgentOffice({
         <Suspense
           fallback={
             <div className="office-loading" role="status">
-              3D 오피스를 준비하고 있어요…
+              라운지를 준비하고 있어요…
             </div>
           }
         >
@@ -77,7 +76,7 @@ export function AgentOffice({
         <div className="office-scene-badge" aria-hidden="true">
           <i /> TEAM STUDIO <span>01</span>
         </div>
-        <div className="office-camera-tools" role="group" aria-label="오피스 도구">
+        <div className="office-camera-tools" role="group" aria-label="라운지 도구">
           <button
             type="button"
             title="확대"
@@ -108,6 +107,53 @@ export function AgentOffice({
           <OfficeControlsHelp />
         </div>
       </div>
+      {agents.length === 0 && (
+        <div className="office-control-bar" aria-live="polite">
+          <span className="office-pointer">
+            <OfficeIcon name="pointer" />
+          </span>
+          <div className="office-control-copy">
+            <strong>새로운 팀원을 기다리는 중이에요</strong>
+            <span>왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요</span>
+          </div>
+        </div>
+      )}
+      {agents.length > 0 && (
+        <div className="office-roster" aria-label="에이전트 목록">
+          {agents.map((agent, i) => {
+            const id = getOfficeAgentId(agent, i);
+            return (
+              <button
+                type="button"
+                className={"office-agent-card " + (controlledId === id ? "is-selected" : "")}
+                key={id}
+                aria-label={agent.name + " 선택"}
+                aria-pressed={controlledId === id}
+                onClick={() => selectAgent(id)}
+                onDoubleClick={() => startChat(id)}
+              >
+                <span className={"office-card-avatar office-color-" + agent.color}>
+                  <CharacterAvatar agent={agent} className="agent-character-avatar" />
+                </span>
+                <span className="office-card-copy">
+                  <strong>{agent.name}</strong>
+                  <small>
+                    {agent.role === "main"
+                      ? "메인 에이전트"
+                      : agent.role === "sub"
+                        ? "보조 에이전트"
+                        : "팀 에이전트"}
+                  </small>
+                </span>
+                <span
+                  className={"office-status-dot " + (agent.active ? "is-active" : "")}
+                  title={agent.active ? "활성" : "비활성"}
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
       {selected && (
         <div className="office-control-bar" aria-live="polite">
           <CharacterAvatar agent={selected} className="office-selected-avatar" />
@@ -159,53 +205,6 @@ export function AgentOffice({
               ×
             </button>
           </div>
-        </div>
-      )}
-      {agents.length === 0 && (
-        <div className="office-control-bar" aria-live="polite">
-          <span className="office-pointer">
-            <OfficeIcon name="pointer" />
-          </span>
-          <div className="office-control-copy">
-            <strong>새로운 팀원을 기다리는 중이에요</strong>
-            <span>왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요</span>
-          </div>
-        </div>
-      )}
-      {agents.length > 0 && (
-        <div className="office-roster" aria-label="에이전트 목록">
-          {agents.map((agent, i) => {
-            const id = getOfficeAgentId(agent, i);
-            return (
-              <button
-                type="button"
-                className={"office-agent-card " + (controlledId === id ? "is-selected" : "")}
-                key={id}
-                aria-label={agent.name + " 선택"}
-                aria-pressed={controlledId === id}
-                onClick={() => selectAgent(id)}
-                onDoubleClick={() => startChat(id)}
-              >
-                <span className={"office-card-avatar office-color-" + agent.color}>
-                  <CharacterAvatar agent={agent} className="agent-character-avatar" />
-                </span>
-                <span className="office-card-copy">
-                  <strong>{agent.name}</strong>
-                  <small>
-                    {agent.role === "main"
-                      ? "메인 에이전트"
-                      : agent.role === "sub"
-                        ? "보조 에이전트"
-                        : "팀 에이전트"}
-                  </small>
-                </span>
-                <span
-                  className={"office-status-dot " + (agent.active ? "is-active" : "")}
-                  title={agent.active ? "활성" : "비활성"}
-                />
-              </button>
-            );
-          })}
         </div>
       )}
       {isConversationBusy && (
