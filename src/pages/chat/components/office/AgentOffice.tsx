@@ -4,6 +4,7 @@ import type { AgentItem } from "@/types/chat";
 import type { OfficeViewportHandle } from "./OfficeViewport";
 import { getOfficeAgentId } from "./office-identity";
 import { OfficeIcon } from "./OfficeIcon";
+import { OfficeControlsHelp } from "./OfficeControlsHelp";
 import "./AgentOffice.css";
 
 const OfficeViewport = lazy(() => import("./OfficeViewport"));
@@ -76,7 +77,7 @@ export function AgentOffice({
         <div className="office-scene-badge" aria-hidden="true">
           <i /> TEAM STUDIO <span>01</span>
         </div>
-        <div className="office-camera-tools" aria-label="카메라 조작">
+        <div className="office-camera-tools" role="group" aria-label="오피스 도구">
           <button
             type="button"
             title="확대"
@@ -104,105 +105,73 @@ export function AgentOffice({
           >
             <OfficeIcon name="focus" />
           </button>
+          <OfficeControlsHelp />
         </div>
-        {sceneReady && (
-          <div className="office-scene-hint">
-            드래그로 둘러보기 <span>·</span> 휠로 확대
+      </div>
+      {selected && (
+        <div className="office-control-bar" aria-live="polite">
+          <CharacterAvatar agent={selected} className="office-selected-avatar" />
+          <div className="office-control-copy">
+            <strong>{selected.name}</strong>
           </div>
-        )}
-      </div>
-      <div className={"office-control-bar " + (selected ? "has-selection" : "")} aria-live="polite">
-        {selected ? (
-          <>
-            <CharacterAvatar agent={selected} className="office-selected-avatar" />
-            <div className="office-control-copy">
-              <strong>{selected.name}</strong>
-              <span>
-                {sceneReady
-                  ? "선택한 에이전트를 움직여 보세요"
-                  : "대화와 상세 정보를 이용할 수 있어요"}
-              </span>
-            </div>
-            <div className="office-selected-actions">
-              <button
-                type="button"
-                className="office-chat-button"
-                disabled={isConversationBusy}
-                title={isConversationBusy ? "응답이 끝난 뒤 대화를 전환할 수 있어요" : undefined}
-                aria-label={selected.name + "와 대화하기"}
-                onClick={() => onStartChat(index)}
-              >
-                <OfficeIcon name="chat" />
-                대화하기
-              </button>
-              <button
-                type="button"
-                className="office-icon-button"
-                aria-label={selected.name + " 상세 정보"}
-                title="상세 정보"
-                aria-expanded={selectedAgentIndex === index}
-                onClick={() => onSelectAgent(index)}
-              >
-                <OfficeIcon name="info" />
-              </button>
-              <button
-                type="button"
-                className="office-icon-button"
-                aria-label="자리로 돌아가기"
-                title="자리로 돌아가기"
-                disabled={!sceneReady}
-                onClick={() => {
-                  viewport.current?.resetPosition();
-                  viewport.current?.focus();
-                }}
-              >
-                <OfficeIcon name="home" />
-              </button>
-              <button
-                type="button"
-                className="office-icon-button"
-                aria-label="선택 해제"
-                title="선택 해제"
-                onClick={() => selectAgent(null)}
-              >
-                ×
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <span className="office-pointer">
-              <OfficeIcon name="pointer" />
-            </span>
-            <div className="office-control-copy">
-              <strong>
-                {agents.length
-                  ? "팀원을 클릭하고, 자유롭게 걸어보세요"
-                  : "새로운 팀원을 기다리는 중이에요"}
-              </strong>
-              <span>
-                {agents.length
-                  ? "오피스나 아래 목록에서 팀원을 더블클릭하면 대화가 열려요"
-                  : "왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요"}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="office-keyboard-guide" aria-label="오피스 조작 안내">
-        <span>
-          <kbd>W</kbd>
-          <kbd>A</kbd>
-          <kbd>S</kbd>
-          <kbd>D</kbd> / <kbd>↑</kbd>
-          <kbd>←</kbd>
-          <kbd>↓</kbd>
-          <kbd>→</kbd> 이동
-        </span>
-        <span>
-          <kbd>Shift</kbd> 빠르게 <kbd>Esc</kbd> 선택 해제
-        </span>
-      </div>
+          <div className="office-selected-actions">
+            <button
+              type="button"
+              className="office-chat-button"
+              disabled={isConversationBusy}
+              title={isConversationBusy ? "응답이 끝난 뒤 대화를 전환할 수 있어요" : undefined}
+              aria-label={selected.name + "와 대화하기"}
+              onClick={() => onStartChat(index)}
+            >
+              <OfficeIcon name="chat" />
+              대화하기
+            </button>
+            <button
+              type="button"
+              className="office-icon-button"
+              aria-label={selected.name + " 상세 정보"}
+              title="상세 정보"
+              aria-expanded={selectedAgentIndex === index}
+              onClick={() => onSelectAgent(index)}
+            >
+              <OfficeIcon name="info" />
+            </button>
+            <button
+              type="button"
+              className="office-icon-button"
+              aria-label="자리로 돌아가기"
+              title="자리로 돌아가기"
+              disabled={!sceneReady}
+              onClick={() => {
+                viewport.current?.resetPosition();
+                viewport.current?.focus();
+              }}
+            >
+              <OfficeIcon name="home" />
+            </button>
+            <button
+              type="button"
+              className="office-icon-button"
+              aria-label="선택 해제"
+              title="선택 해제"
+              onClick={() => selectAgent(null)}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+      {agents.length === 0 && (
+        <div className="office-control-bar" aria-live="polite">
+          <span className="office-pointer">
+            <OfficeIcon name="pointer" />
+          </span>
+          <div className="office-control-copy">
+            <strong>새로운 팀원을 기다리는 중이에요</strong>
+            <span>왼쪽 에이전트 메뉴에서 팀원을 추가해 주세요</span>
+          </div>
+        </div>
+      )}
       {agents.length > 0 && (
         <div className="office-roster" aria-label="에이전트 목록">
           {agents.map((agent, i) => {

@@ -65,6 +65,32 @@ test("3D 선택과 이동은 대화 전환 없이 실행되고 재진입 뒤에�
   expect(errors).toEqual([]);
 });
 
+test("조작법 버튼으로만 안내를 열고 팀원 선택을 유지하며 닫는다", async ({ page }) => {
+  await openOffice(page);
+  const trigger = page.getByRole("button", { name: "조작법", exact: true });
+  const help = page.getByRole("dialog", { name: "오피스 조작법" });
+  await expect(page.getByText(/더블클릭하면/)).toBeHidden();
+  await expect(page.getByText("Shift", { exact: true })).toBeHidden();
+
+  await rosterAgent(page).click();
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(help.getByText(/더블클릭하면/)).toBeVisible();
+  await expect(help.getByText("Shift", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(rosterAgent(page)).toHaveAttribute("aria-pressed", "true");
+
+  await trigger.click();
+  await help.getByRole("button", { name: "조작법 닫기" }).click();
+  await expect(help).toBeHidden();
+  await trigger.click();
+  await rosterAgent(page, "Backend").click();
+  await expect(help).toBeHidden();
+  await expect(rosterAgent(page, "Backend")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("다른 입력창·포커스 이탈·Escape에서 키보드 이동을 멈춘다", async ({ page }) => {
   await openOffice(page);
   await rosterAgent(page).click();
