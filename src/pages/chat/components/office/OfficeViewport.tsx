@@ -108,7 +108,7 @@ export default function OfficeViewport({
     setFailed(false);
     const canvas = renderer.domElement;
     canvas.tabIndex = 0;
-    canvas.setAttribute("aria-label", "3D 에이전트 오피스");
+    canvas.setAttribute("aria-label", "에이전트 라운지 3D 보기");
     canvas.setAttribute(
       "aria-description",
       "에이전트를 더블클릭하면 대화가 열립니다. 한 번 클릭한 뒤 WASD 또는 방향키로 이동하세요. Escape로 선택을 해제합니다."

@@ -334,6 +334,7 @@ export function ChatPage() {
         />
 
         <ChatPanel
+          modeName={selectedMode}
           conversationLabel={
             currentAgentId ? (conversationAgent?.name ?? "삭제된 에이전트") : "일반 대화"
           }

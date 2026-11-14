@@ -52,6 +52,7 @@ function Fixture() {
     <main className="fixture">
       <AgentOffice
         key={generation}
+        modeName="Orchestration"
         agents={agents}
         selectedAgentIndex={null}
         isConversationBusy={busy}
