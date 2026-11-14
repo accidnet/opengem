@@ -172,11 +172,20 @@ export function ProvidersSettingModal({
                   className={`panel-modal-nav-item ${isActive ? "is-active" : ""}`}
                   type="button"
                   aria-current={isActive ? "true" : undefined}
-                  onClick={() =>
-                    onChange(
-                      applyProviderSelection(settings, provider.key as LLMSettings["providerId"])
-                    )
-                  }
+                  onClick={() => {
+                    if (isActive) return;
+                    const next = applyProviderSelection(
+                      settings,
+                      provider.key as LLMSettings["providerId"]
+                    );
+                    const connected = availableProviders.find(
+                      (item) => item.providerId === next.providerId
+                    );
+                    onChange({
+                      ...next,
+                      baseUrl: connected?.apiUrls[next.providerKind] ?? next.baseUrl,
+                    });
+                  }}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     {PROVIDER_ICONS[provider.key as LLMSettings["providerId"]]}

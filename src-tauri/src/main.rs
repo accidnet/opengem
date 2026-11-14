@@ -441,6 +441,7 @@ fn main() {
             commands::session::open_folder_in_explorer,
             commands::settings::get_llm_settings,
             commands::settings::get_available_providers,
+            commands::provider_models::list_provider_models,
             commands::settings::get_providers,
             commands::settings::get_provider_credential,
             commands::settings::save_llm_settings,

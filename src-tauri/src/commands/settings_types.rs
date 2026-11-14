@@ -66,6 +66,10 @@ pub struct ResolvedLlmSettingsPayload {
     pub api_key: Option<String>,
     pub access_token: Option<String>,
     pub account_id: Option<String>,
+    pub openai_oauth_enabled: bool,
+    pub openai_oauth_priority: i64,
+    pub openai_api_key_enabled: bool,
+    pub openai_api_key_priority: i64,
 }
 
 #[derive(Serialize)]

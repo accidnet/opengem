@@ -8,7 +8,7 @@ use crate::commands::settings_types::{
 };
 use crate::repositories::settings_repository::{
     clear_credential, load_available_providers, load_credential, load_providers, load_settings,
-    save_credential, save_provider_settings, save_selection,
+    save_credential, save_provider_settings, save_refreshed_oauth_credential, save_selection,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
@@ -27,8 +27,6 @@ use tracing::{debug, error, info};
 use url::Url;
 
 const DEFAULT_PROVIDER_ID: &str = "openai";
-const DEFAULT_MODEL: &str = "gpt-4o-mini";
-const CHATGPT_DEFAULT_MODEL: &str = "gpt-5.2";
 const OPENAI_ISSUER: &str = "https://auth.openai.com";
 const OPENAI_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OAUTH_TIMEOUT_SECONDS: u64 = 300;
@@ -71,7 +69,7 @@ fn resolve_preferred_provider_kind(input: &SaveLlmSettingsInput) -> String {
 pub fn get_llm_settings(state: State<AppState>) -> Result<LlmSettingsPayload, String> {
     let connection = state.open_connection()?;
     debug!("loading llm settings");
-    Ok(to_payload(load_settings(&connection)?))
+    load_settings_for_editing(&connection)
 }
 
 #[tauri::command]
@@ -117,29 +115,40 @@ pub fn save_llm_settings(
     state: State<AppState>,
     input: SaveLlmSettingsInput,
 ) -> Result<LlmSettingsPayload, String> {
-    let connection = state.open_connection()?;
+    let mut connection = state.open_connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
+    let settings = save_settings(&transaction, input)?;
+    transaction.commit().map_err(|error| error.to_string())?;
+    Ok(settings)
+}
+
+fn save_settings(
+    connection: &rusqlite::Connection,
+    input: SaveLlmSettingsInput,
+) -> Result<LlmSettingsPayload, String> {
     let provider_id = normalize_provider_id(&input.provider_id);
     let provider_kind = resolve_preferred_provider_kind(&input);
-    let model =
-        normalize_text(&input.model).unwrap_or_else(|| default_model_for(&provider_id).to_string());
-    let api_key = normalize_optional_secret(input.api_key);
+    let model = normalize_text(&input.model).unwrap_or_default();
     let (openai_oauth_priority, openai_api_key_priority) =
         normalize_openai_priorities(input.openai_oauth_priority, input.openai_api_key_priority);
 
-    if provider_id == DEFAULT_PROVIDER_ID || provider_kind == "api-key" {
+    // 생략된 키는 유지하고, 사용자가 직접 비운 문자열만 기존 키를 지웁니다.
+    if let Some(key) = input.api_key {
         save_credential(
-            &connection,
+            connection,
             StoredProviderCredential {
                 provider_id: provider_id.clone(),
                 credential_type: "api-key".to_string(),
-                api_key,
+                api_key: normalize_text(&key),
                 ..StoredProviderCredential::default()
             },
         )?;
     }
 
     save_selection(
-        &connection,
+        connection,
         &provider_id,
         &provider_kind,
         &model,
@@ -154,7 +163,7 @@ pub fn save_llm_settings(
         model = %model,
         "llm settings saved"
     );
-    Ok(to_payload(load_settings(&connection)?))
+    load_settings_for_editing(connection)
 }
 
 #[tauri::command]
@@ -211,6 +220,10 @@ pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSetting
         api_key: settings.api_key,
         access_token: settings.access_token,
         account_id: settings.account_id,
+        openai_oauth_enabled: settings.openai_oauth_enabled,
+        openai_oauth_priority: settings.openai_oauth_priority,
+        openai_api_key_enabled: settings.openai_api_key_enabled,
+        openai_api_key_priority: settings.openai_api_key_priority,
     })
 }
 
@@ -272,7 +285,7 @@ pub fn logout_chatgpt(state: State<AppState>) -> Result<LlmSettingsPayload, Stri
             current.openai_api_key_priority,
         )?;
     }
-    Ok(to_payload(load_settings(&connection)?))
+    load_settings_for_editing(&connection)
 }
 
 fn open_url_with_system_browser(url: &str) -> Result<(), String> {
@@ -334,13 +347,6 @@ fn run_chatgpt_login_flow(
         tokens.id_token.as_deref(),
         Some(tokens.access_token.as_str()),
     );
-    let next_model =
-        if current.provider_id == DEFAULT_PROVIDER_ID && current.provider_kind == "oauth" {
-            current.model
-        } else {
-            CHATGPT_DEFAULT_MODEL.to_string()
-        };
-
     save_credential(
         &connection,
         StoredProviderCredential {
@@ -360,7 +366,7 @@ fn run_chatgpt_login_flow(
             &connection,
             DEFAULT_PROVIDER_ID,
             "oauth",
-            &next_model,
+            &current.model,
             current.openai_oauth_enabled,
             current.openai_oauth_priority,
             current.openai_api_key_enabled,
@@ -447,6 +453,7 @@ fn exchange_code_for_tokens(
 fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, String> {
     Client::new()
         .post(format!("{OPENAI_ISSUER}/oauth/token"))
+        .timeout(Duration::from_secs(8))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .form(&[
             ("grant_type", "refresh_token"),
@@ -471,9 +478,14 @@ fn resolve_settings(connection: &rusqlite::Connection) -> Result<StoredLlmSettin
     load_settings(connection)
 }
 
-fn resolve_oauth_credential(
+pub(super) fn resolve_oauth_credential(
     connection: &rusqlite::Connection,
 ) -> Result<StoredProviderCredential, String> {
+    // 모델 조회와 대화가 동시에 시작되어도 회전되는 갱신 토큰은 한 번만 사용합니다.
+    static REFRESH: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = REFRESH
+        .lock()
+        .map_err(|_| "OAuth 갱신 상태를 확인할 수 없습니다.")?;
     resolve_oauth_credential_with(connection, refresh_access_token)
 }
 
@@ -505,25 +517,35 @@ fn resolve_oauth_credential_with(
             email: claims.and_then(|item| item.email).or(credential.email),
             ..StoredProviderCredential::default()
         };
-        save_credential(connection, credential.clone())?;
+        save_refreshed_oauth_credential(connection, &refresh_token, &credential)?;
     }
     Ok(credential)
 }
 
-fn to_payload(settings: StoredLlmSettings) -> LlmSettingsPayload {
-    LlmSettingsPayload {
+fn load_settings_for_editing(
+    connection: &rusqlite::Connection,
+) -> Result<LlmSettingsPayload, String> {
+    let settings = load_settings(connection)?;
+    // OAuth가 우선인 경우에도 설정 양식은 별도로 저장해 둔 API 키를 편집합니다.
+    let api_key =
+        if settings.provider_id == DEFAULT_PROVIDER_ID && settings.provider_kind == "oauth" {
+            load_credential(connection, DEFAULT_PROVIDER_ID, "api-key")?.api_key
+        } else {
+            settings.api_key
+        };
+    Ok(LlmSettingsPayload {
         provider_id: settings.provider_id,
         provider_kind: settings.provider_kind,
         base_url: settings.base_url,
         model: settings.model,
-        api_key: settings.api_key,
+        api_key,
         logged_in: settings.logged_in,
         email: settings.email,
         openai_oauth_enabled: settings.openai_oauth_enabled,
         openai_oauth_priority: settings.openai_oauth_priority,
         openai_api_key_enabled: settings.openai_api_key_enabled,
         openai_api_key_priority: settings.openai_api_key_priority,
-    }
+    })
 }
 
 fn to_provider_settings_payload(settings: StoredProviderSettings) -> ProviderSettingsPayload {
@@ -560,15 +582,6 @@ fn normalize_provider_kind(provider_id: &str, value: &str) -> String {
     "api-key".to_string()
 }
 
-fn default_model_for(provider_id: &str) -> &'static str {
-    match provider_id {
-        "anthropic" => "claude-3-5-sonnet-latest",
-        "google" => "gemini-2.5-pro",
-        "openrouter" => "openai/gpt-4o-mini",
-        _ => DEFAULT_MODEL,
-    }
-}
-
 fn normalize_text(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -576,10 +589,6 @@ fn normalize_text(value: &str) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
-}
-
-fn normalize_optional_secret(value: Option<String>) -> Option<String> {
-    value.and_then(|item| normalize_text(&item))
 }
 
 fn generate_oauth_codes() -> OAuthCodes {
@@ -676,6 +685,105 @@ fn oauth_error_html(message: &str) -> String {
 mod oauth_credential_tests {
     use super::*;
     use crate::migrations::run_migrations;
+
+    #[test]
+    fn delayed_refresh_cannot_restore_a_logged_out_or_replaced_account() {
+        let mut db = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut db).unwrap();
+        let oauth = |token: &str| StoredProviderCredential {
+            provider_id: "openai".into(),
+            credential_type: "oauth".into(),
+            refresh_token: Some(token.into()),
+            ..StoredProviderCredential::default()
+        };
+        for replacement in [None, Some("new-login")] {
+            save_credential(&db, oauth("old-login")).unwrap();
+            let result = resolve_oauth_credential_with(&db, |_| {
+                match replacement {
+                    Some(token) => save_credential(&db, oauth(token)).unwrap(),
+                    None => clear_credential(&db, "openai", "oauth").unwrap(),
+                }
+                Ok(TokenResponse {
+                    access_token: "stale-access".into(),
+                    refresh_token: "stale-refresh".into(),
+                    expires_in: Some(3600),
+                    id_token: None,
+                })
+            });
+            assert!(result.is_err());
+            let stored = load_credential(&db, "openai", "oauth").unwrap();
+            assert_eq!(stored.refresh_token.as_deref(), replacement);
+            assert!(stored.access_token.is_none());
+        }
+    }
+
+    #[test]
+    fn disabled_credentials_stay_connected_and_are_excluded_from_model_queries() {
+        let mut db = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut db).unwrap();
+        save_credential(
+            &db,
+            StoredProviderCredential {
+                provider_id: "openai".into(),
+                credential_type: "oauth".into(),
+                refresh_token: Some("test-refresh".into()),
+                ..StoredProviderCredential::default()
+            },
+        )
+        .unwrap();
+        save_selection(&db, "openai", "oauth", "test", false, 2, true, 1).unwrap();
+        let connections = load_available_providers(&db).unwrap();
+        assert_eq!(connections.len(), 1);
+        assert!(connections[0].logged_in);
+        assert!(connections[0].credential_types.is_empty());
+    }
+
+    #[test]
+    fn editing_oauth_settings_preserves_the_separate_key_until_explicitly_cleared() {
+        let mut db = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut db).unwrap();
+        assert_eq!(load_settings(&db).unwrap().model, "gpt-5.4-mini");
+        save_credential(
+            &db,
+            StoredProviderCredential {
+                provider_id: "openai".into(),
+                credential_type: "oauth".into(),
+                access_token: Some("test-oauth".into()),
+                refresh_token: Some("test-refresh".into()),
+                expires_at: Some(i64::MAX),
+                ..StoredProviderCredential::default()
+            },
+        )
+        .unwrap();
+        let input = |key: Option<&str>| SaveLlmSettingsInput {
+            provider_id: "openai".into(),
+            provider_kind: "oauth".into(),
+            model: String::new(),
+            api_key: key.map(str::to_owned),
+            openai_oauth_enabled: true,
+            openai_oauth_priority: 1,
+            openai_api_key_enabled: true,
+            openai_api_key_priority: 2,
+        };
+        save_settings(&db, input(Some("test-api-key"))).unwrap();
+        let editing = save_settings(&db, input(None)).unwrap();
+        assert_eq!(editing.api_key.as_deref(), Some("test-api-key"));
+        assert_eq!(editing.model, "gpt-6.1-sol");
+        let runtime = resolve_settings(&db).unwrap();
+        assert_eq!(runtime.access_token.as_deref(), Some("test-oauth"));
+        assert!(runtime.api_key.is_none());
+        assert!(save_settings(&db, input(Some("")))
+            .unwrap()
+            .api_key
+            .is_none());
+        assert!(load_credential(&db, "openai", "api-key")
+            .unwrap()
+            .api_key
+            .is_none());
+        let mut legacy = input(None);
+        legacy.model = "gpt-4o-mini".into();
+        assert_eq!(save_settings(&db, legacy).unwrap().model, "gpt-4o-mini");
+    }
 
     #[test]
     fn refreshes_openai_credentials_without_changing_selected_provider() {

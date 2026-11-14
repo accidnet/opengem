@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import { getModelCatalog } from "@/config/loadModels";
 import { useAvailableModels } from "@/hooks/useAI";
 
 type ModelSelectProps = {
@@ -34,19 +33,22 @@ export function ModelSelect({
   disabled = false,
   onInteract,
 }: ModelSelectProps) {
-  const { data, isLoading, isError } = useAvailableModels();
+  const { data, isFetching, isError, refetch } = useAvailableModels();
   const [isOpen, setIsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [isFiltering, setIsFiltering] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listboxId = useId();
-  const providerCatalog = useMemo(() => getModelCatalog(), []);
 
   const options = useMemo<ModelOption[]>(() => {
     const optionMap = new Map<string, ModelOption>();
 
     data?.forEach((provider) => {
+      const providerName = provider.providerName?.trim() || provider.providerId;
       const providerLabel =
-        providerCatalog[provider.providerId]?.name?.trim() || provider.providerId;
+        provider.providerId === "openai"
+          ? `${providerName} (${provider.credentialType === "oauth" ? "ChatGPT 로그인" : "API 키"})`
+          : providerName;
 
       provider.models.forEach((model) => {
         const modelValue = model.id?.trim();
@@ -76,22 +78,39 @@ export function ModelSelect({
     return Array.from(optionMap.values()).sort((left, right) =>
       left.label.localeCompare(right.label)
     );
-  }, [data, providerCatalog]);
+  }, [data]);
 
   const filteredOptions = useMemo(() => {
     const normalizedValue = normalizeText(value);
-    if (!normalizedValue) {
+    if (!isFiltering || !normalizedValue) {
       return options;
     }
 
     return options.filter((option) => option.searchText.includes(normalizedValue));
-  }, [options, value]);
+  }, [isFiltering, options, value]);
 
   const highlightedOption = filteredOptions[highlightedIndex] ?? null;
+  const hasFallbackOptions = data?.some(
+    (provider) => provider.source === "fallback" && provider.models.length > 0
+  );
 
-  useEffect(() => {
-    setHighlightedIndex(0);
-  }, [value, isOpen]);
+  function getListStatus() {
+    if (isFetching)
+      return hasFallbackOptions
+        ? "기본 목록을 표시하고 있습니다. 연결된 공급자의 모델을 확인하는 중입니다."
+        : "모델 목록을 불러오는 중입니다.";
+    if (isError) return "모델 목록을 갱신하지 못했습니다.";
+    if (!data?.length) return "연결된 공급자가 없습니다. Providers에서 연결해 주세요.";
+    if (options.length === 0)
+      return data.some((provider) => provider.source === "fallback")
+        ? "모델 목록을 불러오지 못했습니다. 모델 ID를 직접 입력할 수 있습니다."
+        : "표시할 모델이 없습니다. 모델 ID를 직접 입력할 수 있습니다.";
+    if (filteredOptions.length === 0)
+      return "검색 결과가 없습니다. 모델 ID를 직접 입력할 수 있습니다.";
+    return hasFallbackOptions
+      ? `${filteredOptions.length}개의 모델 · 기본 목록 포함 (계정에 따라 사용 가능 여부가 다릅니다.)`
+      : `${filteredOptions.length}개의 모델`;
+  }
 
   useEffect(() => {
     if (!isOpen) {
@@ -115,9 +134,20 @@ export function ModelSelect({
     setIsOpen(false);
   };
 
+  const openOptions = () => {
+    // 저장된 모델 ID는 유지하고 사용자가 검색어를 입력한 뒤에만 목록을 좁힙니다.
+    setIsFiltering(false);
+    setHighlightedIndex(-1);
+    setIsOpen(true);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (!isOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-      setIsOpen(true);
+    if (!isOpen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        openOptions();
+        setHighlightedIndex(event.key === "ArrowDown" ? 0 : options.length - 1);
+      }
       return;
     }
 
@@ -129,7 +159,9 @@ export function ModelSelect({
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+      setHighlightedIndex((prev) =>
+        prev < 0 ? filteredOptions.length - 1 : Math.max(prev - 1, 0)
+      );
       return;
     }
 
@@ -162,24 +194,30 @@ export function ModelSelect({
           value={value}
           onChange={(event) => {
             onChange(event.target.value);
+            setIsFiltering(true);
+            setHighlightedIndex(0);
             setIsOpen(true);
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => !isOpen && openOptions()}
+          onClick={() => !isOpen && openOptions()}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label={ariaLabel}
           aria-autocomplete="list"
           aria-expanded={isOpen}
-          aria-controls={listboxId}
+          aria-controls={isOpen && filteredOptions.length > 0 ? listboxId : undefined}
+          aria-activedescendant={
+            isOpen && highlightedOption ? `${listboxId}-${highlightedIndex}` : undefined
+          }
           role="combobox"
           disabled={disabled}
         />
         <button
           type="button"
           className="model-select-toggle"
-          aria-label={`${ariaLabel} 목록 열기`}
+          aria-label={`${ariaLabel} 목록 ${isOpen ? "닫기" : "열기"}`}
           aria-expanded={isOpen}
-          onClick={() => setIsOpen((prev) => !prev)}
+          onClick={() => (isOpen ? setIsOpen(false) : openOptions())}
           disabled={disabled}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -191,16 +229,22 @@ export function ModelSelect({
       {isOpen && !disabled && (
         <div className="model-select-popover">
           <div className="model-select-status">
-            {isLoading
-              ? "모델 목록을 불러오는 중입니다."
-              : isError
-                ? "모델 목록을 불러오지 못했습니다."
-                : filteredOptions.length > 0
-                  ? `${filteredOptions.length}개의 모델`
-                  : "검색 결과가 없습니다. 직접 입력해서 사용할 수 있습니다."}
+            <span role="status">{getListStatus()}</span>
+            <button
+              type="button"
+              className="model-select-refresh"
+              aria-label="모델 목록 새로고침"
+              title="모델 목록 새로고침"
+              disabled={isFetching}
+              onClick={() => void refetch()}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                refresh
+              </span>
+            </button>
           </div>
 
-          {!isLoading && !isError && filteredOptions.length > 0 && (
+          {filteredOptions.length > 0 && (
             <div
               id={listboxId}
               className="model-select-options"
@@ -214,8 +258,10 @@ export function ModelSelect({
                 return (
                   <button
                     key={option.value}
+                    id={`${listboxId}-${index}`}
                     type="button"
                     role="option"
+                    title={option.value}
                     aria-selected={isSelected}
                     className={`model-select-option${isSelected ? " is-selected" : ""}${isHighlighted ? " is-highlighted" : ""}`}
                     onMouseEnter={() => setHighlightedIndex(index)}

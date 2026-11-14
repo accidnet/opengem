@@ -1,6 +1,4 @@
 import type { LLMConfig, LLMSettings } from "@/types/chat";
-import { normalizeBaseUrl } from "@/lib/utils";
-import { getModelCatalog } from "@/config/loadModels";
 
 import PROMPT_ANTHROPIC from "@/features/chat/prompts/anthropic.txt?raw";
 import PROMPT_CODEX from "@/features/chat/prompts/codex.txt?raw";
@@ -33,7 +31,6 @@ export type ProviderCatalogEntry = {
   baseUrl: string;
   modelDefault: string;
   authLabel: string;
-  modelsSource?: "static" | "models.dev";
   models: ModelCatalogEntry[];
 };
 
@@ -41,7 +38,7 @@ const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
 const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const CHATGPT_BASE_URL = "https://chatgpt.com/backend-api/codex";
+export const CHATGPT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 
 function normalizeOpenAIPriority(value?: number | null): 1 | 2 {
   return value === 2 ? 2 : 1;
@@ -94,19 +91,12 @@ const providerEntries: ProviderCatalogEntry[] = [
     providerKinds: ["api-key", "oauth"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENAI_BASE_URL,
-    modelDefault: "gpt-4o-mini",
+    modelDefault: "gpt-5.4-mini",
     authLabel: "Credential",
-    modelsSource: "static",
     models: [
-      { id: "gpt-5.2", label: "GPT-5.2", promptProfile: "gpt" },
-      { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
       { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", promptProfile: "gpt" },
-      { id: "gpt-4.1", label: "GPT-4.1", promptProfile: "gpt" },
-      { id: "gpt-4o", label: "GPT-4o", promptProfile: "gpt" },
-      { id: "gpt-4o-mini", label: "GPT-4o Mini", promptProfile: "gpt" },
-      { id: "codex-mini-latest", label: "Codex Mini", promptProfile: "codex" },
-      { id: "o3", label: "o3", promptProfile: "gpt" },
-      { id: "o4-mini", label: "o4-mini", promptProfile: "gpt" },
+      { id: "gpt-5.4", label: "GPT-5.4", promptProfile: "gpt" },
+      { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", promptProfile: "gpt" },
     ],
   },
   {
@@ -117,13 +107,11 @@ const providerEntries: ProviderCatalogEntry[] = [
     providerKinds: ["api-key"],
     protocol: "anthropic",
     baseUrl: DEFAULT_ANTHROPIC_BASE_URL,
-    modelDefault: "claude-3-5-sonnet-latest",
+    modelDefault: "claude-sonnet-4-6",
     authLabel: "API Key",
-    modelsSource: "static",
     models: [
-      { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet", promptProfile: "anthropic" },
-      { id: "claude-3-5-sonnet-latest", label: "Claude 3.5 Sonnet", promptProfile: "anthropic" },
-      { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku", promptProfile: "anthropic" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", promptProfile: "anthropic" },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", promptProfile: "anthropic" },
     ],
   },
   {
@@ -134,13 +122,11 @@ const providerEntries: ProviderCatalogEntry[] = [
     providerKinds: ["api-key"],
     protocol: "google-gemini",
     baseUrl: DEFAULT_GEMINI_BASE_URL,
-    modelDefault: "gemini-2.5-pro",
+    modelDefault: "gemini-flash-latest",
     authLabel: "API Key",
-    modelsSource: "static",
     models: [
-      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", promptProfile: "gemini" },
-      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", promptProfile: "gemini" },
-      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", promptProfile: "gemini" },
+      { id: "gemini-flash-latest", label: "Gemini Flash Latest", promptProfile: "gemini" },
+      { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite", promptProfile: "gemini" },
     ],
   },
   {
@@ -151,14 +137,11 @@ const providerEntries: ProviderCatalogEntry[] = [
     providerKinds: ["api-key"],
     protocol: "openai-compatible",
     baseUrl: DEFAULT_OPENROUTER_BASE_URL,
-    modelDefault: "openai/gpt-4o-mini",
+    modelDefault: "openai/gpt-5.4-mini",
     authLabel: "API Key",
-    modelsSource: "static",
     models: [
-      { id: "openai/gpt-4o-mini", label: "OpenAI GPT-4o Mini", promptProfile: "gpt" },
-      { id: "openai/gpt-4o", label: "OpenAI GPT-4o", promptProfile: "gpt" },
-      { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet", promptProfile: "anthropic" },
-      { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", promptProfile: "gemini" },
+      { id: "openai/gpt-5.4-mini", label: "OpenAI GPT-5.4 Mini", promptProfile: "gpt" },
+      { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", promptProfile: "anthropic" },
     ],
   },
   {
@@ -171,7 +154,6 @@ const providerEntries: ProviderCatalogEntry[] = [
     baseUrl: DEFAULT_OPENAI_BASE_URL,
     modelDefault: "gpt-4o-mini",
     authLabel: "API Key",
-    modelsSource: "static",
     models: [],
   },
 ];
@@ -180,83 +162,6 @@ const providerCatalog = new Map<ProviderId, ProviderCatalogEntry>(
   providerEntries.map((provider) => [provider.id, provider])
 );
 
-const modelsDevProviderMap: Partial<Record<string, ProviderId>> = {
-  anthropic: "anthropic",
-  google: "google",
-  openai: "openai",
-  openrouter: "openrouter",
-};
-
-function toModelsDevEntries(
-  models: Record<string, { id?: string; name?: string }> | undefined
-): ModelCatalogEntry[] {
-  if (!models) {
-    return [];
-  }
-
-  return Object.entries(models)
-    .map(([id, model]) => {
-      const modelId = model.id?.trim() || id;
-      return {
-        id: modelId,
-        label: model.name?.trim() || modelId,
-        promptProfile: resolvePromptProfile(modelId),
-      };
-    })
-    .sort((left, right) => left.label.localeCompare(right.label));
-}
-
-function applyModelsDevProviderCatalog(
-  providerId: ProviderId,
-  models: ModelCatalogEntry[]
-): ProviderCatalogEntry {
-  const provider = getProviderCatalog(providerId);
-  const next: ProviderCatalogEntry = {
-    ...provider,
-    models: models.length > 0 ? models : provider.models,
-    modelDefault: models.some((entry) => entry.id === provider.modelDefault)
-      ? provider.modelDefault
-      : models[0]?.id || provider.modelDefault,
-    modelsSource: models.length > 0 ? "models.dev" : provider.modelsSource,
-  } satisfies ProviderCatalogEntry;
-
-  providerCatalog.set(providerId, next);
-  return next;
-}
-
-export function syncProviderCatalogWithModelsDev() {
-  const payload = getModelCatalog();
-  let changed = false;
-
-  for (const [externalId, provider] of Object.entries(payload)) {
-    const providerId = modelsDevProviderMap[externalId];
-    if (!providerId) {
-      continue;
-    }
-
-    const nextModels = toModelsDevEntries(provider.models);
-    if (nextModels.length === 0) {
-      continue;
-    }
-
-    const current = getProviderCatalog(providerId);
-    const currentSignature = JSON.stringify(current.models.map((entry) => entry.id));
-    const nextSignature = JSON.stringify(nextModels.map((entry) => entry.id));
-    if (currentSignature === nextSignature) {
-      continue;
-    }
-
-    applyModelsDevProviderCatalog(providerId, nextModels);
-    changed = true;
-  }
-
-  return changed;
-}
-
-export function listProviders(): ProviderCatalogEntry[] {
-  return Array.from(providerCatalog.values());
-}
-
 export function getProviderCatalog(providerId?: string | null): ProviderCatalogEntry {
   if (providerId && providerCatalog.has(providerId as ProviderId)) {
     return providerCatalog.get(providerId as ProviderId)!;
@@ -264,40 +169,19 @@ export function getProviderCatalog(providerId?: string | null): ProviderCatalogE
   return providerCatalog.get("openai")!;
 }
 
-export function listProviderModels(providerId?: string | null): ModelCatalogEntry[] {
-  return getProviderCatalog(providerId).models;
-}
-
-export function replaceProviderModels(
-  providerId: ProviderId,
-  models: ModelCatalogEntry[]
-): ProviderCatalogEntry {
-  const provider = getProviderCatalog(providerId);
-  const next: ProviderCatalogEntry = {
-    ...provider,
-    models: [...models],
-    modelsSource: "static",
-  };
-  providerCatalog.set(providerId, next);
-  return next;
-}
-
-export function upsertProviderModels(
-  providerId: ProviderId,
-  models: ModelCatalogEntry[]
-): ProviderCatalogEntry {
-  const provider = getProviderCatalog(providerId);
-  const merged = new Map(provider.models.map((model) => [model.id, model]));
-  models.forEach((model) => {
-    merged.set(model.id, model);
-  });
-  const next: ProviderCatalogEntry = {
-    ...provider,
-    models: Array.from(merged.values()),
-    modelsSource: "static",
-  };
-  providerCatalog.set(providerId, next);
-  return next;
+// 조회에 실패한 연결에는 해당 인증 방식에서 호출할 수 있는 대표 모델을 제안합니다.
+export function getFallbackModels(providerId: string, credentialType: ProviderKind) {
+  if (providerId === "openai" && credentialType === "oauth") {
+    return [
+      { id: "gpt-6.1-sol", name: "GPT-6.1 Sol" },
+      { id: "gpt-6.1-terra", name: "GPT-6.1 Terra" },
+      { id: "gpt-6-luna", name: "GPT-6 Luna" },
+    ];
+  }
+  return (providerCatalog.get(providerId as ProviderId)?.models ?? []).map(({ id, label }) => ({
+    id,
+    name: label,
+  }));
 }
 
 export function resolvePromptProfile(model?: string, providerId?: string | null): PromptProfile {
@@ -359,17 +243,23 @@ export function normalizeLlmSettings(input: Partial<LLMSettings>): LLMSettings {
   const provider = getProviderCatalog(input.providerId ?? defaults.providerId);
   const providerKind =
     provider.id === "openai" && input.providerKind === "oauth" ? "oauth" : "api-key";
-  const model = normalizeModelSelection(provider.id, input.model ?? defaults.model);
+  const model = normalizeModelSelection(
+    provider.id,
+    input.model ?? (provider.id === defaults.providerId ? defaults.model : undefined)
+  );
   const openaiPreferences = normalizeOpenAIPreferences(input);
 
   return {
     providerId: provider.id,
     providerKind,
     baseUrl:
-      normalizeBaseUrl(providerKind === "oauth" ? CHATGPT_BASE_URL : provider.baseUrl) ??
-      DEFAULT_OPENAI_BASE_URL,
+      provider.id === "custom"
+        ? (input.baseUrl ?? provider.baseUrl)
+        : providerKind === "oauth"
+          ? CHATGPT_BASE_URL
+          : provider.baseUrl,
     model,
-    apiKey: input.apiKey ?? defaults.apiKey,
+    apiKey: input.apiKey,
     loggedIn: Boolean(input.loggedIn),
     email: input.email,
     ...openaiPreferences,
@@ -427,15 +317,5 @@ export function applyModelSelection(
 }
 
 export function normalizeModelSelection(providerId: ProviderId, model?: string | null): string {
-  const provider = getProviderCatalog(providerId);
-  const trimmed = model?.trim();
-  if (!trimmed) {
-    return provider.modelDefault;
-  }
-
-  if (provider.models.length === 0) {
-    return trimmed;
-  }
-
-  return provider.models.some((entry) => entry.id === trimmed) ? trimmed : provider.modelDefault;
+  return model?.trim() || getProviderCatalog(providerId).modelDefault;
 }

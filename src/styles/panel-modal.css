@@ -412,8 +412,34 @@ select.settings-input option {
 }
 
 .model-select-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--text-soft);
   font-size: 12px;
+}
+
+.model-select-refresh {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.model-select-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.model-select-refresh .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .model-select-options {
@@ -425,6 +451,7 @@ select.settings-input option {
 
 .model-select-option {
   display: grid;
+  min-width: 0;
   gap: 2px;
   width: 100%;
   padding: 10px 12px;
@@ -447,6 +474,7 @@ select.settings-input option {
 }
 
 .model-select-option-label {
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 600;
 }

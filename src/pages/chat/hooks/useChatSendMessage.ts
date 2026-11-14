@@ -13,9 +13,9 @@ import { loadAgentContext, manageAgentRequest } from "@/features/agent/context";
 import { runComputerTask } from "@/features/computer/runtime";
 
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
-import { getChatSession, getProviderCredential } from "@/features/backend/api";
-import { resolveProviderApiUrl } from "@/config/loadModels";
-import { getProviderCatalog, listProviders } from "@/features/ai/catalog";
+import { getAvailableProviders, getChatSession } from "@/features/backend/api";
+import { getProviderCatalog } from "@/features/ai/catalog";
+import { resolveAgentModel } from "@/features/agent/model";
 import { getErrorMessage } from "@/features/app/appHelpers";
 import { composeChatSystemPrompt } from "@/features/chat/promptComposer";
 import { getPermittedToolCalls } from "@/features/chat/toolPolicy";
@@ -32,10 +32,8 @@ import {
   buildTypingMessage,
   nowTime,
 } from "@/pages/chat/utils";
-import { useAvailableModels, useAvailableProviders } from "@/hooks/useAI";
 import { finalizeAssistantMessage } from "@/pages/chat/activity";
 import { resolveConversationAgent } from "@/pages/chat/conversationTarget";
-import { selectModelProvider } from "@/pages/chat/providerRouting";
 
 type SendMessageDeps = {
   executionMode: "chat" | "codex" | "computer";
@@ -377,18 +375,6 @@ function createAssistantMessage(base: Message, text: string): Message {
   };
 }
 
-function resolveRuntimeApiUrl(input: {
-  activeSettings: ResolvedLLMSettings;
-  availableProviders: ReturnType<typeof useAvailableProviders>["data"];
-}): string {
-  const matchedProvider = input.availableProviders?.find(
-    (provider) => provider.providerId === input.activeSettings.providerId
-  );
-  const credentialApiUrl = matchedProvider?.apiUrls?.[input.activeSettings.providerKind];
-
-  return credentialApiUrl || input.activeSettings.baseUrl;
-}
-
 export function useChatSendMessage({
   executionMode,
   agents,
@@ -411,10 +397,6 @@ export function useChatSendMessage({
   setResourceToken,
   maxAgentSteps = DEFAULT_MAX_AGENT_STEPS,
 }: SendMessageDeps) {
-  // 사용가능한 provider가 있는 지 확인
-  const { data: availableProviders = [] } = useAvailableProviders();
-  const { data: availableModels = [] } = useAvailableModels();
-  const hasProvider = hasAvailableProvider(availableProviders);
   const activeCodexRequest = useRef<string | null>(null);
   const [isCodexRunning, setIsCodexRunning] = useState(false);
   const [isComputerRunning, setIsComputerRunning] = useState(false);
@@ -604,9 +586,12 @@ export function useChatSendMessage({
         }
         return;
       }
-      const currentSettings = await resolveProviderSettings();
+      const [currentSettings, availableProviders] = await Promise.all([
+        resolveProviderSettings(),
+        getAvailableProviders().catch(() => []),
+      ]);
 
-      if (!hasProvider && currentSettings.providerId !== "custom") {
+      if (!hasAvailableProvider(availableProviders) && currentSettings.providerId !== "custom") {
         await publishGuardMessage({
           sessionId: session.id,
           typingMessage,
@@ -619,77 +604,11 @@ export function useChatSendMessage({
         return;
       }
 
-      const selected = selectModelProvider({
-        model: mainAgent.model,
+      const activeSettings = await resolveAgentModel(mainAgent.model, {
         activeSettings: currentSettings,
         availableProviders,
-        availableModels,
-        catalogModels: listProviders().map((provider) => ({
-          providerId: provider.id,
-          models: provider.models,
-        })),
       });
-      const sameCredential =
-        selected.providerId === currentSettings.providerId &&
-        selected.providerKind === currentSettings.providerKind;
-      let activeSettings: ResolvedLLMSettings;
-      const hasCurrentCredential =
-        selected.providerId === "custom" ||
-        (selected.providerKind === "api-key"
-          ? Boolean(currentSettings.apiKey?.trim())
-          : Boolean(currentSettings.accessToken?.trim()));
-      if (sameCredential && hasCurrentCredential) {
-        activeSettings = { ...currentSettings, model: selected.model };
-      } else {
-        let credential;
-        try {
-          credential = await getProviderCredential({
-            providerId: selected.providerId,
-            credentialType: selected.providerKind,
-          });
-        } catch {
-          throw new Error(
-            "선택한 Provider의 인증 정보를 불러오지 못했습니다. Provider 설정을 확인해 주세요."
-          );
-        }
-        if (
-          credential.providerId !== selected.providerId ||
-          credential.credentialType !== selected.providerKind
-        ) {
-          throw new Error(
-            "선택한 Provider의 인증 정보가 일치하지 않습니다. Provider 설정을 확인해 주세요."
-          );
-        }
-        const provider = availableProviders.find((item) => item.providerId === selected.providerId);
-        const baseUrl =
-          provider?.apiUrls?.[selected.providerKind] ||
-          resolveProviderApiUrl(
-            selected.providerId,
-            selected.providerKind,
-            getProviderCatalog(selected.providerId).baseUrl
-          );
-        activeSettings = {
-          ...selected,
-          baseUrl,
-          ...(credential.credentialType === "api-key"
-            ? { apiKey: credential.apiKey }
-            : { accessToken: credential.accessToken, accountId: credential.accountId }),
-        };
-      }
-      if (
-        activeSettings.providerId !== "custom" &&
-        (activeSettings.providerKind === "api-key"
-          ? !activeSettings.apiKey?.trim()
-          : !activeSettings.accessToken?.trim())
-      ) {
-        throw new Error(
-          "선택한 Provider의 인증 정보가 없습니다. Provider 설정 또는 로그인을 확인해 주세요."
-        );
-      }
-      const runtimeApiUrl =
-        activeSettings.providerId === "custom"
-          ? activeSettings.baseUrl
-          : resolveRuntimeApiUrl({ activeSettings, availableProviders });
+      const runtimeApiUrl = activeSettings.baseUrl;
 
       activeAssistantMessage = {
         ...typingMessage,
