@@ -60,6 +60,7 @@
 .office-stage {
   position: relative;
   isolation: isolate;
+  container-type: inline-size;
   height: clamp(360px, 43vw, 550px);
   background: radial-gradient(ellipse at 55% 40%, #faf7ee 0, #ecebe3 70%, #e0e6df 100%);
   border-block: 1px solid #d7ddd380;
@@ -104,6 +105,8 @@
 }
 .office-camera-tools {
   position: absolute;
+  /* 3D 화면을 복구하는 동안에도 조작법을 열 수 있습니다. */
+  z-index: 3;
   right: 18px;
   top: 16px;
   display: flex;
@@ -114,7 +117,8 @@
   background: #ffffffd9;
   box-shadow: 0 3px 12px #37493e08;
 }
-.office-camera-tools button {
+.office-camera-tools > button,
+.office-help-header button {
   display: grid;
   place-items: center;
   width: 32px;
@@ -126,29 +130,70 @@
   font-size: 20px;
   cursor: pointer;
 }
-.office-camera-tools button:hover {
+.office-camera-tools > button:hover,
+.office-camera-tools > button[data-state="open"] {
   background: #e8eee5;
 }
-.office-camera-tools .material-symbols-outlined {
-  font-size: 19px;
+.office-camera-tools .office-help-trigger {
+  width: auto;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
 }
-.office-scene-hint {
+.office-help-popover {
   position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-  white-space: nowrap;
-  color: #69766d;
-  font-size: 10px;
-  padding: 7px 13px;
-  background: #fafff3b8;
-  border: 1px solid #ffffff88;
-  border-radius: 20px;
+  top: calc(100% + 6px);
+  right: 0;
+  box-sizing: border-box;
+  width: min(260px, calc(100cqi - 36px));
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel, var(--message-bubble-bg));
+  color: var(--text-main);
+  box-shadow: 0 6px 22px #15251d24;
+  font-size: 12px;
 }
-.office-scene-hint span {
-  margin: 0 6px;
-  color: #a3ada3;
+.office-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.office-help-header h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.office-help-header button {
+  width: 26px;
+  height: 26px;
+  color: var(--text-muted);
+}
+.office-help-header button:hover {
+  background: var(--panel-soft);
+  color: var(--text-main);
+}
+.office-help-popover p {
+  margin: 6px 0 12px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.office-help-popover dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+}
+.office-help-popover dd {
+  margin: 0;
+}
+.office-help-popover kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-soft);
+  font: inherit;
 }
 .office-agent-labels {
   position: absolute;
@@ -272,39 +317,14 @@
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
-.office-keyboard-guide {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-  padding: 0 24px 18px;
-  color: var(--text-muted);
-  font-size: 10px;
-}
-.office-keyboard-guide > span {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.office-keyboard-guide kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 19px;
-  height: 20px;
-  padding: 0 3px;
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: var(--panel-soft);
-  font-family: inherit;
-  font-size: 9px;
-}
 .office-roster {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 9px;
-  padding: 0 22px 22px;
+  padding: 16px 22px 22px;
+}
+.office-roster + .office-control-bar {
+  padding-top: 0;
 }
 .office-agent-card {
   display: flex;
@@ -444,13 +464,9 @@
   .office-selected-actions {
     margin-left: 54px;
   }
-  .office-keyboard-guide {
-    padding-inline: 16px;
-    gap: 10px;
-  }
   .office-roster {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 0 14px 16px;
+    padding: 14px 14px 16px;
     gap: 7px;
   }
   .office-agent-card {

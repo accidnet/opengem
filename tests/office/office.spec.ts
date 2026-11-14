@@ -65,6 +65,32 @@ test("3D 선택과 이동은 대화 전환 없이 실행되고 재진입 뒤에�
   expect(errors).toEqual([]);
 });
 
+test("조작법 버튼으로만 안내를 열고 팀원 선택을 유지하며 닫는다", async ({ page }) => {
+  await openOffice(page);
+  const trigger = page.getByRole("button", { name: "조작법", exact: true });
+  const help = page.getByRole("dialog", { name: "라운지 조작법" });
+  await expect(page.getByText(/더블클릭하면/)).toBeHidden();
+  await expect(page.getByText("Shift", { exact: true })).toBeHidden();
+
+  await rosterAgent(page).click();
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(help.getByText(/더블클릭하면/)).toBeVisible();
+  await expect(help.getByText("Shift", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(rosterAgent(page)).toHaveAttribute("aria-pressed", "true");
+
+  await trigger.click();
+  await help.getByRole("button", { name: "조작법 닫기" }).click();
+  await expect(help).toBeHidden();
+  await trigger.click();
+  await rosterAgent(page, "Backend").click();
+  await expect(help).toBeHidden();
+  await expect(rosterAgent(page, "Backend")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("다른 입력창·포커스 이탈·Escape에서 키보드 이동을 멈춘다", async ({ page }) => {
   await openOffice(page);
   await rosterAgent(page).click();
@@ -112,7 +138,8 @@ test("대화와 상세 동작을 분리하고 처리 중 대화 전환을 막는
 test("캐릭터와 이름표, 목록에서 더블클릭한 팀원의 대화를 연다", async ({ page }) => {
   await openOffice(page);
   const chat = page.getByLabel("대화 콜백", { exact: true });
-  await rosterAgent(page, "Backend").dblclick();
+  // 첫 클릭의 선택 UI가 렌더된 뒤에도 같은 좌표에서 두 번째 클릭을 받습니다.
+  await rosterAgent(page, "Backend").dblclick({ delay: 100 });
   await expect(chat).toHaveText("Backend");
   await label(page, "office-agent-2").dblclick();
   await expect(chat).toHaveText("Frontend");
@@ -227,6 +254,10 @@ test("WebGL 컨텍스트가 사라지면 안내 화면을 표시하고 다시 �
     extension.loseContext();
   });
   await expect(page.getByText("3D 화면을 표시할 수 없어요", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "조작법", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "라운지 조작법" });
+  await expect(help).toBeVisible();
+  await help.getByRole("button", { name: "조작법 닫기" }).click();
   await rosterAgent(page).click();
   await page.getByRole("button", { name: firstName + "와 대화하기", exact: true }).click();
   await expect(page.getByLabel("대화 콜백", { exact: true })).toHaveText(firstName);

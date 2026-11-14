@@ -22,6 +22,9 @@ import type {
 } from "./left-panel/types";
 import { parseConfigList } from "./left-panel/utils";
 
+// 실제 도구 상태를 표시할 때 사이드바 목록을 다시 켭니다.
+const SHOW_ENABLED_TOOLS = false;
+
 type QuickEditAgentDraft = {
   name: string;
   model: string;
@@ -857,7 +860,7 @@ export function LeftPanel({
           onQuickEditAgentChange={handleQuickEditAgentChange}
         />
       </fieldset>
-      <ToolsSection tools={tools} />
+      {SHOW_ENABLED_TOOLS && <ToolsSection tools={tools} />}
       <section className="panel-block app-update-block">
         <div className="app-update-copy">
           <h3 className="section-title">앱 업데이트</h3>
