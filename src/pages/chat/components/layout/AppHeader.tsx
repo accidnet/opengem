@@ -40,21 +40,23 @@ export function AppHeader({
 }: AppHeaderProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [versionLabel, setVersionLabel] = useState<string | null>(
+    import.meta.env.DEV ? "개발 버전" : null
+  );
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (import.meta.env.DEV || !isTauri()) return;
 
-    // 설치된 실행 파일의 버전을 표시합니다.
+    // 배포된 데스크톱 앱에서는 실행 파일의 버전을 표시합니다.
     let active = true;
     void getVersion()
       .then((version) => {
-        if (active) setAppVersion(version);
+        if (active) setVersionLabel(`버전 ${version}`);
       })
       .catch(() => {
-        if (active) setAppVersion("확인 불가");
+        if (active) setVersionLabel("버전 확인 불가");
       });
     return () => {
       active = false;
@@ -105,7 +107,7 @@ export function AppHeader({
           </div>
           <div className="brand-copy">
             <p className="brand-title">OpenGem</p>
-            {appVersion && <p className="brand-subtitle">버전 {appVersion}</p>}
+            {versionLabel && <p className="brand-subtitle">{versionLabel}</p>}
           </div>
         </div>
         <div className="separator" />
@@ -180,7 +182,7 @@ export function AppHeader({
 
           {isProfileMenuOpen && (
             <div className="profile-menu" role="menu" aria-label="프로필 메뉴">
-              {appVersion && <div className="profile-menu-version">버전 {appVersion}</div>}
+              {versionLabel && <div className="profile-menu-version">{versionLabel}</div>}
               <button
                 className="profile-menu-item"
                 type="button"
