@@ -13,7 +13,7 @@ import {
 import { parseSSEStream } from "@/features/ai/stream";
 import { normalizeBaseUrl } from "@/lib/utils";
 import { resolveProviderApiUrl } from "@/config/loadModels";
-import { resolveProviderCredential } from "../credentials";
+import { resolveProviderCredential } from "@/features/ai/providers/credentials";
 
 function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
   const headers: Record<string, string> = {
@@ -31,24 +31,48 @@ function buildHeaders(authorization?: string, accountId?: string): HeadersInit {
   return headers;
 }
 
-function buildMessages(input: AIRequest) {
-  validateMessageImages(input.messages);
-  return input.messages.map(buildOpenAIImageMessage);
+function buildMessages(messages: AIRequest["messages"]) {
+  const items: Record<string, unknown>[] = [];
+  for (const message of messages) {
+    if (message.role === "tool") {
+      items.push({
+        type: "function_call_output",
+        call_id: message.toolCallId,
+        output: message.content,
+      });
+    } else if (message.role === "assistant" && message.responseOutput?.length) {
+      items.push(...message.responseOutput);
+    } else {
+      if (message.content || !message.toolCalls?.length)
+        items.push(buildOpenAIImageMessage(message));
+      for (const call of message.toolCalls ?? []) {
+        items.push({
+          type: "function_call",
+          call_id: call.id,
+          name: call.name,
+          arguments: call.arguments,
+        });
+      }
+    }
+  }
+  return items;
 }
 
 function buildRequestBody(input: AIRequest) {
+  validateMessageImages(input.messages);
   const firstMessage = input.messages[0];
   const hasSystemPrompt = firstMessage?.role === "system";
   return {
     model: input.model,
     instructions: hasSystemPrompt ? firstMessage.content : "You are a helpful assistant.",
-    input: buildMessages(input),
+    input: buildMessages(hasSystemPrompt ? input.messages.slice(1) : input.messages),
     stream: input.stream,
     store: false,
     temperature: input.temperature,
     ...(input.tools?.length
       ? {
-          tools: input.tools,
+          tools: input.tools.map(({ type, function: fn }) => ({ type, ...fn, strict: false })),
+          include: ["reasoning.encrypted_content"],
           tool_choice: input.toolChoice ?? "auto",
         }
       : {}),
@@ -94,6 +118,7 @@ export async function sendToOpenAICompatible(input: AIRequest): Promise<AIRespon
     text: extractTextChunk(json, "openai-compatible"),
     usage: extractUsage(json, "openai-compatible"),
     toolCalls,
+    responseOutput: toolCalls?.length && Array.isArray(json.output) ? json.output : undefined,
     finishReason: extractFinishReason(json, "openai-compatible"),
   };
 }

@@ -91,10 +91,46 @@
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
-.agent-workspace-memory small {
-  display: block;
+.agent-memory-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: 620px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text-main);
+}
+.agent-memory-dialog [data-slot="dialog-description"],
+.agent-memory-dialog [role="status"] {
+  color: var(--text-soft);
+}
+.agent-memory-dialog textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text-main);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+.agent-memory-dialog textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.agent-memory-info {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
+}
+.agent-memory-dialog [role="alert"] {
+  color: var(--text-main);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .agent-workspace-actions {
   display: flex;

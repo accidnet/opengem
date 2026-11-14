@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const MIGRATIONS: [(&str, &str); 20] = [
+const MIGRATIONS: [(&str, &str); 21] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     (
         "002_llm_settings",
@@ -77,6 +77,10 @@ const MIGRATIONS: [(&str, &str); 20] = [
     (
         "020_google_integrations",
         include_str!("../sql/migrations/020_google_integrations.sql"),
+    ),
+    (
+        "021_app_settings",
+        include_str!("../sql/migrations/021_app_settings.sql"),
     ),
 ];
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
+import { AppSettingsDialog } from "@/components/AppSettingsDialog";
 
 import "./AppHeader.css";
 
@@ -38,8 +39,10 @@ export function AppHeader({
   onTogglePanel,
 }: AppHeaderProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -162,6 +165,7 @@ export function AppHeader({
         <div className="profile-menu-wrap" ref={profileMenuRef}>
           <button
             className="profile-dot"
+            ref={profileButtonRef}
             type="button"
             aria-haspopup="menu"
             aria-expanded={isProfileMenuOpen}
@@ -177,6 +181,17 @@ export function AppHeader({
           {isProfileMenuOpen && (
             <div className="profile-menu" role="menu" aria-label="프로필 메뉴">
               {appVersion && <div className="profile-menu-version">버전 {appVersion}</div>}
+              <button
+                className="profile-menu-item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  setAppSettingsOpen(true);
+                }}
+              >
+                앱 설정
+              </button>
               <button
                 className="profile-menu-item"
                 type="button"
@@ -203,6 +218,12 @@ export function AppHeader({
           )}
         </div>
       </div>
+      {appSettingsOpen && (
+        <AppSettingsDialog
+          onClose={() => setAppSettingsOpen(false)}
+          onReturnFocus={() => profileButtonRef.current?.focus()}
+        />
+      )}
     </header>
   );
 }

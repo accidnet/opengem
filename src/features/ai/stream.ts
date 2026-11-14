@@ -6,15 +6,15 @@ import type {
   LLMStreamEvent,
   LLMToolCall,
   LLMUsage,
-} from "../../lib/llm/types";
-import { safeJsonParse } from "./json";
+} from "@/lib/llm/types";
+import { safeJsonParse } from "./json.ts";
 import {
   extractFinishReason,
   extractTextChunk,
   extractToolCallDeltas,
   extractToolCalls,
   extractUsage,
-} from "./payload";
+} from "./payload.ts";
 
 export async function parseSSEStream(
   response: Response,
@@ -32,15 +32,12 @@ export async function parseSSEStream(
   let text = "";
   let buffer = "";
   let finishReason: string | undefined;
+  let responseOutput: JsonRecord[] | undefined;
   const toolCallsByIndex = new Map<number, LLMToolCall>();
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
+    buffer += done ? decoder.decode() + "\n\n" : decoder.decode(value, { stream: true });
     const parsed = extractCompleteSSEEvents(buffer);
     buffer = parsed.remainder;
 
@@ -63,12 +60,16 @@ export async function parseSSEStream(
         continue;
       }
 
-      if (!usage) {
-        usage = extractUsage(json, protocol);
+      // 실행이 끝난 응답의 output을 사용해야 분할된 함수 인자를 한 번만 실행합니다.
+      const completed =
+        json.type === "response.completed" ? (json.response as JsonRecord | undefined) : undefined;
+      if (completed && Array.isArray(completed.output)) {
+        responseOutput = completed.output;
       }
+      usage ??= extractUsage(completed ?? json, protocol);
       finishReason = extractFinishReason(json, protocol) ?? finishReason;
 
-      const completeToolCalls = extractToolCalls(json, protocol);
+      const completeToolCalls = extractToolCalls(completed ?? json, protocol);
       if (completeToolCalls?.length) {
         completeToolCalls.forEach((toolCall, index) => {
           toolCallsByIndex.set(index, toolCall);
@@ -102,36 +103,7 @@ export async function parseSSEStream(
         onChunk?.(merged.delta);
       }
     }
-  }
-
-  if (buffer.trim().length > 0) {
-    const fallback = parseSSEEventBlock(buffer);
-    if (fallback) {
-      onEvent?.(fallback);
-      const json = safeJsonParse<JsonRecord>(fallback.data);
-      if (json) {
-        if (!usage) {
-          usage = extractUsage(json, protocol);
-        }
-        finishReason = extractFinishReason(json, protocol) ?? finishReason;
-
-        const completeToolCalls = extractToolCalls(json, protocol);
-        if (completeToolCalls?.length) {
-          completeToolCalls.forEach((toolCall, index) => {
-            toolCallsByIndex.set(index, toolCall);
-          });
-        }
-
-        const chunk = extractTextChunk(json, protocol);
-        if (chunk) {
-          const merged = mergeStreamText(text, chunk);
-          text = merged.text;
-          if (merged.delta) {
-            onChunk?.(merged.delta);
-          }
-        }
-      }
-    }
+    if (done) break;
   }
 
   const toolCalls = Array.from(toolCallsByIndex.entries())
@@ -143,6 +115,7 @@ export async function parseSSEStream(
     text,
     usage,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    responseOutput: toolCalls.length > 0 ? responseOutput : undefined,
     finishReason,
   };
 }

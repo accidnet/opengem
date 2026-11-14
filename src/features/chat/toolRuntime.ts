@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { LLMToolCall, LLMToolDefinition } from "@/features/ai";
+import { appendAgentMemory, notifyAgentWorkspace, type AgentScope } from "@/features/agent/api";
+import { parseMemoryToolNote } from "@/features/agent/management";
+import { MEMORY_TOOL_NAME } from "./toolPolicy";
 
 import SHELL_COMMAND_PROMPT from "@/features/chat/tools/prompts/shell-command.txt?raw";
 import WORKSPACE_LIST_DIRECTORY_PROMPT from "@/features/chat/tools/prompts/workspace-list-directory.txt?raw";
@@ -105,7 +108,7 @@ function formatDirectoryEntries(entries: WorkspaceDirectoryEntry[]) {
   return entries.map((entry) => `[${entry.kind}] ${entry.name}\n${entry.path}`).join("\n\n");
 }
 
-export function createChatToolDefinitions(): LLMToolDefinition[] {
+export function createChatToolDefinitions(includeAgentMemory: boolean): LLMToolDefinition[] {
   const definitions: LLMToolDefinition[] = [
     {
       type: "function",
@@ -227,14 +230,51 @@ export function createChatToolDefinitions(): LLMToolDefinition[] {
     }
   );
 
+  if (includeAgentMemory) {
+    definitions.push({
+      type: "function",
+      function: {
+        name: MEMORY_TOOL_NAME,
+        description:
+          "Append one note to this agent's MEMORY.md in the app. Use only the latest user's own statements as evidence. Use before reading workspace or shell output. A successful result confirms storage.",
+        parameters: createObjectSchema(
+          {
+            note: {
+              type: "string",
+              description: "A concise note supported by the quoted statement.",
+              maxLength: 1500,
+            },
+            sourceQuote: {
+              type: "string",
+              description: "Exact quote from the current user message supporting this note.",
+            },
+          },
+          ["note", "sourceQuote"]
+        ),
+      },
+    });
+  }
   return definitions;
 }
 
 export async function executeChatToolCall(
   toolCall: LLMToolCall,
-  projectPaths: string[]
+  projectPaths: string[],
+  memoryTarget: { scope: AgentScope; userText: string } | null
 ): Promise<ChatToolExecutionResult> {
   switch (toolCall.name) {
+    case MEMORY_TOOL_NAME: {
+      if (!memoryTarget) throw new Error("이 대화 단계에서는 에이전트 기억을 기록할 수 없습니다.");
+      const note = parseMemoryToolNote(toolCall.arguments, memoryTarget.userText);
+      const saved = await appendAgentMemory(memoryTarget.scope, note);
+      if (saved) notifyAgentWorkspace(memoryTarget.scope);
+      return {
+        toolName: toolCall.name,
+        title: "MEMORY.md",
+        content: saved ? "MEMORY.md에 기억을 추가했습니다." : "이미 MEMORY.md에 있는 기억입니다.",
+        logs: [],
+      };
+    }
     case "shell_command": {
       const args = parseArguments<ShellCommandArgs>(toolCall.arguments);
       const result = await invoke<CommandLineResult>("run_command_line", {

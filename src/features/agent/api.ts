@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { appendMemoryNote } from "./management";
 
 export type AgentScope = { modeName: string; agentId: string };
 export type AgentMemory = { content: string; updatedAt: number | null };
@@ -61,6 +62,15 @@ export const getAgentRecentContext = (scope: AgentScope) =>
 export const saveAgentMemory = (
   input: AgentScope & { content: string; expectedUpdatedAt: number | null }
 ) => invoke<AgentMemory>("save_agent_memory", { input });
+
+export async function appendAgentMemory(scope: AgentScope, note: string, snapshot?: AgentMemory) {
+  const memory = snapshot ?? (await getAgentMemory(scope));
+  const content = appendMemoryNote(memory.content, note, new Date().toISOString().slice(0, 10));
+  if (content === memory.content) return false;
+  await saveAgentMemory({ ...scope, content, expectedUpdatedAt: memory.updatedAt });
+  return true;
+}
+
 export const listAgentRoutines = (scope: AgentScope) =>
   invoke<AgentRoutine[]>("list_agent_routines", scope);
 export const saveEmailRoutine = (
