@@ -49,6 +49,7 @@ export type ProviderCredentialValue =
   | {
       providerId: string;
       credentialType: "api-key";
+      baseUrl?: string | null;
       apiKey?: string;
     };
 

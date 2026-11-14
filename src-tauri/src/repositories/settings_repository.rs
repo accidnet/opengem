@@ -258,7 +258,8 @@ pub fn load_credential(
               provider_settings.refresh_token,
               provider_settings.expires_at,
               provider_settings.account_id,
-              provider_settings.email
+              provider_settings.email,
+              provider_settings.api_url
             FROM provider_settings
             INNER JOIN providers ON providers.id = provider_settings.provider_id
             WHERE providers.key = ?1 AND provider_settings.credential_type = ?2
@@ -275,6 +276,7 @@ pub fn load_credential(
                     expires_at: row.get(5)?,
                     account_id: row.get(6)?,
                     email: row.get(7)?,
+                    base_url: row.get(8)?,
                 })
             },
         )

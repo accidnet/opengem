@@ -131,6 +131,7 @@ pub fn get_provider_credential(
     Ok(ProviderCredentialPayload {
         provider_id: credential.provider_id,
         credential_type: credential.credential_type,
+        base_url: credential.base_url,
         api_key: credential.api_key,
         access_token: credential.access_token,
         account_id: credential.account_id,

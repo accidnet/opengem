@@ -27,6 +27,22 @@ export async function resolveAgentModel(
       Object.prototype.hasOwnProperty.call(legacyCatalog[providerId]?.models ?? {}, id) ||
       getProviderCatalog(providerId).models.some((entry) => entry.id === id),
   });
+  if (selected.providerId === "custom") {
+    // 설정을 바꾸는 중에도 같은 DB 행에서 읽은 서버 주소와 키를 함께 사용합니다.
+    const credential = await getProviderCredential({
+      providerId: selected.providerId,
+      credentialType: selected.providerKind,
+    });
+    if (credential.providerId !== "custom" || credential.credentialType !== "api-key")
+      throw new Error("Provider 인증 설정을 확인해 주세요.");
+    if (!credential.baseUrl?.trim()) throw new Error("선택한 Provider의 API 주소를 확인해 주세요.");
+    return {
+      ...selected,
+      providerKind: "api-key",
+      baseUrl: credential.baseUrl,
+      apiKey: credential.apiKey,
+    };
+  }
   // 다른 연결로 전환하면 해당 연결에 저장된 주소와 자격 증명을 함께 사용합니다.
   const provider = availableProviders.find((p) => p.providerId === selected.providerId);
   const sameCredential =
@@ -35,20 +51,17 @@ export async function resolveAgentModel(
   const baseUrl =
     provider?.apiUrls[selected.providerKind] ||
     (sameCredential ? activeSettings.baseUrl : undefined) ||
-    (selected.providerId === "custom"
-      ? undefined
-      : resolveProviderApiUrl(
-          selected.providerId,
-          selected.providerKind,
-          getProviderCatalog(selected.providerId).baseUrl
-        ));
+    resolveProviderApiUrl(
+      selected.providerId,
+      selected.providerKind,
+      getProviderCatalog(selected.providerId).baseUrl
+    );
   if (!baseUrl) throw new Error("선택한 Provider의 API 주소를 확인해 주세요.");
   if (
     sameCredential &&
-    (selected.providerId === "custom" ||
-      (selected.providerKind === "api-key"
-        ? activeSettings.apiKey?.trim()
-        : activeSettings.accessToken?.trim()))
+    (selected.providerKind === "api-key"
+      ? activeSettings.apiKey?.trim()
+      : activeSettings.accessToken?.trim())
   ) {
     return { ...activeSettings, model: selected.model, baseUrl };
   }
@@ -63,7 +76,7 @@ export async function resolveAgentModel(
     throw new Error("Provider 인증 설정을 확인해 주세요.");
   if (
     credential.credentialType === "api-key"
-      ? selected.providerId !== "custom" && !credential.apiKey?.trim()
+      ? !credential.apiKey?.trim()
       : !credential.accessToken?.trim()
   )
     throw new Error("Provider 인증 설정을 확인해 주세요.");
