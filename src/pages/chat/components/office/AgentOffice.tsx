@@ -195,7 +195,6 @@ export function AgentOffice({
         <span>
           <kbd>Shift</kbd> 빠르게 <kbd>Esc</kbd> 선택 해제
         </span>
-        <span className="office-save-hint">위치는 이 기기에 자동 저장돼요</span>
       </div>
       {agents.length > 0 && (
         <div className="office-roster" aria-label="에이전트 목록">
