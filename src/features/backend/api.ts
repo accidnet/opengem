@@ -8,6 +8,7 @@ import type { AIModel, AvailableProviderInfo, ProviderInfo } from "@/features/ai
 export type SaveLlmSettingsParams = {
   providerId: LLMSettings["providerId"];
   providerKind: LLMSettings["providerKind"];
+  apiUrl?: string;
   model: string;
   apiKey?: string;
   openaiOauthEnabled: boolean;

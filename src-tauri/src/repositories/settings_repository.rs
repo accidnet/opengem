@@ -294,12 +294,25 @@ pub fn save_provider_settings(
     let provider_settings_id =
         resolve_or_create_provider_setting_id(connection, provider_id, credential_type)?;
 
+    let mut clear_api_key = false;
+    if provider_id == "custom" {
+        let new_url = url::Url::parse(api_url)
+            .ok()
+            .filter(|url| matches!(url.scheme(), "http" | "https") && url.host().is_some())
+            .ok_or("지정 서버의 HTTP 또는 HTTPS 주소를 입력해 주세요.")?;
+        let previous = load_provider_settings(connection, provider_id, credential_type)?;
+        let old_origin = previous
+            .and_then(|settings| url::Url::parse(&settings.api_url).ok())
+            .map(|url| url.origin());
+        clear_api_key = old_origin != Some(new_url.origin());
+    }
     connection
         .execute(
             "UPDATE provider_settings
-             SET name = ?1, api_url = ?2, updated_at = CURRENT_TIMESTAMP
+             SET name = ?1, api_url = ?2, api_key = CASE WHEN ?4 THEN NULL ELSE api_key END,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?3",
-            params![name, api_url, provider_settings_id],
+            params![name, api_url, provider_settings_id, clear_api_key],
         )
         .map_err(|error| error.to_string())?;
 

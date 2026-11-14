@@ -161,7 +161,18 @@ fn save_settings(
     let (openai_oauth_priority, openai_api_key_priority) =
         normalize_openai_priorities(input.openai_oauth_priority, input.openai_api_key_priority);
 
-    // 생략된 키는 유지하고, 사용자가 직접 비운 문자열만 기존 키를 지웁니다.
+    // 주소가 바뀌면 이전 서버 키를 먼저 폐기하고 같은 트랜잭션에서 새 키를 저장합니다.
+    if provider_id == "custom" {
+        if let Some(api_url) = &input.api_url {
+            save_provider_settings(
+                connection,
+                &provider_id,
+                &provider_kind,
+                None,
+                api_url.trim(),
+            )?;
+        }
+    }
     if let Some(key) = input.api_key {
         save_credential(
             connection,
@@ -198,7 +209,8 @@ pub fn save_provider_settings_command(
     state: State<AppState>,
     input: SaveProviderSettingsInput,
 ) -> Result<ProviderSettingsPayload, String> {
-    let connection = state.open_connection()?;
+    let mut db = state.open_connection()?;
+    let connection = db.transaction().map_err(|error| error.to_string())?;
     let provider_id = normalize_provider_id(&input.provider_id);
     let provider_kind = normalize_provider_kind(&provider_id, &input.provider_kind);
     let name = input.name.and_then(|value| normalize_text(&value));
@@ -232,6 +244,7 @@ pub fn save_provider_settings_command(
         "provider settings saved"
     );
 
+    connection.commit().map_err(|error| error.to_string())?;
     Ok(to_provider_settings_payload(settings))
 }
 
@@ -714,6 +727,48 @@ mod oauth_credential_tests {
     use crate::migrations::run_migrations;
 
     #[test]
+    fn custom_server_keys_follow_their_origin_when_settings_are_saved() {
+        let mut db = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut db).unwrap();
+        let mut save = |url: &str, key: Option<&str>| {
+            let transaction = db.transaction().unwrap();
+            let settings = save_settings(
+                &transaction,
+                SaveLlmSettingsInput {
+                    provider_id: "custom".into(),
+                    provider_kind: "api-key".into(),
+                    api_url: Some(url.into()),
+                    model: "local".into(),
+                    api_key: key.map(str::to_owned),
+                    openai_oauth_enabled: true,
+                    openai_oauth_priority: 1,
+                    openai_api_key_enabled: true,
+                    openai_api_key_priority: 2,
+                },
+            )?;
+            transaction.commit().unwrap();
+            Ok::<_, String>(settings.api_key)
+        };
+        let server = "https://a.example/v1";
+        assert_eq!(
+            save(server, Some("key-a")).unwrap().as_deref(),
+            Some("key-a")
+        );
+        assert_eq!(
+            save("https://A.example:443/v2", None).unwrap().as_deref(),
+            Some("key-a")
+        );
+        assert!(save("not-a-url", Some("invalid")).is_err());
+        assert_eq!(save(server, None).unwrap().as_deref(), Some("key-a"));
+        assert!(save("https://b.example/v1", None).unwrap().is_none());
+        assert_eq!(
+            save(server, Some("replacement")).unwrap().as_deref(),
+            Some("replacement")
+        );
+        assert!(save("https://a.example:1443/v1", None).unwrap().is_none());
+    }
+
+    #[test]
     fn delayed_refresh_cannot_restore_a_logged_out_or_replaced_account() {
         let mut db = rusqlite::Connection::open_in_memory().unwrap();
         run_migrations(&mut db).unwrap();
@@ -785,6 +840,7 @@ mod oauth_credential_tests {
         let input = |key: Option<&str>| SaveLlmSettingsInput {
             provider_id: "openai".into(),
             provider_kind: "oauth".into(),
+            api_url: None,
             model: String::new(),
             api_key: key.map(str::to_owned),
             openai_oauth_enabled: true,

@@ -18,6 +18,10 @@ type ProvidersSettingModalProps = {
 
 type OpenAICredentialMode = "oauth" | "api-key";
 
+function customServerOrigin(value: string) {
+  return URL.canParse(value) ? new URL(value).origin : undefined;
+}
+
 const PROVIDER_ICONS: Record<LLMSettings["providerId"], string> = {
   openai: "auto_awesome",
   anthropic: "psychiatry",
@@ -264,7 +268,17 @@ export function ProvidersSettingModal({
                     className="settings-input"
                     type="url"
                     value={settings.baseUrl}
-                    onChange={(event) => onChange({ baseUrl: event.target.value })}
+                    onChange={(event) => {
+                      const baseUrl = event.target.value;
+                      // 새 서버에 쓸 키는 사용자가 그 주소에서 직접 입력합니다.
+                      onChange({
+                        baseUrl,
+                        apiKey:
+                          customServerOrigin(baseUrl) === customServerOrigin(settings.baseUrl)
+                            ? settings.apiKey
+                            : undefined,
+                      });
+                    }}
                     placeholder="https://your-endpoint.example/v1"
                   />
                 </label>

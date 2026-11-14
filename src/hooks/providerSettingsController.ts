@@ -7,7 +7,6 @@ import {
   logoutChatgpt,
   openExternalUrl,
   saveLlmSettings,
-  saveProviderSettings,
 } from "@/features/backend/api";
 import { AIQueryKeys, preloadAvailableModels } from "@/hooks/useAI";
 import { queryClient } from "@/lib/queryClient";
@@ -62,17 +61,10 @@ export function createProviderSettingsController({
   const savePanelModalSettings = async () => {
     setIsSavingProvider(true);
     try {
-      // 지정 서버만 주소를 수정할 수 있습니다. 다른 연결은 저장된 주소를 그대로 사용합니다.
-      if (settings.providerId === "custom") {
-        await saveProviderSettings({
-          providerId: settings.providerId,
-          providerKind: settings.providerKind,
-          apiUrl: settings.baseUrl.trim(),
-        });
-      }
       const next = await saveLlmSettings({
         providerId: settings.providerId,
         providerKind: settings.providerKind,
+        apiUrl: settings.providerId === "custom" ? settings.baseUrl.trim() : undefined,
         model: settings.model,
         apiKey: settings.apiKey,
         openaiOauthEnabled: settings.openaiOauthEnabled,

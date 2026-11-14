@@ -22,6 +22,7 @@ pub struct LlmSettingsPayload {
 pub struct SaveLlmSettingsInput {
     pub provider_id: String,
     pub provider_kind: String,
+    pub api_url: Option<String>,
     pub model: String,
     pub api_key: Option<String>,
     pub openai_oauth_enabled: bool,
