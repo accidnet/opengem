@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { KeyboardEvent, MutableRefObject } from "react";
 
 import { ModelSelect } from "@/components/ModelSelect";
@@ -105,13 +105,6 @@ export function ModeSettingsModal({
 }: ModeSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<"create" | "list">("create");
 
-  const projectPathCounts = useMemo(() => {
-    return draftModes.reduce<Record<string, number>>((acc, mode) => {
-      acc[mode.id] = mode.projectPaths.length;
-      return acc;
-    }, {});
-  }, [draftModes]);
-
   if (!isOpen) {
     return null;
   }
@@ -155,11 +148,6 @@ export function ModeSettingsModal({
               className="panel-modal-sidebar mode-panel-modal-sidebar"
               aria-label="모드 설정 안내"
             >
-              <p className="panel-modal-sidebar-label">MODES</p>
-              <p className="panel-modal-sidebar-help">
-                모드마다 기본 모델과 프로젝트 폴더를 함께 관리할 수 있어요.
-              </p>
-
               <div className="mode-panel-modal-tabs" role="tablist" aria-label="모드 설정 탭">
                 <button
                   type="button"
@@ -185,24 +173,10 @@ export function ModeSettingsModal({
             <main className="panel-modal-main mode-panel-modal-main">
               <div className="panel-modal-main-copy">
                 <h4>{activeTab === "create" ? "모드 추가" : "모드 목록"}</h4>
-                <p>
-                  {activeTab === "create"
-                    ? "새 모드의 기본 모델과 기본 프로젝트 폴더 설정을 미리 준비할 수 있어요."
-                    : "기존 모드별 이름, 아이콘, 기본 모델, 기본 프로젝트 폴더 설정을 한 번에 관리할 수 있어요."}
-                </p>
               </div>
 
               {activeTab === "create" ? (
                 <section className="settings-card mode-create-card">
-                  <div className="settings-card-head settings-card-head-column">
-                    <div>
-                      <h4>새 모드 추가</h4>
-                      <p>
-                        이름, 아이콘, 기본 모델, 기본 프로젝트 폴더 설정을 초안 목록에 추가해요.
-                      </p>
-                    </div>
-                  </div>
-
                   <div className="mode-settings-create">
                     <div className="mode-settings-mode-btn is-selected" aria-hidden="true">
                       <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
@@ -246,16 +220,13 @@ export function ModeSettingsModal({
                       }}
                     />
                     <button className="mode-settings-action" type="button" onClick={onCreateMode}>
-                      추가
+                      목록에 추가
                     </button>
                   </div>
 
                   <div className="mode-project-path-section">
                     <div className="mode-project-path-copy">
-                      <h5>기본 프로젝트 폴더 설정</h5>
-                      <p>
-                        Operation Mode에서 생성되는 session에 기본값으로 설정될 프로젝트 폴더예요.
-                      </p>
+                      <h5>새 세션의 기본 프로젝트 폴더</h5>
                     </div>
 
                     <div className="mode-project-path-input-row">
@@ -283,13 +254,6 @@ export function ModeSettingsModal({
                 </section>
               ) : (
                 <section className="settings-card mode-list-card">
-                  <div className="settings-card-head">
-                    <div>
-                      <h4>모드 목록</h4>
-                      <p>총 {draftModes.length}개 모드</p>
-                    </div>
-                  </div>
-
                   <div className="mode-settings-list" role="list" aria-label="모드 목록">
                     {draftModes.map((mode, index) => {
                       const isProtectedMode = index === 0;
@@ -388,12 +352,7 @@ export function ModeSettingsModal({
 
                           <div className="mode-settings-item-folders">
                             <div className="mode-project-path-copy">
-                              <h5>기본 프로젝트 폴더 설정</h5>
-                              <p>
-                                Operation Mode에서 생성되는 session에 기본값으로 설정될 프로젝트
-                                폴더
-                                {` (${projectPathCounts[mode.id] || 0}개 연결됨)`}
-                              </p>
+                              <h5>새 세션의 기본 프로젝트 폴더</h5>
                             </div>
 
                             <div className="mode-project-path-input-row">
@@ -443,7 +402,7 @@ export function ModeSettingsModal({
                 Cancel
               </button>
               <button className="settings-primary-btn" type="button" onClick={onSave}>
-                Done
+                저장
               </button>
             </div>
           </footer>

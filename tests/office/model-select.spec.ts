@@ -105,6 +105,7 @@ test("빠른 편집에서 저장된 모델 외의 목록을 열고 새로고침�
   await input.click();
   await expect(list.getByRole("option", { name: /Alternate/ })).toBeVisible();
   await expect(list.getByRole("option", { selected: true })).toContainText("GPT-5.4");
+  await expect(dialog.getByRole("status")).toBeEmpty();
 
   // 응답이 도착하기 전에도 기존 모델은 선택할 수 있어야 합니다.
   let captureRefresh!: (route: Route) => void;
@@ -131,6 +132,6 @@ test("빠른 편집에서 저장된 모델 외의 목록을 열고 새로고침�
 
   await page.route("**/__test__/models", (route) => route.abort(), { times: 1 });
   await dialog.getByRole("button", { name: "모델 목록 새로고침" }).click();
-  await expect(dialog.getByRole("status")).toContainText("기본 목록");
-  await expect(list.getByRole("option").first()).toBeEnabled();
+  await expect(list.getByRole("option", { name: /GPT-6.1 Terra/ })).toBeEnabled();
+  await expect(dialog.getByRole("status")).toBeEmpty();
 });

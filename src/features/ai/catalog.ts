@@ -24,7 +24,7 @@ export type ModelCatalogEntry = {
 export type ProviderCatalogEntry = {
   id: ProviderId;
   label: string;
-  description: string;
+  description?: string;
   providerKind: ProviderKind;
   providerKinds: ProviderKind[];
   protocol: ProviderProtocol;
@@ -86,7 +86,6 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "openai",
     label: "OpenAI",
-    description: "OpenAI는 ChatGPT 로그인과 API 키를 입력하여 사용할 수 있습니다.",
     providerKind: "api-key",
     providerKinds: ["api-key", "oauth"],
     protocol: "openai-compatible",
@@ -102,7 +101,6 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "anthropic",
     label: "Anthropic",
-    description: "Claude models using the native Anthropic Messages API.",
     providerKind: "api-key",
     providerKinds: ["api-key"],
     protocol: "anthropic",
@@ -117,7 +115,6 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "google",
     label: "Google Gemini",
-    description: "Gemini models using the Google Generative Language API.",
     providerKind: "api-key",
     providerKinds: ["api-key"],
     protocol: "google-gemini",
@@ -132,7 +129,6 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "openrouter",
     label: "OpenRouter",
-    description: "OpenRouter using the OpenAI-compatible chat completions interface.",
     providerKind: "api-key",
     providerKinds: ["api-key"],
     protocol: "openai-compatible",
@@ -147,7 +143,7 @@ const providerEntries: ProviderCatalogEntry[] = [
   {
     id: "custom",
     label: "Custom OpenAI-Compatible",
-    description: "Any custom base URL that implements the OpenAI chat completions shape.",
+    description: "OpenAI Chat Completions 호환 서버용",
     providerKind: "api-key",
     providerKinds: ["api-key"],
     protocol: "openai-compatible",

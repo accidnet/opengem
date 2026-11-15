@@ -118,20 +118,6 @@
   background: color-mix(in srgb, var(--panel-soft) 86%, var(--bg) 14%);
 }
 
-.panel-modal-sidebar-label {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.panel-modal-sidebar-help {
-  margin: 6px 0 14px;
-  color: var(--text-soft);
-  font-size: 14px;
-}
-
 .panel-modal-nav-item {
   width: 100%;
   margin: 0 0 8px;
@@ -176,8 +162,7 @@
 }
 
 .panel-modal-main-copy p,
-.settings-card-head p,
-.settings-auth-copy span {
+.settings-card-head p {
   margin: 6px 0 0;
   color: var(--text-soft);
   font-size: 13px;
@@ -273,7 +258,6 @@
   font-size: 16px;
 }
 
-.settings-auth-method-head p,
 .settings-auth-priority-help {
   margin: 6px 0 0;
   color: var(--text-soft);

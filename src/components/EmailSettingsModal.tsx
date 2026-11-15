@@ -210,10 +210,7 @@ function GoogleSettingsContent() {
       )}
       {tab === "connections" && (
         <>
-          <p className="email-settings-copy">
-            연결은 모든 에이전트가 함께 사용해요. 필요한 서비스만 선택해서 연결할 수 있고, 각
-            서비스의 계정과 연결 상태를 따로 확인할 수 있어요.
-          </p>
+          <p className="email-settings-copy">연결한 계정은 모든 에이전트가 함께 사용해요.</p>
           <div className="google-service-list">
             {SERVICES.map((service) => {
               const status = settings?.services.find((item) => item.service === service.id);

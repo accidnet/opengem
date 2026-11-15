@@ -83,10 +83,6 @@
   color: var(--text-soft);
 }
 
-[data-theme="light"] .disclaimer {
-  color: var(--text-muted);
-}
-
 [data-theme="light"] .composer-box textarea::placeholder {
   color: var(--text-muted);
 }

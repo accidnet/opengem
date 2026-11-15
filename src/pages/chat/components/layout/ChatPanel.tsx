@@ -260,10 +260,7 @@ export function ChatPanel({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   chat_bubble
                 </span>
-                <div>
-                  <strong>대화를 시작해 보세요</strong>
-                  <p>아래에 메시지를 입력하면 에이전트가 함께할게요.</p>
-                </div>
+                <strong>대화를 시작해 보세요</strong>
               </div>
             </div>
           ) : null}
@@ -306,11 +303,7 @@ export function ChatPanel({
                   <div className="project-path-popover-head">
                     <div>
                       <strong>세션 프로젝트</strong>
-                      <p>
-                        {currentSessionId
-                          ? "이 세션에 연결된 프로젝트 폴더를 관리해요."
-                          : "세션 생성 전이라 기본 프로젝트 폴더만 확인할 수 있어요."}
-                      </p>
+                      {!currentSessionId && <p>세션을 만든 뒤 폴더를 변경할 수 있어요.</p>}
                     </div>
                   </div>
 
@@ -460,7 +453,6 @@ export function ChatPanel({
               </button>
             </div>
           </div>
-          <p className="disclaimer">AI가 생성한 내용은 확인이 필요할 수 있어요.</p>
         </footer>
       )}
     </section>
