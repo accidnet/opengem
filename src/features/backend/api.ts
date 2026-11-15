@@ -94,7 +94,16 @@ export async function getProviderCredential(
 }
 
 export async function beginChatgptLogin(): Promise<StartChatgptLoginPayload> {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    throw new Error(
+      "ChatGPT 연결은 데스크톱 앱에서 진행해 주세요. 개발 환경에서는 pnpm tauri:dev로 실행하세요."
+    );
+  }
   return invoke<StartChatgptLoginPayload>("begin_chatgpt_login");
+}
+
+export function getChatgptLoginStatus(attemptId: string): Promise<"pending" | "succeeded"> {
+  return invoke("get_chatgpt_login_status", { attemptId });
 }
 
 export async function logoutChatgpt(): Promise<LLMSettings> {

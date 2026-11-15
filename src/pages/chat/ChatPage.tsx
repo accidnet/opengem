@@ -55,7 +55,7 @@ export function ChatPage() {
   }, [openPanel]);
 
   const {
-    chatGPTLoginUrl,
+    isChatGPTLoginPending,
     isChatGPTLoginBusy,
     isPanelModalOpen,
     isSavingProvider,
@@ -430,7 +430,7 @@ export function ChatPage() {
         isOpen={isPanelModalOpen}
         isSaving={isSavingProvider}
         isLoginBusy={isChatGPTLoginBusy}
-        loginUrl={chatGPTLoginUrl}
+        isLoginPending={isChatGPTLoginPending}
         errorMessage={panelModalError}
         onClose={() => setIsPanelModalOpen(false)}
         onChange={(patch) => {

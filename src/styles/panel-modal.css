@@ -51,6 +51,16 @@
   border-bottom: 1px solid color-mix(in srgb, var(--primary) 8%, var(--border) 92%);
 }
 
+.settings-auth-row,
+.settings-auth-actions {
+  flex-wrap: wrap;
+}
+
+.settings-auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .panel-modal-header-title-wrap {
   display: inline-flex;
   align-items: center;

@@ -1,6 +1,7 @@
 import type { AgentItem } from "../../types/chat";
 
 export type StartChatgptLoginPayload = {
+  attemptId: string;
   authorizationUrl: string;
 };
 

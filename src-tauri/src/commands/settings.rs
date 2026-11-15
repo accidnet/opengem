@@ -17,11 +17,12 @@ use rusqlite::OptionalExtension;
 use sha2::{Digest, Sha256};
 use std::{
     io::{Read, Write},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Arc, Mutex, OnceLock},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::State;
 use tracing::{debug, error, info};
@@ -268,10 +269,32 @@ pub fn resolve_llm_settings(state: State<AppState>) -> Result<ResolvedLlmSetting
     })
 }
 
+#[derive(Default)]
+pub struct ChatgptLogin(Mutex<Option<LoginAttempt>>);
+
+struct LoginAttempt {
+    request: StartChatgptLoginPayload,
+    result: Arc<OnceLock<Result<(), String>>>,
+}
+
 #[tauri::command]
-pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPayload, String> {
-    let listener = TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}"))
-        .map_err(|error| format!("OAuth 콜백 포트를 열지 못했습니다: {error}"))?;
+pub fn begin_chatgpt_login(
+    state: State<AppState>,
+    login: State<ChatgptLogin>,
+) -> Result<StartChatgptLoginPayload, String> {
+    let mut active = login
+        .0
+        .lock()
+        .map_err(|_| "로그인 상태를 읽지 못했습니다.")?;
+    // 브라우저를 다시 열 때는 현재 리스너와 짝을 이루는 인증 주소를 돌려줍니다.
+    if let Some(attempt) = active.as_ref() {
+        if attempt.result.get().is_none() {
+            return Ok(attempt.request.clone());
+        }
+    }
+    let listener = TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}")).map_err(|error| {
+        format!("ChatGPT 로그인용 로컬 포트 {OAUTH_PORT}를 열지 못했습니다. {error}")
+    })?;
     listener
         .set_nonblocking(true)
         .map_err(|error| error.to_string())?;
@@ -279,25 +302,48 @@ pub fn begin_chatgpt_login(state: State<AppState>) -> Result<StartChatgptLoginPa
     let redirect_uri = format!("http://localhost:{OAUTH_PORT}/auth/callback");
     let oauth = generate_oauth_codes();
     let state_code = generate_state();
-    let auth_url = build_authorize_url(&redirect_uri, &oauth.challenge, &state_code);
+    let request = StartChatgptLoginPayload {
+        attempt_id: state_code.clone(),
+        authorization_url: build_authorize_url(&redirect_uri, &oauth.challenge, &state_code),
+    };
     let db_path = state.db_path.clone();
-    let redirect_uri_for_worker = redirect_uri.clone();
-
-    thread::spawn(move || {
-        if let Err(error) = run_chatgpt_login_flow(
-            listener,
-            &redirect_uri_for_worker,
-            &oauth,
-            &state_code,
-            db_path,
-        ) {
-            error!("chatgpt oauth flow failed: {error}");
-        }
+    let result = Arc::new(OnceLock::new());
+    let worker_result = Arc::clone(&result);
+    thread::Builder::new()
+        .spawn(move || {
+            let outcome =
+                run_chatgpt_login_flow(listener, &redirect_uri, &oauth, &state_code, db_path);
+            if let Err(error) = &outcome {
+                error!("chatgpt oauth flow failed: {error}");
+            }
+            let _ = worker_result.set(outcome);
+        })
+        .map_err(|error| format!("ChatGPT 로그인 대기를 시작하지 못했습니다. {error}"))?;
+    *active = Some(LoginAttempt {
+        request: request.clone(),
+        result,
     });
+    Ok(request)
+}
 
-    Ok(StartChatgptLoginPayload {
-        authorization_url: auth_url,
-    })
+#[tauri::command]
+pub fn get_chatgpt_login_status(
+    login: State<ChatgptLogin>,
+    attempt_id: String,
+) -> Result<&'static str, String> {
+    let active = login
+        .0
+        .lock()
+        .map_err(|_| "로그인 상태를 읽지 못했습니다.")?;
+    let attempt = active
+        .as_ref()
+        .filter(|attempt| attempt.request.attempt_id == attempt_id)
+        .ok_or("이전 로그인 요청입니다. ChatGPT 로그인을 다시 시작해 주세요.")?;
+    match attempt.result.get() {
+        None => Ok("pending"),
+        Some(Ok(())) => Ok("succeeded"),
+        Some(Err(error)) => Err(error.clone()),
+    }
 }
 
 #[tauri::command]
@@ -363,26 +409,67 @@ fn run_chatgpt_login_flow(
     expected_state: &str,
     db_path: PathBuf,
 ) -> Result<(), String> {
-    let deadline = std::time::Instant::now() + Duration::from_secs(OAUTH_TIMEOUT_SECONDS);
-    let tokens = loop {
-        if std::time::Instant::now() > deadline {
-            return Err("ChatGPT 로그인 시간이 초과되었습니다.".to_string());
-        }
+    let deadline = Instant::now() + Duration::from_secs(OAUTH_TIMEOUT_SECONDS);
+    receive_chatgpt_callback(listener, expected_state, deadline, |code| {
+        let tokens = exchange_code_for_tokens(code, redirect_uri, &oauth.verifier)?;
+        AppState { db_path }
+            .open_connection()
+            .and_then(|mut db| store_chatgpt_login(&mut db, tokens))
+            .map_err(|_| "OpenGem에 ChatGPT 로그인 정보를 저장하지 못했습니다.".to_string())
+    })
+}
+
+fn receive_chatgpt_callback(
+    listener: TcpListener,
+    expected_state: &str,
+    deadline: Instant,
+    complete: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    while Instant::now() < deadline {
         match listener.accept() {
             Ok((mut stream, _)) => {
-                match handle_oauth_connection(&mut stream, redirect_uri, oauth, expected_state) {
-                    Ok(tokens) => break tokens,
-                    Err(error) => return Err(error),
+                // Windows에서는 연결된 소켓도 리스너의 논블로킹 모드를 상속합니다.
+                stream.set_nonblocking(false).map_err(|e| e.to_string())?;
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(2)))
+                    .map_err(|e| e.to_string())?;
+                let read_deadline = deadline.min(Instant::now() + Duration::from_secs(3));
+                let Some(target) = read_callback_target(&mut stream, read_deadline) else {
+                    continue;
+                };
+                let Some(code) = chatgpt_callback_code(&target, expected_state) else {
+                    let _ = write_html(
+                        &mut stream,
+                        "404 Not Found",
+                        "현재 진행 중인 OpenGem 로그인 요청이 아닙니다.",
+                    );
+                    continue;
+                };
+                let result = code.and_then(|code| complete(&code));
+                // 브라우저가 먼저 닫혀도 이미 저장된 로그인 결과를 유지합니다.
+                match &result {
+                    Ok(()) => {
+                        let _ = write_html(&mut stream, "200 OK", OAUTH_SUCCESS_HTML);
+                    }
+                    Err(message) => {
+                        let _ =
+                            write_html(&mut stream, "400 Bad Request", &oauth_error_html(message));
+                    }
                 }
+                return result;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(150))
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => thread::sleep(
+                Duration::from_millis(50).min(deadline.saturating_duration_since(Instant::now())),
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.to_string()),
         }
-    };
+    }
+    Err("ChatGPT 로그인 시간이 초과되었습니다.".to_string())
+}
 
-    let connection = rusqlite::Connection::open(db_path).map_err(|error| error.to_string())?;
+fn store_chatgpt_login(db: &mut rusqlite::Connection, tokens: TokenResponse) -> Result<(), String> {
+    let connection = db.transaction().map_err(|error| error.to_string())?;
     let current = load_settings(&connection)?;
     let claims = extract_claims(
         tokens.id_token.as_deref(),
@@ -414,58 +501,59 @@ fn run_chatgpt_login_flow(
             current.openai_api_key_priority,
         )?;
     }
-    Ok(())
+    connection.commit().map_err(|error| error.to_string())
 }
 
-fn handle_oauth_connection(
-    stream: &mut std::net::TcpStream,
-    redirect_uri: &str,
-    oauth: &OAuthCodes,
-    expected_state: &str,
-) -> Result<TokenResponse, String> {
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .map_err(|error| error.to_string())?;
-    let mut buffer = [0u8; 4096];
-    let read = stream
-        .read(&mut buffer)
-        .map_err(|error| error.to_string())?;
-    let request = String::from_utf8_lossy(&buffer[..read]);
-    let target = request
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .ok_or_else(|| "OAuth 콜백 요청을 해석하지 못했습니다.".to_string())?;
-    let url =
-        Url::parse(&format!("http://localhost{target}")).map_err(|error| error.to_string())?;
-
-    if let Some(message) = url
-        .query_pairs()
-        .find(|(key, _)| key == "error")
-        .map(|(_, value)| value.to_string())
-    {
-        write_html(stream, &oauth_error_html(&message))?;
-        return Err(message);
+fn read_callback_target(stream: &mut TcpStream, deadline: Instant) -> Option<String> {
+    let mut request = Vec::new();
+    let mut chunk = [0u8; 2048];
+    // 헤더가 여러 TCP 패킷으로 나뉘거나 선연결 후 아무 요청이 오지 않을 수 있습니다.
+    while request.len() < 16 * 1024 {
+        let timeout = deadline.checked_duration_since(Instant::now())?;
+        stream.set_read_timeout(Some(timeout)).ok()?;
+        let size = stream.read(&mut chunk).ok()?;
+        if size == 0 {
+            return None;
+        }
+        request.extend_from_slice(&chunk[..size]);
+        if request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+            let line = request.split(|byte| *byte == b'\n').next()?;
+            let mut parts = std::str::from_utf8(line).ok()?.split_ascii_whitespace();
+            if parts.next()? == "GET" {
+                return parts.next().map(str::to_owned);
+            }
+            return None;
+        }
     }
+    None
+}
 
-    let state = url
-        .query_pairs()
-        .find(|(key, _)| key == "state")
-        .map(|(_, value)| value.to_string());
-    if state.as_deref() != Some(expected_state) {
-        let message = "OAuth state 검증에 실패했습니다.".to_string();
-        write_html(stream, &oauth_error_html(&message))?;
-        return Err(message);
+fn chatgpt_callback_code(target: &str, expected_state: &str) -> Option<Result<String, String>> {
+    let (path, query) = target.split_once('?')?;
+    if path != "/auth/callback" {
+        return None;
     }
-
-    let code = url
-        .query_pairs()
-        .find(|(key, _)| key == "code")
-        .map(|(_, value)| value.to_string())
-        .ok_or_else(|| "OAuth authorization code가 없습니다.".to_string())?;
-    let tokens = exchange_code_for_tokens(&code, redirect_uri, &oauth.verifier)?;
-    write_html(stream, OAUTH_SUCCESS_HTML)?;
-    Ok(tokens)
+    let params = url::form_urlencoded::parse(query.as_bytes());
+    let (_, state) = params.clone().find(|(key, _)| key == "state")?;
+    if state != expected_state {
+        return None;
+    }
+    if let Some((_, error)) = params.clone().find(|(key, _)| key == "error") {
+        return Some(Err(if error == "access_denied" {
+            "ChatGPT 로그인이 취소되었습니다."
+        } else {
+            "OpenAI에서 로그인 요청을 승인하지 못했습니다."
+        }
+        .to_string()));
+    }
+    Some(
+        params
+            .into_iter()
+            .find(|(key, _)| key == "code")
+            .map(|(_, value)| value.into_owned())
+            .filter(|code| !code.is_empty())
+            .ok_or_else(|| "OpenAI 로그인 응답에 인증 코드가 없습니다.".to_string()),
+    )
 }
 
 fn exchange_code_for_tokens(
@@ -475,6 +563,7 @@ fn exchange_code_for_tokens(
 ) -> Result<TokenResponse, String> {
     Client::new()
         .post(format!("{OPENAI_ISSUER}/oauth/token"))
+        .timeout(Duration::from_secs(30))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .form(&[
             ("grant_type", "authorization_code"),
@@ -484,11 +573,22 @@ fn exchange_code_for_tokens(
             ("code_verifier", verifier),
         ])
         .send()
-        .map_err(|error| error.to_string())?
+        .map_err(|_| {
+            "OpenAI 서버에 연결하지 못했습니다. 네트워크를 확인하고 다시 로그인해 주세요."
+                .to_string()
+        })?
         .error_for_status()
-        .map_err(|error| error.to_string())?
+        .map_err(|error| {
+            format!(
+                "OpenAI가 인증 코드를 승인하지 않았습니다 (HTTP {}). 다시 로그인해 주세요.",
+                error
+                    .status()
+                    .map(|status| status.as_u16())
+                    .unwrap_or_default()
+            )
+        })?
         .json::<TokenResponse>()
-        .map_err(|error| error.to_string())
+        .map_err(|_| "OpenAI의 로그인 응답을 읽을 수 없습니다.".to_string())
 }
 
 fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, String> {
@@ -698,9 +798,9 @@ fn extract_account_id(claims: Option<&IdTokenClaims>) -> Option<String> {
         })
 }
 
-fn write_html(stream: &mut std::net::TcpStream, html: &str) -> Result<(), String> {
+fn write_html(stream: &mut TcpStream, status: &str, html: &str) -> Result<(), String> {
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n{}",
         html.len(),
         html
     );
@@ -726,6 +826,106 @@ fn oauth_error_html(message: &str) -> String {
 mod oauth_credential_tests {
     use super::*;
     use crate::migrations::run_migrations;
+
+    fn callback_listener() -> (TcpListener, std::net::SocketAddr) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        (listener, address)
+    }
+
+    fn callback_response(address: std::net::SocketAddr, target: &str) -> String {
+        let mut socket = TcpStream::connect(address).unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        write!(socket, "GET {target} HTTP/1.1\r\nHost: localhost\r\n\r\n").unwrap();
+        let mut response = String::new();
+        socket.read_to_string(&mut response).unwrap();
+        response
+    }
+
+    fn login_tokens() -> TokenResponse {
+        TokenResponse {
+            access_token: "test-access".into(),
+            refresh_token: "test-refresh".into(),
+            id_token: None,
+            expires_in: Some(3600),
+        }
+    }
+
+    #[test]
+    fn callback_ignores_unrelated_connections_and_saves_after_fragmented_request() {
+        let (listener, address) = callback_listener();
+        let worker = thread::spawn(move || {
+            let mut db = rusqlite::Connection::open_in_memory().unwrap();
+            run_migrations(&mut db).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            receive_chatgpt_callback(listener, "active", deadline, |code| {
+                assert_eq!(code, "test+code");
+                store_chatgpt_login(&mut db, login_tokens())
+            })
+            .unwrap();
+            assert!(load_settings_for_editing(&db).unwrap().logged_in);
+        });
+        drop(TcpStream::connect(address).unwrap());
+        for target in [
+            "/favicon.ico",
+            "/auth/callback?error=access_denied&state=old",
+        ] {
+            assert!(callback_response(address, target).starts_with("HTTP/1.1 404"));
+        }
+        let mut socket = TcpStream::connect(address).unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        socket
+            .write_all(b"GET /auth/callback?code=test%2B")
+            .unwrap();
+        thread::sleep(Duration::from_millis(150));
+        socket
+            .write_all(b"code&state=active HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        let mut response = String::new();
+        socket.read_to_string(&mut response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"));
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn callback_reports_exchange_and_storage_failures_to_the_browser() {
+        for exchange_fails in [true, false] {
+            let (listener, address) = callback_listener();
+            let worker = thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                receive_chatgpt_callback(listener, "active", deadline, |_| {
+                    if exchange_fails {
+                        return Err("인증 코드 교환 실패".into());
+                    }
+                    let mut db = rusqlite::Connection::open_in_memory().unwrap();
+                    store_chatgpt_login(&mut db, login_tokens())
+                        .map_err(|_| "로그인 정보 저장 실패".into())
+                })
+            });
+            let response = callback_response(address, "/auth/callback?code=test-code&state=active");
+            let error = worker.join().unwrap().unwrap_err();
+            assert!(response.starts_with("HTTP/1.1 400"));
+            assert!(response.contains(&error));
+            assert!(!response.contains("test-code"));
+        }
+    }
+
+    #[test]
+    fn callback_times_out_with_an_idle_client() {
+        let (listener, address) = callback_listener();
+        let _socket = TcpStream::connect(address).unwrap();
+        let deadline = Instant::now() + Duration::from_millis(100);
+        let error = receive_chatgpt_callback(listener, "state", deadline, |_| {
+            panic!("빈 연결은 인증 코드를 교환하지 않아야 합니다")
+        })
+        .unwrap_err();
+        assert!(error.contains("초과"));
+    }
 
     #[test]
     fn custom_server_keys_follow_their_origin_when_settings_are_saved() {

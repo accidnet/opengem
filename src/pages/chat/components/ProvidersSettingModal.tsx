@@ -7,7 +7,7 @@ type ProvidersSettingModalProps = {
   isOpen: boolean;
   isSaving: boolean;
   isLoginBusy: boolean;
-  loginUrl: string;
+  isLoginPending: boolean;
   errorMessage: string;
   onClose: () => void;
   onChange: (patch: Partial<LLMSettings>) => void;
@@ -103,7 +103,7 @@ export function ProvidersSettingModal({
   isOpen,
   isSaving,
   isLoginBusy,
-  loginUrl,
+  isLoginPending,
   errorMessage,
   onClose,
   onChange,
@@ -217,37 +217,47 @@ export function ProvidersSettingModal({
 
                 <div className="settings-auth-row">
                   <div className="settings-auth-copy">
-                    <strong>{settings.email || "연동된 ChatGPT 계정이 없습니다."}</strong>
+                    <strong>
+                      {settings.loggedIn
+                        ? settings.email || "연결된 ChatGPT 계정"
+                        : "연동된 ChatGPT 계정이 없습니다."}
+                    </strong>
                     <span>
                       {settings.loggedIn
                         ? "로그인 토큰은 필요할 때 자동으로 갱신됩니다."
                         : "ChatGPT 로그인 버튼을 눌러 계정을 연동해 주세요."}
                     </span>
                   </div>
-                  {settings.loggedIn ? (
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      onClick={onLogoutChatGPT}
-                      disabled={isLoginBusy}
-                    >
-                      로그아웃
-                    </button>
-                  ) : (
+                  <div className="settings-auth-actions">
                     <button
                       className="settings-primary-btn"
                       type="button"
                       onClick={onLoginChatGPT}
                       disabled={isLoginBusy}
                     >
-                      {isLoginBusy ? "로그인 준비 중..." : "ChatGPT 로그인"}
+                      {isLoginBusy
+                        ? "로그인 준비 중..."
+                        : isLoginPending
+                          ? "로그인 페이지 다시 열기"
+                          : settings.loggedIn
+                            ? "다시 로그인"
+                            : "ChatGPT 로그인"}
                     </button>
-                  )}
+                    {settings.loggedIn && (
+                      <button
+                        className="settings-secondary-btn"
+                        type="button"
+                        onClick={onLogoutChatGPT}
+                        disabled={isLoginBusy || isLoginPending}
+                      >
+                        로그아웃
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {!settings.loggedIn && loginUrl && (
+                {isLoginPending && (
                   <p className="settings-oauth-help">
-                    브라우저가 자동으로 열리지 않으면 로그인 버튼을 다시 눌러 OAuth 흐름을
-                    재시도하세요.
+                    브라우저에서 로그인을 마치면 연결된 계정이 여기에 표시됩니다.
                   </p>
                 )}
               </section>

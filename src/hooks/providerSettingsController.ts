@@ -1,8 +1,10 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 import { LLM_CONFIG } from "@/features/app/config/appData";
+import { getErrorMessage, type StartChatgptLoginPayload } from "@/features/app/appHelpers";
 import {
   beginChatgptLogin,
+  getChatgptLoginStatus,
   getLlmSettings,
   logoutChatgpt,
   openExternalUrl,
@@ -16,36 +18,67 @@ import type { LLMSettings } from "@/types/chat";
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
 type ProviderSettingsControllerParams = {
-  chatGPTLoginUrl: string;
   settings: LLMSettings;
-  setChatGPTLoginUrl: Setter<string>;
-  setIsChatGPTLoginBusy: Setter<boolean>;
   setIsPanelModalOpen: Setter<boolean>;
   setIsSavingProvider: Setter<boolean>;
   setPanelModalError: Setter<string>;
   setSettings: Setter<LLMSettings>;
 };
 
-export function createProviderSettingsController({
-  chatGPTLoginUrl,
+const refreshAvailableProviderQueries = async () => {
+  // 같은 공급자의 키만 교체한 경우에도 이전 계정에서 진행 중인 조회를 폐기합니다.
+  await queryClient.cancelQueries({ queryKey: AIQueryKeys.availableModels });
+  await queryClient.invalidateQueries({
+    queryKey: AIQueryKeys.availableModels,
+    refetchType: "none",
+  });
+  await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableProviders });
+  void preloadAvailableModels().catch(() => {});
+};
+
+export function useProviderSettingsController({
   settings,
-  setChatGPTLoginUrl,
-  setIsChatGPTLoginBusy,
   setIsPanelModalOpen,
   setIsSavingProvider,
   setPanelModalError,
   setSettings,
 }: ProviderSettingsControllerParams) {
-  const refreshAvailableProviderQueries = async () => {
-    // 같은 공급자의 키만 교체한 경우에도 이전 계정에서 진행 중인 조회를 폐기합니다.
-    await queryClient.cancelQueries({ queryKey: AIQueryKeys.availableModels });
-    await queryClient.invalidateQueries({
-      queryKey: AIQueryKeys.availableModels,
-      refetchType: "none",
-    });
-    await queryClient.invalidateQueries({ queryKey: AIQueryKeys.availableProviders });
-    void preloadAvailableModels().catch(() => {});
-  };
+  const [loginAttempt, setLoginAttempt] = useState<StartChatgptLoginPayload | null>(null);
+  const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loginAttempt) return;
+    const { attemptId } = loginAttempt;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    // 브라우저를 다시 열어도 같은 로그인 시도는 한 번만 감시합니다.
+    async function checkStatus() {
+      try {
+        const status = await getChatgptLoginStatus(attemptId);
+        if (stopped) return;
+        if (status === "pending") {
+          timer = setTimeout(checkStatus, 1200);
+          return;
+        }
+        const next = await getLlmSettings();
+        if (stopped) return;
+        setSettings(normalizeLlmSettings(next));
+        setPanelModalError("");
+        setLoginAttempt(null);
+        void refreshAvailableProviderQueries().catch(() => {});
+      } catch (error) {
+        if (stopped) return;
+        setPanelModalError(getErrorMessage(error));
+        setLoginAttempt(null);
+      }
+    }
+    void checkStatus();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [loginAttempt, setPanelModalError, setSettings]);
 
   const loadProviderSettings = async () => {
     try {
@@ -86,41 +119,17 @@ export function createProviderSettingsController({
   };
 
   const loginChatGPT = async () => {
-    if (chatGPTLoginUrl) {
-      await openExternalUrl(chatGPTLoginUrl);
-      return;
-    }
-
     setIsChatGPTLoginBusy(true);
+    setPanelModalError("");
     try {
-      const auth = await beginChatgptLogin();
-      setChatGPTLoginUrl(auth.authorizationUrl);
-      await openExternalUrl(auth.authorizationUrl);
-      setPanelModalError("");
-      setIsChatGPTLoginBusy(false);
-
-      const timeoutAt = Date.now() + 305_000;
-      while (Date.now() < timeoutAt) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1200);
-        });
-
-        const next = await getLlmSettings();
-        setSettings(normalizeLlmSettings(next));
-        if (next.loggedIn) {
-          await refreshAvailableProviderQueries();
-          setChatGPTLoginUrl("");
-          return;
-        }
+      if (loginAttempt && (await getChatgptLoginStatus(loginAttempt.attemptId)) === "succeeded") {
+        return;
       }
-
-      setPanelModalError(
-        "로그인 시간이 초과됐습니다. 브라우저에서 인증을 완료했는지 확인한 뒤 다시 시도해 주세요."
-      );
+      const auth = loginAttempt ?? (await beginChatgptLogin());
+      setLoginAttempt(auth);
+      await openExternalUrl(auth.authorizationUrl);
     } catch (error) {
-      setPanelModalError(
-        error instanceof Error ? error.message : `ChatGPT 로그인에 실패했습니다: ${String(error)}`
-      );
+      setPanelModalError(getErrorMessage(error));
     } finally {
       setIsChatGPTLoginBusy(false);
     }
@@ -132,7 +141,7 @@ export function createProviderSettingsController({
       const next = await logoutChatgpt();
       setSettings(normalizeLlmSettings(next));
       await refreshAvailableProviderQueries();
-      setChatGPTLoginUrl("");
+      setLoginAttempt(null);
       setPanelModalError("");
     } catch (error) {
       setPanelModalError(
@@ -144,6 +153,8 @@ export function createProviderSettingsController({
   };
 
   return {
+    isChatGPTLoginBusy,
+    isChatGPTLoginPending: loginAttempt !== null,
     loadProviderSettings,
     loginChatGPT,
     logoutChatGPT,

@@ -59,3 +59,84 @@ for (const newKey of ["", "replacement-test-key"]) {
     expect(saves[0].input.apiKey ?? "").toBe(newKey);
   });
 }
+
+for (const previouslyConnected of [false, true]) {
+  test(`ChatGPT ${previouslyConnected ? "다시 로그인" : "첫 연결"} 실패 후 재시도하여 연결된 계정을 표시한다`, async ({
+    page,
+  }) => {
+    await page.addInitScript((connected) => {
+      const login = {
+        phase: "idle" as "idle" | "pending" | "failed" | "succeeded",
+        attempt: 0,
+        opened: [] as string[],
+      };
+      Object.assign(window, {
+        testChatgptLogin: login,
+        __TAURI_INTERNALS__: {
+          invoke: async (command: string, args?: { url: string; attemptId: string }) => {
+            if (command === "load_operation_mode") return { modes: [] };
+            if (command === "get_llm_settings") {
+              return {
+                providerId: "openai",
+                providerKind: "oauth",
+                loggedIn: connected || login.phase === "succeeded",
+                email: login.phase === "succeeded" ? "tester@example.org" : undefined,
+              };
+            }
+            if (command === "begin_chatgpt_login") {
+              if (login.phase !== "pending") login.attempt++;
+              login.phase = "pending";
+              return {
+                attemptId: String(login.attempt),
+                authorizationUrl: `https://login.example/${login.attempt}`,
+              };
+            }
+            if (command === "get_chatgpt_login_status") {
+              if (args?.attemptId !== String(login.attempt)) throw "이전 로그인 시도입니다.";
+              if (login.phase === "failed") throw "브라우저에서 로그인 요청을 거절했습니다.";
+              return login.phase;
+            }
+            if (command === "open_external_url") {
+              login.opened.push(args!.url);
+              if (login.opened.length === 1) throw "브라우저를 열지 못했습니다.";
+            }
+            return [];
+          },
+        },
+      });
+    }, previouslyConnected);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "사용자 메뉴 열기" }).click();
+    await page.getByRole("menuitem", { name: "Provider", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Providers" });
+    const start = dialog.getByRole("button", {
+      name: previouslyConnected ? "다시 로그인" : "ChatGPT 로그인",
+      exact: true,
+    });
+    const logout = dialog.getByRole("button", { name: "로그아웃", exact: true });
+    if (previouslyConnected) {
+      await expect(dialog.getByText("연결된 ChatGPT 계정", { exact: true })).toBeVisible();
+      await expect(logout).toBeEnabled();
+    }
+    await start.click();
+    await expect(dialog.getByText("브라우저를 열지 못했습니다.")).toBeVisible();
+    if (previouslyConnected) await expect(logout).toBeDisabled();
+    await dialog.getByRole("button", { name: "로그인 페이지 다시 열기" }).click();
+    await expect(dialog.getByText("브라우저를 열지 못했습니다.")).toBeHidden();
+    await page.evaluate(() => (Reflect.get(window, "testChatgptLogin").phase = "failed"));
+    await expect(dialog.getByText("브라우저에서 로그인 요청을 거절했습니다.")).toBeVisible();
+    if (previouslyConnected) await expect(logout).toBeEnabled();
+
+    await start.click();
+    await expect(dialog.getByRole("button", { name: "로그인 페이지 다시 열기" })).toBeVisible();
+    expect(await page.evaluate(() => Reflect.get(window, "testChatgptLogin").opened)).toEqual([
+      "https://login.example/1",
+      "https://login.example/1",
+      "https://login.example/2",
+    ]);
+    await page.evaluate(() => (Reflect.get(window, "testChatgptLogin").phase = "succeeded"));
+    await expect(dialog.getByText("tester@example.org")).toBeVisible();
+    await expect(logout).toBeEnabled();
+  });
+}

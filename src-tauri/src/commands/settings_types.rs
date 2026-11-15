@@ -73,9 +73,10 @@ pub struct ResolvedLlmSettingsPayload {
     pub openai_api_key_priority: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartChatgptLoginPayload {
+    pub attempt_id: String,
     pub authorization_url: String,
 }
 

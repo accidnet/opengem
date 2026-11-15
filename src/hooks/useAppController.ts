@@ -3,28 +3,29 @@ import { useEffect, useState, type SetStateAction } from "react";
 import { LLM_CONFIG } from "@/features/app/config/appData";
 import { normalizeLlmSettings } from "@/features/ai/catalog";
 import type { LLMSettings, ThemeMode } from "../types/chat";
-import { createProviderSettingsController } from "./providerSettingsController";
+import { useProviderSettingsController } from "./providerSettingsController";
 
 export function useAppController() {
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [settings, setSettings] = useState<LLMSettings>(LLM_CONFIG);
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
-  const [isChatGPTLoginBusy, setIsChatGPTLoginBusy] = useState(false);
-  const [chatGPTLoginUrl, setChatGPTLoginUrl] = useState("");
   const [panelModalError, setPanelModalError] = useState("");
 
-  const { loadProviderSettings, loginChatGPT, logoutChatGPT, savePanelModalSettings } =
-    createProviderSettingsController({
-      chatGPTLoginUrl,
-      settings,
-      setChatGPTLoginUrl,
-      setIsChatGPTLoginBusy,
-      setIsPanelModalOpen,
-      setIsSavingProvider,
-      setPanelModalError,
-      setSettings,
-    });
+  const {
+    isChatGPTLoginBusy,
+    isChatGPTLoginPending,
+    loadProviderSettings,
+    loginChatGPT,
+    logoutChatGPT,
+    savePanelModalSettings,
+  } = useProviderSettingsController({
+    settings,
+    setIsPanelModalOpen,
+    setIsSavingProvider,
+    setPanelModalError,
+    setSettings,
+  });
 
   useEffect(() => {
     void loadProviderSettings();
@@ -41,7 +42,7 @@ export function useAppController() {
   };
 
   return {
-    chatGPTLoginUrl,
+    isChatGPTLoginPending,
     isChatGPTLoginBusy,
     isPanelModalOpen,
     isSavingProvider,

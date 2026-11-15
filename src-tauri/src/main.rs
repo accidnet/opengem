@@ -373,6 +373,7 @@ fn main() {
             })?;
 
             app_handle.manage(CodexTasks::default());
+            app_handle.manage(commands::settings::ChatgptLogin::default());
             app_handle.manage(AppState {
                 db_path: db_path.clone(),
             });
@@ -450,6 +451,7 @@ fn main() {
             commands::settings::save_provider_settings_command,
             commands::settings::resolve_llm_settings,
             commands::settings::begin_chatgpt_login,
+            commands::settings::get_chatgpt_login_status,
             commands::settings::open_external_url,
             commands::settings::logout_chatgpt,
             commands::workspace::list_workspace_files,
