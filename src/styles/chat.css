@@ -162,6 +162,7 @@
 }
 
 .avatar-agent {
+  overflow: hidden;
   background: var(--panel-soft);
   color: #7dd3fc;
   border: 1px solid var(--border);

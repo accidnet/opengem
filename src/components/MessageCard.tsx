@@ -1,13 +1,15 @@
-import type { Message } from "@/types/chat";
+import type { AgentItem, Message } from "@/types/chat";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { MarkdownText } from "@/components/MarkdownText";
 
 type MessageCardProps = {
   message: Message;
+  agent?: AgentItem;
   onApprovePlan: () => void;
   onModifyPlan: () => void;
 };
 
-export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCardProps) {
+export function MessageCard({ message, agent, onApprovePlan, onModifyPlan }: MessageCardProps) {
   const text = typeof message.text === "string" ? message.text : "";
   const bubbleText = text.trim();
   const logs = Array.isArray(message.logs) ? message.logs : [];
@@ -48,18 +50,23 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
   const classes = ["message-row", "agent", message.type === "typing" ? "typing" : ""].filter(
     Boolean
   );
+  // 도구 실행 기록과 오류는 해당 상태를 나타내는 아이콘을 사용합니다.
+  const avatar = (
+    <div className="message-avatar avatar-agent" style={{ color: message.iconColor || "#94a3b8" }}>
+      {agent && message.type !== "search" && message.icon !== "error" ? (
+        <CharacterAvatar agent={agent} className="agent-character-avatar" />
+      ) : (
+        <span className="material-symbols-outlined" style={{ fontSize: "20px" }} aria-hidden="true">
+          {message.icon}
+        </span>
+      )}
+    </div>
+  );
 
   if (message.type === "search") {
     return (
       <div className={classes.join(" ")} key={message.id}>
-        <div
-          className="message-avatar avatar-agent"
-          style={{ color: message.iconColor || "#94a3b8" }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-            {message.icon}
-          </span>
-        </div>
+        {avatar}
         <details className="message-bubble runtime-bubble">
           <summary className="runtime-summary">
             <div className="runtime-summary-main">
@@ -101,14 +108,7 @@ export function MessageCard({ message, onApprovePlan, onModifyPlan }: MessageCar
 
   return (
     <div className={classes.join(" ")} key={message.id}>
-      <div
-        className="message-avatar avatar-agent"
-        style={{ color: message.iconColor || "#94a3b8" }}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-          {message.icon}
-        </span>
-      </div>
+      {avatar}
       <div className="message-bubble">
         <div className="bubble-meta">
           <span className="bubble-name" style={{ color: message.iconColor || "#a5b4fc" }}>
