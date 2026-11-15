@@ -555,12 +555,6 @@
   font-size: 13px;
 }
 
-.mode-project-path-copy p {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
 .mode-project-path-input-row {
   display: flex;
   gap: 8px;

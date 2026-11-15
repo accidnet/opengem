@@ -113,10 +113,7 @@ export function CharacterLibrary({ onRemoved }: CharacterLibraryProps) {
     <div className="character-library">
       <div className="panel-modal-main-copy">
         <h4>캐릭터 관리</h4>
-        <p>
-          이미지를 추가하거나 이름과 이미지를 변경하고, 필요 없는 캐릭터를 삭제하세요. 이 변경은
-          즉시 저장됩니다.
-        </p>
+        <p>캐릭터 변경은 즉시 저장돼요.</p>
       </div>
       <section className="settings-card character-library-list" aria-label="캐릭터 라이브러리">
         {loading && <p>캐릭터를 불러오는 중이에요.</p>}

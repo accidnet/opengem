@@ -164,10 +164,6 @@ export function ProvidersSettingModal({
 
         <div className="panel-modal-body">
           <aside className="panel-modal-sidebar" aria-label="Provider list">
-            <p className="panel-modal-sidebar-label">PROVIDERS</p>
-            <p className="panel-modal-sidebar-help">
-              공급자별 API 키와 로그인 인증 방식을 관리합니다.
-            </p>
             {providers.map((provider) => {
               const isActive = provider.key === activeProvider.id;
               return (
@@ -203,16 +199,13 @@ export function ProvidersSettingModal({
           <main className="panel-modal-main">
             <div className="panel-modal-main-copy">
               <h4>{activeProviderLabel} 설정</h4>
-              <p>{activeProvider.description}</p>
+              {activeProvider.description && <p>{activeProvider.description}</p>}
             </div>
 
             {supportsChatGPTLogin && (
               <section className="settings-card">
                 <div className="settings-card-head settings-card-head-column">
-                  <div>
-                    <h4>로그인</h4>
-                    <p>ChatGPT 계정 로그인 상태를 관리합니다.</p>
-                  </div>
+                  <h4>로그인</h4>
                 </div>
 
                 <div className="settings-auth-row">
@@ -222,11 +215,6 @@ export function ProvidersSettingModal({
                         ? settings.email || "연결된 ChatGPT 계정"
                         : "연동된 ChatGPT 계정이 없습니다."}
                     </strong>
-                    <span>
-                      {settings.loggedIn
-                        ? "로그인 토큰은 필요할 때 자동으로 갱신됩니다."
-                        : "ChatGPT 로그인 버튼을 눌러 계정을 연동해 주세요."}
-                    </span>
                   </div>
                   <div className="settings-auth-actions">
                     <button
@@ -256,19 +244,14 @@ export function ProvidersSettingModal({
                   </div>
                 </div>
                 {isLoginPending && (
-                  <p className="settings-oauth-help">
-                    브라우저에서 로그인을 마치면 연결된 계정이 여기에 표시됩니다.
-                  </p>
+                  <p className="settings-oauth-help">브라우저에서 로그인을 마쳐 주세요.</p>
                 )}
               </section>
             )}
 
             <section className="settings-card settings-form-grid">
               <div className="settings-card-head settings-card-head-column">
-                <div>
-                  <h4>API 키</h4>
-                  <p>OpenAI에서 발급받은 API 키를 입력하고 저장합니다.</p>
-                </div>
+                <h4>API 키</h4>
               </div>
 
               {activeProvider.id === "custom" && (
@@ -301,7 +284,6 @@ export function ProvidersSettingModal({
                   type="password"
                   value={settings.apiKey || ""}
                   onChange={(event) => onChange({ apiKey: event.target.value })}
-                  placeholder="Enter provider secret"
                 />
               </label>
             </section>
@@ -309,10 +291,7 @@ export function ProvidersSettingModal({
             {activeProvider.id === "openai" && (
               <section className="settings-card">
                 <div className="settings-card-head settings-card-head-column">
-                  <div>
-                    <h4>권한 설정</h4>
-                    <p>로그인 권한과 API 키 권한을 각각 활성화하고 우선순위를 정합니다.</p>
-                  </div>
+                  <h4>권한 설정</h4>
                 </div>
 
                 <div className="settings-auth-method-grid">
@@ -321,10 +300,7 @@ export function ProvidersSettingModal({
                     aria-label="ChatGPT 로그인 권한 설정"
                   >
                     <div className="settings-auth-method-head">
-                      <div>
-                        <h5>로그인 권한</h5>
-                        <p>ChatGPT 로그인 세션 기반 권한을 켜거나 끌 수 있습니다.</p>
-                      </div>
+                      <h5>ChatGPT 로그인</h5>
                       <span
                         className={`settings-badge ${settings.loggedIn ? "is-connected" : "is-idle"}`}
                       >
@@ -376,10 +352,7 @@ export function ProvidersSettingModal({
                     aria-label="API 키 권한 설정"
                   >
                     <div className="settings-auth-method-head">
-                      <div>
-                        <h5>API 키 권한</h5>
-                        <p>저장된 OpenAI API 키 기반 권한을 켜거나 끌 수 있습니다.</p>
-                      </div>
+                      <h5>API 키</h5>
                       <span
                         className={`settings-badge ${hasSavedOpenAIApiKey ? "is-connected" : "is-idle"}`}
                       >
@@ -428,7 +401,7 @@ export function ProvidersSettingModal({
                 </div>
 
                 <p className="settings-auth-priority-help">
-                  활성화된 권한 중 실제로 연결 가능한 수단을 우선순위 순서대로 자동 선택합니다.
+                  연결된 인증 방식만 우선순위에 포함됩니다.
                 </p>
               </section>
             )}

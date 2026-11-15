@@ -90,15 +90,9 @@ export function ModelSelect({
   }, [isFiltering, options, value]);
 
   const highlightedOption = filteredOptions[highlightedIndex] ?? null;
-  const hasFallbackOptions = data?.some(
-    (provider) => provider.source === "fallback" && provider.models.length > 0
-  );
 
   function getListStatus() {
-    if (isFetching)
-      return hasFallbackOptions
-        ? "기본 목록을 표시하고 있습니다. 연결된 공급자의 모델을 확인하는 중입니다."
-        : "모델 목록을 불러오는 중입니다.";
+    if (isFetching) return "모델 목록을 불러오는 중입니다.";
     if (isError) return "모델 목록을 갱신하지 못했습니다.";
     if (!data?.length) return "연결된 공급자가 없습니다. Providers에서 연결해 주세요.";
     if (options.length === 0)
@@ -107,9 +101,7 @@ export function ModelSelect({
         : "표시할 모델이 없습니다. 모델 ID를 직접 입력할 수 있습니다.";
     if (filteredOptions.length === 0)
       return "검색 결과가 없습니다. 모델 ID를 직접 입력할 수 있습니다.";
-    return hasFallbackOptions
-      ? `${filteredOptions.length}개의 모델 · 기본 목록 포함 (계정에 따라 사용 가능 여부가 다릅니다.)`
-      : `${filteredOptions.length}개의 모델`;
+    return null;
   }
 
   useEffect(() => {

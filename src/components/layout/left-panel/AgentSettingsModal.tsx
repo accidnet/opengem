@@ -132,9 +132,6 @@ export function AgentSettingsModal({
               className="panel-modal-sidebar agent-panel-modal-sidebar"
               aria-label="agent 설정 탭"
             >
-              <p className="panel-modal-sidebar-label">AGENTS</p>
-              <p className="panel-modal-sidebar-help">에이전트를 추가하고 순서를 관리해요.</p>
-
               <button
                 className={`panel-modal-nav-item ${agentSettingsTab === "create" ? "is-active" : ""}`}
                 type="button"
@@ -175,15 +172,11 @@ export function AgentSettingsModal({
                 <>
                   <div className="panel-modal-main-copy">
                     <h4>Agent 추가</h4>
-                    <p>기본 정보와 모델, 성격·말투·역할을 함께 설정해서 새 에이전트를 만들어요.</p>
                   </div>
 
                   <section className="settings-card agent-create-card">
                     <div className="settings-card-head settings-card-head-column">
-                      <div>
-                        <h4>기본 설정</h4>
-                        <p>이름, 아이콘, 색상을 정하면 좌측 Active Agents에 바로 반영돼요.</p>
-                      </div>
+                      <h4>기본 설정</h4>
                     </div>
 
                     <label className="settings-field">
@@ -271,13 +264,7 @@ export function AgentSettingsModal({
 
                   <section className="settings-card agent-config-card">
                     <div className="settings-card-head settings-card-head-column">
-                      <div>
-                        <h4>작업 컨텍스트</h4>
-                        <p>
-                          성격과 말투, 잘하는 일을 적어 주세요. 각 에이전트는 자기 기억을 따로
-                          보관해요.
-                        </p>
-                      </div>
+                      <h4>작업 컨텍스트</h4>
                     </div>
 
                     <label className="settings-field settings-field-wide">
@@ -339,17 +326,9 @@ export function AgentSettingsModal({
                 <>
                   <div className="panel-modal-main-copy">
                     <h4>Agent 목록</h4>
-                    <p>각 에이전트의 이름과 캐릭터, 성격과 말투를 정하고 순서를 관리해요.</p>
                   </div>
 
                   <section className="settings-card agent-list-card">
-                    <div className="settings-card-head">
-                      <div>
-                        <h4>현재 에이전트</h4>
-                        <p>총 {draftAgents.length}개 에이전트</p>
-                      </div>
-                    </div>
-
                     <div
                       className="mode-settings-list agent-settings-list"
                       role="list"

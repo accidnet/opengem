@@ -651,13 +651,6 @@
   cursor: not-allowed;
 }
 
-.disclaimer {
-  margin: 8px 0 0;
-  text-align: center;
-  color: #4b5563;
-  font-size: 10px;
-}
-
 @keyframes typingSlide {
   0% {
     transform: translateX(0);
@@ -711,8 +704,7 @@
   color: var(--primary);
 }
 
-.chat-welcome p,
-.chat-start-hint p {
+.chat-welcome p {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
@@ -818,8 +810,6 @@
 }
 
 .chat-start-hint strong {
-  display: block;
-  margin-bottom: 3px;
   color: var(--text-main);
   font-size: 12px;
 }
@@ -865,8 +855,7 @@
 }
 
 .composer-floating-actions,
-.composer-box,
-.disclaimer {
+.composer-box {
   width: min(100%, 920px);
   margin-left: auto;
   margin-right: auto;
@@ -916,10 +905,6 @@
 
 .send-btn:disabled {
   background: var(--border);
-  color: var(--text-muted);
-}
-
-.disclaimer {
   color: var(--text-muted);
 }
 

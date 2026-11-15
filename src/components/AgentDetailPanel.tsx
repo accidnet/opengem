@@ -105,13 +105,12 @@ export function AgentDetailPanel({
         </div>
       </div>
 
-      <div className="agent-detail-section">
-        <h4>성격·말투·역할</h4>
-        <p className="agent-detail-persona">
-          {agent.prompt?.trim() ||
-            "이 에이전트만의 기억과 대화를 바탕으로 함께하는 동료예요. 에이전트 설정에서 성격과 말투를 정할 수 있어요."}
-        </p>
-      </div>
+      {agent.prompt?.trim() && (
+        <div className="agent-detail-section">
+          <h4>성격·말투·역할</h4>
+          <p className="agent-detail-persona">{agent.prompt.trim()}</p>
+        </div>
+      )}
 
       {modeName && onOpenEmailSettings && (
         <AgentWorkspacePanel
