@@ -268,14 +268,14 @@ export function AgentSettingsModal({
                     </div>
 
                     <label className="settings-field settings-field-wide">
-                      <span>성격·말투·역할</span>
+                      <span>프롬프트</span>
                       <textarea
                         className="settings-input settings-textarea"
                         rows={5}
                         placeholder="이 에이전트가 맡을 역할과 작업 방식을 적어 주세요."
                         value={newAgentPrompt}
                         onChange={(event) => onNewAgentPromptChange(event.target.value)}
-                        aria-label="새 에이전트 성격·말투·역할"
+                        aria-label="새 에이전트 프롬프트"
                       />
                     </label>
 
@@ -486,13 +486,13 @@ export function AgentSettingsModal({
                             className="settings-field"
                             style={{ gridColumn: "1 / -1", width: "100%" }}
                           >
-                            <span>성격·말투·역할</span>
+                            <span>프롬프트</span>
                             <textarea
                               className="settings-input settings-textarea"
                               rows={3}
                               value={agent.prompt ?? ""}
                               placeholder="예: 차분하고 꼼꼼한 일정 도우미. 중요한 내용부터 짧게 설명해 줘."
-                              aria-label={`${agent.name || "agent"} 성격·말투·역할 수정`}
+                              aria-label={`${agent.name || "agent"} 프롬프트 수정`}
                               onChange={(event) =>
                                 onDraftAgentChange(agent.id, "prompt", event.target.value)
                               }

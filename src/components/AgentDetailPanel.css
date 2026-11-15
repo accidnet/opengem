@@ -255,11 +255,42 @@
   line-height: 1.5;
 }
 
-.agent-detail-persona {
+.agent-detail-prompt {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-detail-prompt label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-detail-prompt button {
+  grid-area: 1 / 2;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.agent-detail-prompt textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: auto;
+  min-height: 64px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.agent-detail-prompt [role="alert"] {
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--text-soft);
   font-size: 11px;
-  line-height: 1.7;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

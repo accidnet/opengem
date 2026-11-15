@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { AgentWorkspacePanel } from "@/components/AgentWorkspacePanel";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
+import { getErrorMessage } from "@/features/app/appHelpers";
 import type { ActivityItem, ActivityState, AgentItem } from "@/types/chat";
 
 import "./AgentDetailPanel.css";
@@ -12,6 +14,7 @@ type AgentDetailPanelProps = {
   activity: ActivityItem[];
   onClose: () => void;
   onStartChat: () => void;
+  onSavePrompt: (prompt: string) => Promise<void>;
   isConversationBusy: boolean;
 };
 
@@ -23,6 +26,58 @@ const activityLabels: Record<ActivityState, string> = {
   failed: "실패",
 };
 
+function AgentPromptEditor({
+  prompt,
+  onSave,
+  busy,
+}: {
+  prompt: string;
+  onSave: (prompt: string) => Promise<void>;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState(prompt);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(draft.trim());
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="agent-detail-section agent-detail-prompt">
+      <label htmlFor="agent-detail-prompt">프롬프트</label>
+      <textarea
+        id="agent-detail-prompt"
+        className="settings-input"
+        rows={3}
+        value={draft}
+        disabled={saving}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setError("");
+        }}
+      />
+      <button
+        type="button"
+        className="settings-secondary-btn"
+        disabled={busy || saving || draft.trim() === prompt}
+        title={busy && !saving ? "진행 중인 작업이 끝나면 저장할 수 있어요." : undefined}
+        onClick={() => void save()}
+      >
+        {saving ? "저장 중…" : "저장"}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
+
 export function AgentDetailPanel({
   agent,
   modeName,
@@ -31,6 +86,7 @@ export function AgentDetailPanel({
   activity,
   onClose,
   onStartChat,
+  onSavePrompt,
   isConversationBusy,
 }: AgentDetailPanelProps) {
   // 활동은 현재 세션의 메시지에서 만들어지므로 에이전트 이름으로 연결합니다.
@@ -105,12 +161,13 @@ export function AgentDetailPanel({
         </div>
       </div>
 
-      {agent.prompt?.trim() && (
-        <div className="agent-detail-section">
-          <h4>성격·말투·역할</h4>
-          <p className="agent-detail-persona">{agent.prompt.trim()}</p>
-        </div>
-      )}
+      {/* 설정 창에서 저장한 프롬프트도 상세 패널의 입력란에 반영합니다. */}
+      <AgentPromptEditor
+        key={agent.prompt}
+        prompt={agent.prompt ?? ""}
+        onSave={onSavePrompt}
+        busy={isConversationBusy}
+      />
 
       {modeName && onOpenEmailSettings && (
         <AgentWorkspacePanel
