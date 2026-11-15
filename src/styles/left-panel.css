@@ -22,6 +22,16 @@
   gap: 3px;
 }
 
+.mode-heading {
+  display: flex;
+  align-items: center;
+}
+
+.mode-heading .mode-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 .mode-btn {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -66,6 +76,7 @@
 
 .sub-session-list.is-open {
   max-height: 360px;
+  overflow-y: auto;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;

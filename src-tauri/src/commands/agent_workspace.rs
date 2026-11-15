@@ -903,9 +903,18 @@ mod tests {
             connection.execute("INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name, agent_id) VALUES (?1, '대화', 1, 1, 'Orchestration', ?2)", params![session_id, agent_id]).unwrap();
             connection.execute("INSERT INTO chat_messages (id, session_id, message_order, side, type, text, created_at) VALUES (?1, ?2, 0, 'user', 'text', ?3, 1)", params![format!("message-{index}"), session_id, format!("private-{index}")]).unwrap();
         }
+        connection
+            .execute_batch(
+                "INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name)
+             VALUES ('group', '전체 대화', 1, 1, 'Orchestration');
+             INSERT INTO chat_messages (id, session_id, message_order, side, type, text, created_at)
+             VALUES ('shared', 'group', 0, 'user', 'text', 'group-message', 1);",
+            )
+            .unwrap();
         let context = recent_context(&connection, "Orchestration", &ids[0]).unwrap();
         assert!(context.contains("private-0"));
         assert!(!context.contains("private-1"));
+        assert!(!context.contains("group-message"));
         assert!(recent_context(&connection, "Missing", &ids[0]).is_err());
     }
 

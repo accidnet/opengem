@@ -10,7 +10,7 @@ import type { AgentItem, Message } from "@/types/chat";
 type ChatPanelProps = {
   modeName: string;
   conversationLabel: string;
-  conversationModel: string;
+  conversationDetails?: string;
   conversationError: string;
   executionMode: "chat" | "codex" | "computer";
   onExecutionModeChange: (mode: "chat" | "codex" | "computer") => void;
@@ -44,7 +44,7 @@ type ChatPanelProps = {
 export function ChatPanel({
   modeName,
   conversationLabel,
-  conversationModel,
+  conversationDetails,
   conversationError,
   executionMode,
   onExecutionModeChange,
@@ -228,7 +228,7 @@ export function ChatPanel({
       {workspaceView === "chat" && (
         <div className="conversation-target" aria-live="polite">
           <strong>{conversationLabel}</strong>
-          <span>{conversationModel}</span>
+          {conversationDetails && <span>{conversationDetails}</span>}
           {isConversationBusy && <span>처리 중…</span>}
         </div>
       )}

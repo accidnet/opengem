@@ -5,7 +5,7 @@ const SETTINGS_SCHEMA: &str = include_str!("../sql/migrations/002_llm_settings.s
 const AUTH_PREFERENCES: &str = include_str!("../sql/migrations/016_openai_auth_preferences.sql");
 const REPAIR_PROVIDER_SETTINGS: &str = "022_repair_legacy_provider_settings";
 
-const MIGRATIONS: [(&str, &str); 22] = [
+const MIGRATIONS: [(&str, &str); 23] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     ("002_llm_settings", SETTINGS_SCHEMA),
     (
@@ -82,6 +82,10 @@ const MIGRATIONS: [(&str, &str); 22] = [
         include_str!("../sql/migrations/021_app_settings.sql"),
     ),
     (REPAIR_PROVIDER_SETTINGS, ""),
+    (
+        "023_chat_message_agent",
+        include_str!("../sql/migrations/023_chat_message_agent.sql"),
+    ),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
@@ -321,7 +325,11 @@ mod tests {
         db.execute_batch(AUTH_PREFERENCES).unwrap();
         db.execute_batch("UPDATE llm_settings SET openai_api_key_enabled=0")
             .unwrap();
-        for (name, _) in &MIGRATIONS[..21] {
+        // 이 픽스처는 공급자 복구만 대상으로 하며 다른 기능의 테이블을 생성하지 않습니다.
+        for (name, _) in MIGRATIONS
+            .iter()
+            .filter(|(name, _)| *name != REPAIR_PROVIDER_SETTINGS)
+        {
             db.execute("INSERT INTO schema_migrations(name) VALUES(?1)", [name])
                 .unwrap();
         }
@@ -438,6 +446,8 @@ mod tests {
                 .unwrap();
         }
         connection.execute("INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name) VALUES ('legacy', '이전 대화', 1, 1, 'Orchestration')", []).unwrap();
+        connection.execute("INSERT INTO chat_messages (id, session_id, message_order, side, type, sender, text, created_at)
+            VALUES ('reply', 'legacy', 0, 'agent', 'text', '이전 이름', '기존 답변', 1)", []).unwrap();
         run_migrations(&mut connection).unwrap();
         let ids = |db: &Connection| {
             let mut statement = db
@@ -461,6 +471,17 @@ mod tests {
             )
             .unwrap();
         assert!(target.is_none());
+        let legacy_message: (Option<String>, String, String) = connection
+            .query_row(
+                "SELECT agent_id, sender, text FROM chat_messages WHERE id = 'reply'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            legacy_message,
+            (None, "이전 이름".into(), "기존 답변".into())
+        );
         run_migrations(&mut connection).unwrap();
         assert_eq!(ids(&connection), original_ids);
     }
