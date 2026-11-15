@@ -400,6 +400,13 @@ export function ChatPage() {
             onOpenEmailSettings={() => setEmailSettingsOpen(true)}
             isConversationBusy={isConversationBusy}
             onStartChat={() => void openAgentConversation(selectedAgent)}
+            onSavePrompt={(prompt) =>
+              saveAgentsForSelectedMode(
+                agents.map((agent) =>
+                  agent.agentId === selectedAgentId ? { ...agent, prompt } : agent
+                )
+              )
+            }
             agent={selectedAgent}
             activity={activity}
             onClose={() => {

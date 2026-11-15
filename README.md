@@ -98,7 +98,7 @@ GitHub의 **Actions → release → Run workflow**에서 `main`을 선택하고 
 
 ## 에이전트 기억과 Google 연동
 
-각 에이전트의 성격과 Markdown 기억을 따로 관리하고, 대화로 Gmail 새 메일 요약·일정 정리를 맡길 수 있습니다. Gmail·Drive·Calendar 연결은 사용자 메뉴의 **Google 연동**에서 서비스별로 설정합니다. Drive 문서를 검색·읽고 Calendar 일정을 조회하거나 초안을 검토해 등록할 수 있습니다. 반복 업무는 앱 실행 중 동작합니다.
+각 에이전트의 프롬프트와 Markdown 기억을 따로 관리하고, 대화로 Gmail 새 메일 요약·일정 정리를 맡길 수 있습니다. Gmail·Drive·Calendar 연결은 사용자 메뉴의 **Google 연동**에서 서비스별로 설정합니다. Drive 문서를 검색·읽고 Calendar 일정을 조회하거나 초안을 검토해 등록할 수 있습니다. 반복 업무는 앱 실행 중 동작합니다.
 
 - [에이전트 기억과 반복 업무 사용 안내](docs/agent-workspace.md)
 - [Gmail 연결 설정](docs/email-setup.md)
