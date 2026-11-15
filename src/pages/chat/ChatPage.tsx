@@ -342,7 +342,7 @@ export function ChatPage() {
           conversationError={conversationError || unavailableReason}
           executionMode={executionMode}
           onExecutionModeChange={setExecutionMode}
-          canUseCodex={Boolean(currentAgentId)}
+          currentAgentId={currentAgentId}
           isCodexRunning={isCodexRunning}
           onCancelCodex={cancelCodexTask}
           isComputerRunning={isComputerRunning}

@@ -14,7 +14,7 @@ type ChatPanelProps = {
   conversationError: string;
   executionMode: "chat" | "codex" | "computer";
   onExecutionModeChange: (mode: "chat" | "codex" | "computer") => void;
-  canUseCodex: boolean;
+  currentAgentId: string | null;
   isCodexRunning: boolean;
   onCancelCodex: () => void;
   isComputerRunning: boolean;
@@ -48,7 +48,7 @@ export function ChatPanel({
   conversationError,
   executionMode,
   onExecutionModeChange,
-  canUseCodex,
+  currentAgentId,
   isCodexRunning,
   onCancelCodex,
   isComputerRunning,
@@ -269,6 +269,9 @@ export function ChatPanel({
               <MessageCard
                 key={message.id}
                 message={message}
+                agent={agents.find((agent) =>
+                  currentAgentId ? agent.agentId === currentAgentId : agent.name === message.sender
+                )}
                 onApprovePlan={onApprovePlan}
                 onModifyPlan={onModifyPlan}
               />
@@ -280,7 +283,7 @@ export function ChatPanel({
       {workspaceView === "chat" && (
         <footer className="composer-wrap">
           <div className="composer-floating-actions">
-            {canUseCodex && (
+            {currentAgentId && (
               <label className="chip">
                 실행 방식{" "}
                 <select
