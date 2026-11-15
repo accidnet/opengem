@@ -288,17 +288,8 @@ export function LeftPanel({
   };
 
   const handleModeClick = (mode: Mode) => {
-    const isSelected = selectedMode === mode;
-    if (!isSelected) {
-      void onModeSelect(mode);
-      setOpenModes((prev) => ({
-        ...prev,
-        [mode]: true,
-      }));
-      return;
-    }
-
-    toggleModeOpen(mode);
+    void onModeSelect(mode);
+    setOpenModes((prev) => ({ ...prev, [mode]: true }));
   };
 
   const handleCreateMode = () => {
@@ -840,16 +831,21 @@ export function LeftPanel({
         <ModeSection
           modes={modes}
           selectedMode={selectedMode}
+          currentAgentId={currentAgentId}
           openModes={openModes}
           getModeIcon={getModeIcon}
           sessionsByMode={sessionsByMode}
           onModeClick={handleModeClick}
+          onToggleMode={toggleModeOpen}
           onOpenSettings={openModeSettings}
           onSessionSelect={onSessionSelect}
           onSessionDelete={onSessionDelete}
         />
         <AgentsSection
           agents={agents}
+          sessions={sessionsByMode[selectedMode] ?? []}
+          onSessionSelect={onSessionSelect}
+          onSessionDelete={onSessionDelete}
           onAgentChat={onAgentChat}
           currentAgentId={currentAgentId}
           onOpenSettings={openAgentSettings}

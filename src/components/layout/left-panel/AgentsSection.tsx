@@ -1,7 +1,8 @@
 import type { MouseEvent } from "react";
 
 import { CharacterAvatar } from "@/components/CharacterAvatar";
-import type { AgentItem, AgentRole } from "@/types/chat";
+import type { AgentItem, AgentRole, SessionItem } from "@/types/chat";
+import { SessionList } from "./SessionList";
 
 type QuickEditAgentDraft = {
   name: string;
@@ -14,6 +15,9 @@ type AgentsSectionProps = {
   agents: AgentItem[];
   onAgentChat: (agent: AgentItem) => void;
   currentAgentId: string | null;
+  sessions: SessionItem[];
+  onSessionSelect: (session: SessionItem) => void | Promise<void>;
+  onSessionDelete: (session: SessionItem) => void | Promise<void>;
   onOpenSettings: () => void;
   quickEditAgentIndex: number | null;
   quickEditDraft: QuickEditAgentDraft | null;
@@ -29,11 +33,19 @@ export function AgentsSection({
   agents,
   onAgentChat,
   currentAgentId,
+  sessions,
+  onSessionSelect,
+  onSessionDelete,
   onOpenSettings,
   quickEditAgentIndex,
   quickEditDraft,
   onStartQuickEditAgent,
 }: AgentsSectionProps) {
+  const agentIds = new Set(agents.map((agent) => agent.agentId));
+  const archivedSessions = sessions.filter(
+    (session) => session.agentId != null && !agentIds.has(session.agentId)
+  );
+  const currentSessions = sessions.filter((session) => session.agentId === currentAgentId);
   return (
     <section className="panel-block">
       <div className="section-head-with-action">
@@ -118,9 +130,28 @@ export function AgentsSection({
                   </span>
                 </button>
               </div>
+              {isCurrent && currentSessions.length > 0 && (
+                <SessionList
+                  sessions={currentSessions}
+                  label={`${agent.name} 개별 대화 기록`}
+                  onSessionSelect={onSessionSelect}
+                  onSessionDelete={onSessionDelete}
+                />
+              )}
             </div>
           );
         })}
+        {archivedSessions.length > 0 && (
+          <div>
+            <h4 className="section-title">삭제된 에이전트 대화</h4>
+            <SessionList
+              sessions={archivedSessions}
+              label="삭제된 에이전트 대화 기록"
+              onSessionSelect={onSessionSelect}
+              onSessionDelete={onSessionDelete}
+            />
+          </div>
+        )}
       </div>
     </section>
   );

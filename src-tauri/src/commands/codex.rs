@@ -94,22 +94,20 @@ fn load_context(
     {
         return Err("요청 ID 또는 작업 내용이 올바르지 않습니다.".to_string());
     }
-    let row: Option<(Option<String>, Option<String>, String, Option<String>, Option<String>, i64, String)> = connection.query_row(
-        "SELECT s.project_paths, s.agent_id, a.agent_name, a.prompt, a.model, a.is_active, a.agent_role
+    // 로컬 코드 실행은 개별 대화의 활성 대상에게만 허용합니다.
+    let row: Option<(Option<String>, String, Option<String>, Option<String>)> = connection
+        .query_row(
+            "SELECT s.project_paths, a.agent_name, a.prompt, a.model
          FROM chat_sessions s JOIN operation_modes m ON m.mode_name = s.mode_name
-         JOIN operation_mode_agents a ON a.mode_id = m.id AND a.agent_id = ?2 WHERE s.id = ?1",
-        params![input.session_id, input.agent_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
-    ).optional().map_err(|e| e.to_string())?;
-    let (paths, target, name, role_prompt, model, active, role) =
-        row.ok_or("세션 또는 에이전트를 찾을 수 없습니다.")?;
-    if active != 1
-        || target
-            .as_deref()
-            .map_or(role != "main", |id| id != input.agent_id)
-    {
-        return Err("이 세션에서 사용할 수 없는 에이전트입니다.".to_string());
-    }
+         JOIN operation_mode_agents a ON a.mode_id = m.id AND a.agent_id = s.agent_id
+         WHERE s.id = ?1 AND a.agent_id = ?2 AND a.is_active = 1",
+            params![input.session_id, input.agent_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let (paths, name, role_prompt, model) =
+        row.ok_or("Codex는 활성 에이전트와의 개별 대화에서 사용할 수 있습니다.")?;
     let paths: Vec<String> = paths
         .map(|p| serde_json::from_str(&p))
         .transpose()
@@ -557,6 +555,15 @@ mod tests {
         input.agent_id = "agent-2".into();
         assert!(load_context(&db, &input).is_err());
         input.agent_id = "agent-1".into();
+        db.execute_batch(
+            "INSERT INTO chat_sessions SELECT 'group', mode_name, project_paths, NULL
+               FROM chat_sessions WHERE id = 'session-1';
+             UPDATE operation_mode_agents SET agent_role = 'main' WHERE agent_id = 'agent-1';",
+        )
+        .unwrap();
+        input.session_id = "group".into();
+        assert!(load_context(&db, &input).is_err());
+        input.session_id = "session-1".into();
         db.execute(
             "UPDATE operation_mode_agents SET is_active = 0 WHERE agent_id = 'agent-1'",
             [],

@@ -22,8 +22,8 @@ import type {
 import { getErrorMessage, normalizeAgentsForUi } from "@/features/app/appHelpers";
 import {
   conversationDraftKey,
-  findAgentSession,
-  resolveConversationAgent,
+  remapConversationDrafts,
+  resolveConversationParticipants,
 } from "@/pages/chat/conversationTarget";
 import { createSessionModeController } from "@/hooks/sessionModeController";
 import { useChatSendMessage } from "./useChatSendMessage";
@@ -53,7 +53,6 @@ export function useChatController({
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [executionMode, setExecutionMode] = useState<"chat" | "codex" | "computer">("chat");
-  const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
   const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
@@ -64,13 +63,13 @@ export function useChatController({
   const [agents, setAgents] = useState<AgentItem[]>(normalizeAgentsForUi([...AGENTS]));
   const [openSelectedModeSignal, setOpenSelectedModeSignal] = useState(0);
 
-  const resetCurrentSession = () => {
+  const resetCurrentSession = (mode: Mode, agentId: string | null) => {
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
-    setCurrentAgentId(null);
+    setCurrentAgentId(agentId);
     setCurrentSessionTitle("새 채팅");
     setCurrentSessionProjectPaths([]);
-    setInputValue("");
+    setInputValue(draftsRef.current.get(conversationDraftKey(null, mode, agentId)) ?? "");
   };
 
   const {
@@ -79,7 +78,7 @@ export function useChatController({
     getModeProjectPaths,
     handleSessionDelete: selectDeleteSession,
     handleSessionSelect: selectSavedSession,
-    loadSession,
+    selectAgentConversation,
     loadOperationModes,
     refreshSessions,
     saveAgentsForSelectedMode: persistAgents,
@@ -88,7 +87,7 @@ export function useChatController({
     updateCurrentSessionProjectPaths: persistSessionProjectPaths,
     openProjectFolder,
   } = createSessionModeController({
-    agents,
+    currentAgentId,
     currentSessionId,
     modeDefaultModels,
     modeIcons,
@@ -99,6 +98,11 @@ export function useChatController({
     setAgents,
     setCurrentSessionId,
     setCurrentAgentId,
+    hasNewDraft: (mode, agentId) =>
+      Boolean(draftsRef.current.get(conversationDraftKey(null, mode, agentId))),
+    onModesSaved: (modeItems) => {
+      draftsRef.current = remapConversationDrafts(draftsRef.current, modeItems);
+    },
     restoreDraft: (session) => {
       setInputValue(
         draftsRef.current.get(
@@ -108,7 +112,6 @@ export function useChatController({
     },
     setCurrentSessionProjectPaths,
     setCurrentSessionTitle,
-    setIsSessionLoading,
     setMessages,
     setModeDefaultModels,
     setModeIcons,
@@ -145,16 +148,19 @@ export function useChatController({
   // 다른 에이전트로 이동할 때 개발 실행을 다시 명시적으로 선택합니다.
   useEffect(() => setExecutionMode("chat"), [currentAgentId]);
 
-  const conversationAgent = resolveConversationAgent(agents, currentAgentId);
-  const unavailableReason =
-    !currentAgentId && !conversationAgent
-      ? "대화할 에이전트가 없습니다. 에이전트 설정에서 추가해 주세요."
-      : currentAgentId && !conversationAgent
-        ? "이 대화의 에이전트가 삭제되었습니다. 기존 기록만 확인할 수 있어요."
-        : currentAgentId && !conversationAgent?.active
-          ? "비활성 에이전트입니다. 에이전트 설정에서 활성화한 뒤 대화할 수 있어요."
-          : "";
-  const isConversationBusy = isLoading || isSessionLoading || isTransitioning || isInstallingUpdate;
+  const conversationAgent = agents.find((agent) => agent.agentId === currentAgentId);
+  const participants = resolveConversationParticipants(agents, currentAgentId);
+  let unavailableReason = "";
+  if (participants.length === 0) {
+    if (currentAgentId === null) {
+      unavailableReason = "전체 대화에 참여할 에이전트를 추가하거나 활성화해 주세요.";
+    } else if (conversationAgent) {
+      unavailableReason = "비활성 에이전트입니다. 에이전트 설정에서 활성화한 뒤 대화할 수 있어요.";
+    } else {
+      unavailableReason = "이 대화의 에이전트가 삭제되었습니다. 기존 기록만 확인할 수 있어요.";
+    }
+  }
+  const isConversationBusy = isLoading || isTransitioning || isInstallingUpdate;
   const canSend = inputValue.trim().length > 0 && !isConversationBusy && !unavailableReason;
 
   const rememberDraft = () => {
@@ -190,20 +196,7 @@ export function useChatController({
   const startAgentChat = (agent: AgentItem) =>
     changeConversation(async () => {
       if (!agent.agentId) throw new Error("에이전트를 저장한 뒤 개별 대화를 시작해 주세요.");
-      if (currentAgentId === agent.agentId) return;
-      const sessions = await invoke<SessionItem[]>("list_chat_sessions");
-      const existing = findAgentSession(sessions, selectedMode, agent.agentId);
-      if (existing) {
-        await loadSession(existing.id);
-      } else {
-        await refreshSessions(modes, null);
-        resetCurrentSession();
-        setCurrentAgentId(agent.agentId);
-        setCurrentSessionTitle(`${agent.name}와 대화`);
-        setInputValue(
-          draftsRef.current.get(conversationDraftKey(null, selectedMode, agent.agentId)) ?? ""
-        );
-      }
+      await selectAgentConversation(agent.agentId);
     });
 
   const handleSessionSelect = (session: SessionItem) =>
@@ -280,6 +273,7 @@ export function useChatController({
     });
 
     setCurrentSessionId(created.id);
+    draftsRef.current.delete(conversationDraftKey(null, selectedMode, currentAgentId));
     setCurrentSessionTitle(created.title);
     setCurrentSessionProjectPaths(created.projectPaths || []);
     await refreshSessions(modes, created.id);
@@ -346,18 +340,11 @@ export function useChatController({
     appendStatusMessage("계획 수정 요청을 남겼습니다.");
   };
 
-  const clearContext = () => {
-    return changeConversation(async () => {
-      await refreshSessions(modes, null);
-      resetCurrentSession();
-      setCurrentAgentId(currentAgentId);
-    });
-  };
-
   const startNewChat = () => {
     return changeConversation(async () => {
       await refreshSessions(modes, null);
-      resetCurrentSession();
+      draftsRef.current.delete(conversationDraftKey(null, selectedMode, currentAgentId));
+      resetCurrentSession(selectedMode, currentAgentId);
     });
   };
 
@@ -400,11 +387,12 @@ export function useChatController({
     cancelComputerTask,
     isComputerRunning,
     canSend,
-    clearContext,
+    clearContext: startNewChat,
     costPercent,
     currentSessionId,
     currentAgentId,
     conversationAgent,
+    participants,
     conversationError,
     unavailableReason,
     isConversationBusy,

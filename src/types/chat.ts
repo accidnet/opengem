@@ -4,6 +4,8 @@ export type MessageSide = "agent" | "user" | "status";
 
 export type Message = {
   id: string;
+  /** 작성 당시 에이전트의 고유 ID. 이전 메시지는 sender 표시 이름만 가질 수 있습니다. */
+  agentId?: string | null;
   side: MessageSide;
   type: MessageType;
   sender?: string;
@@ -49,7 +51,7 @@ export type AgentItem = {
   status: string;
   color: AgentColor;
   active?: boolean;
-  /** 채팅 수신 에이전트 역할: main은 실제 LLM 호출 대상, sub는 보조 에이전트 */
+  /** 모드 안에서 표시하는 역할입니다. 전체 대화에는 두 역할 모두 참여합니다. */
   role?: AgentRole;
   model?: string;
   prompt?: string;
@@ -59,6 +61,7 @@ export type AgentItem = {
 };
 
 export type SessionItem = {
+  /** 전체 대화는 null이며, 개별 대화에는 대상 에이전트의 고정 ID를 저장합니다. */
   agentId?: string | null;
   id: string;
   title: string;

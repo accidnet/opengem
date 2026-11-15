@@ -85,6 +85,7 @@ export function ChatPage() {
     currentSessionId,
     currentAgentId,
     conversationAgent,
+    participants,
     conversationError,
     unavailableReason,
     isConversationBusy,
@@ -219,7 +220,7 @@ export function ChatPage() {
         onNewChat={async () => {
           if (await startNewChat()) {
             setWorkspaceView("chat");
-            setSelectedAgentId(null);
+            setSelectedAgentId(currentAgentId);
           }
         }}
         onExportChat={exportChat}
@@ -297,7 +298,10 @@ export function ChatPage() {
           selectedMode={selectedMode}
           openSelectedModeSignal={openSelectedModeSignal}
           onModeSelect={async (mode) => {
-            await selectOperationMode(mode);
+            if (!(await selectOperationMode(mode))) return;
+            setSelectedAgentId(null);
+            setWorkspaceView("chat");
+            setOpenPanel(null);
           }}
           onSaveModeSettings={saveOperationModeSettings}
           onSaveAgents={saveAgentsForSelectedMode}
@@ -308,6 +312,7 @@ export function ChatPage() {
           sessionsByMode={sessionsByMode}
           onSessionSelect={async (session) => {
             if (!(await handleSessionSelect(session))) return;
+            setSelectedAgentId(session.agentId ?? null);
             setOpenPanel(null);
             setWorkspaceView("chat");
           }}
@@ -336,9 +341,15 @@ export function ChatPage() {
         <ChatPanel
           modeName={selectedMode}
           conversationLabel={
-            currentAgentId ? (conversationAgent?.name ?? "삭제된 에이전트") : "일반 대화"
+            currentAgentId
+              ? `${conversationAgent?.name ?? "삭제된 에이전트"} 개별 대화`
+              : `${selectedMode} 전체 대화`
           }
-          conversationModel={conversationAgent?.model ?? ""}
+          conversationDetails={
+            currentAgentId
+              ? conversationAgent?.model
+              : participants.map((agent) => agent.name).join(", ")
+          }
           conversationError={conversationError || unavailableReason}
           executionMode={executionMode}
           onExecutionModeChange={setExecutionMode}

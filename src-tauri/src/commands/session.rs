@@ -1,6 +1,6 @@
 use crate::app_state::AppState;
 use rand::{distributions::Alphanumeric, Rng};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -31,6 +31,7 @@ pub struct SessionDetailPayload {
 #[serde(rename_all = "camelCase")]
 pub struct ChatMessagePayload {
     id: String,
+    agent_id: Option<String>,
     side: String,
     r#type: String,
     sender: Option<String>,
@@ -109,12 +110,12 @@ pub fn create_chat_session(
     state: State<AppState>,
     input: Option<CreateSessionInput>,
 ) -> Result<SessionSummaryPayload, String> {
-    let connection = state.open_connection()?;
-    create_session_in_connection(&connection, input)
+    let mut connection = state.open_connection()?;
+    create_session_in_connection(&mut connection, input)
 }
 
 fn create_session_in_connection(
-    connection: &rusqlite::Connection,
+    connection: &mut rusqlite::Connection,
     input: Option<CreateSessionInput>,
 ) -> Result<SessionSummaryPayload, String> {
     let title = normalize_title(input.as_ref().and_then(|value| value.title.clone()));
@@ -124,26 +125,11 @@ fn create_session_in_connection(
             .map(|value| value.mode_name.as_str())
             .unwrap_or_default(),
     )?;
-    let agent_id = input.as_ref().and_then(|value| value.agent_id.as_deref());
-    let agent_id = match agent_id {
-        Some(value) => {
-            let id = value.trim();
-            if id.is_empty() {
-                return Err("에이전트 ID가 비어 있습니다.".to_string());
-            }
-            let exists: bool = connection.query_row(
-                "SELECT EXISTS(SELECT 1 FROM operation_mode_agents a JOIN operation_modes m ON a.mode_id = m.id WHERE m.mode_name = ?1 AND a.agent_id = ?2)",
-                params![&mode_name, id],
-                |row| row.get(0),
-            ).map_err(|error| error.to_string())?;
-            if !exists {
-                return Err("선택한 모드에서 에이전트를 찾을 수 없습니다.".to_string());
-            }
-            Some(id.to_string())
-        }
-        None => None,
-    };
-    let project_paths = load_mode_project_paths(connection, &mode_name)?;
+    let agent_id = input.and_then(|value| value.agent_id.map(|id| id.trim().to_owned()));
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| error.to_string())?;
+    let project_paths = load_target_project_paths(&transaction, &mode_name, agent_id.as_deref())?;
     let now = now_millis();
     let session = SessionSummaryPayload {
         id: generate_id("session"),
@@ -154,7 +140,7 @@ fn create_session_in_connection(
         agent_id,
     };
 
-    connection
+    transaction
         .execute(
             "
             INSERT INTO chat_sessions (id, title, created_at, updated_at, mode_name, project_paths, agent_id)
@@ -171,6 +157,7 @@ fn create_session_in_connection(
             ],
         )
         .map_err(|error| error.to_string())?;
+    transaction.commit().map_err(|error| error.to_string())?;
 
     info!(
         session_id = %session.id,
@@ -228,6 +215,13 @@ pub fn append_chat_message(
     input: AppendMessageInput,
 ) -> Result<ChatMessagePayload, String> {
     let mut connection = state.open_connection()?;
+    append_message_in_connection(&mut connection, input)
+}
+
+fn append_message_in_connection(
+    connection: &mut rusqlite::Connection,
+    input: AppendMessageInput,
+) -> Result<ChatMessagePayload, String> {
     let session_id = normalize_session_id(&input.session_id)?;
     let message = normalize_message(input.message)?;
     debug!(
@@ -239,20 +233,27 @@ pub fn append_chat_message(
     );
     let now = now_millis();
     let transaction = connection
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| error.to_string())?;
 
-    let exists: Option<String> = transaction
+    // 현재 모드의 활성 멤버만 발신할 수 있고, 개별 대화는 세션 대상까지 일치해야 합니다.
+    let has_participant: Option<bool> = transaction
         .query_row(
-            "SELECT id FROM chat_sessions WHERE id = ?1",
-            params![&session_id],
+            "SELECT EXISTS (
+                SELECT 1 FROM operation_modes m
+                JOIN operation_mode_agents a ON a.mode_id = m.id
+                WHERE m.mode_name = s.mode_name AND a.is_active = 1
+                  AND (s.agent_id IS NULL OR s.agent_id = a.agent_id)
+                  AND (?2 IS NULL OR ?2 = a.agent_id)
+             ) FROM chat_sessions s WHERE s.id = ?1",
+            params![&session_id, &message.agent_id],
             |row| row.get(0),
         )
         .optional()
         .map_err(|error| error.to_string())?;
 
-    if exists.is_none() {
-        return Err("채팅 세션을 찾을 수 없습니다.".to_string());
+    if !has_participant.ok_or("채팅 세션을 찾을 수 없습니다.")? {
+        return Err("이 대화에 참여할 수 있는 에이전트를 찾을 수 없습니다.".to_string());
     }
 
     let next_order: i64 = transaction
@@ -268,10 +269,10 @@ pub fn append_chat_message(
             "
             INSERT INTO chat_messages (
               id, session_id, message_order, side, type, sender, byline, avatar_text, icon,
-              icon_color, text, status_text, plan_title, steps_json, logs_json, created_at
+              icon_color, text, status_text, plan_title, steps_json, logs_json, created_at, agent_id
             ) VALUES (
               ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
-              ?10, ?11, ?12, ?13, ?14, ?15, ?16
+              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
             )
             ",
             params![
@@ -291,6 +292,7 @@ pub fn append_chat_message(
                 serialize_json(&message.steps)?,
                 serialize_json(&message.logs)?,
                 now,
+                &message.agent_id,
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -390,7 +392,7 @@ fn load_session_messages(
         .prepare(
             "
             SELECT id, side, type, sender, byline, avatar_text, icon, icon_color, text,
-                   status_text, plan_title, steps_json, logs_json
+                   status_text, plan_title, steps_json, logs_json, agent_id
             FROM chat_messages
             WHERE session_id = ?1
             ORDER BY message_order ASC, created_at ASC, id ASC
@@ -414,6 +416,7 @@ fn load_session_messages(
                 plan_title: row.get(10)?,
                 steps: deserialize_json(row.get::<_, Option<String>>(11)?)?,
                 logs: deserialize_json(row.get::<_, Option<String>>(12)?)?,
+                agent_id: row.get(13)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -426,19 +429,23 @@ fn load_session_messages(
     Ok(messages)
 }
 
-fn load_mode_project_paths(
+fn load_target_project_paths(
     connection: &rusqlite::Connection,
     mode_name: &str,
+    agent_id: Option<&str>,
 ) -> Result<Vec<String>, String> {
     let raw_paths = connection
         .query_row(
-            "SELECT project_paths FROM operation_modes WHERE mode_name = ?1",
-            params![mode_name],
+            "SELECT project_paths FROM operation_modes m WHERE m.mode_name = ?1
+             AND (?2 IS NULL OR EXISTS (
+                SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = m.id AND a.agent_id = ?2
+             ))",
+            params![mode_name, agent_id],
             |row| row.get::<_, Option<String>>(0),
         )
         .optional()
         .map_err(|error| error.to_string())?
-        .flatten();
+        .ok_or("선택한 모드 또는 에이전트를 찾을 수 없습니다.")?;
 
     deserialize_json(raw_paths)
         .map(|paths| normalize_string_list(paths.unwrap_or_default()))
@@ -499,8 +506,11 @@ fn normalize_message(message: ChatMessagePayload) -> Result<ChatMessagePayload, 
         return Err("메시지 ID가 비어 있습니다.".to_string());
     }
 
-    if message.side.trim().is_empty() {
-        return Err("메시지 방향이 비어 있습니다.".to_string());
+    match (message.side.as_str(), message.agent_id.as_deref()) {
+        ("agent", None) => return Err("메시지를 작성한 에이전트 ID가 필요합니다.".to_string()),
+        ("user", Some(_)) => return Err("사용자 메시지에 에이전트 ID가 있습니다.".to_string()),
+        ("agent" | "user" | "status", _) => {}
+        _ => return Err("메시지 방향이 올바르지 않습니다.".to_string()),
     }
 
     if message.r#type.trim().is_empty() {
@@ -564,6 +574,73 @@ mod agent_session_tests {
     use crate::migrations::run_migrations;
 
     #[test]
+    fn replies_stay_with_their_participants_and_keep_the_original_sender() {
+        let mut db = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&mut db).unwrap();
+        db.execute_batch(
+            "UPDATE operation_mode_agents SET agent_id = 'main';
+             INSERT INTO operation_modes (mode_name, display_order) VALUES ('Other', 1);
+             INSERT INTO operation_mode_agents (mode_id, agent_id, agent_name, icon, color)
+               SELECT id, 'sub', '동료', '', '' FROM operation_modes WHERE mode_name = 'Orchestration';
+             INSERT INTO operation_mode_agents (mode_id, agent_id, agent_name, icon, color)
+               SELECT id, 'outsider', '외부', '', '' FROM operation_modes WHERE mode_name = 'Other';",
+        ).unwrap();
+        let new_session = |db: &mut rusqlite::Connection, mode: &str, agent: Option<&str>| {
+            create_session_in_connection(
+                db,
+                Some(CreateSessionInput {
+                    title: None,
+                    mode_name: mode.into(),
+                    agent_id: agent.map(str::to_string),
+                }),
+            )
+        };
+        assert!(new_session(&mut db, "Missing", None).is_err());
+        let group = new_session(&mut db, "Orchestration", None).unwrap().id;
+        let direct = new_session(&mut db, "Orchestration", Some("sub"))
+            .unwrap()
+            .id;
+        let append = |db: &mut rusqlite::Connection,
+                      session: &str,
+                      id: &str,
+                      side: &str,
+                      agent: Option<&str>| {
+            let input = serde_json::from_value(serde_json::json!({
+                "sessionId": session,
+                "message": { "id": id, "side": side, "type": "text", "sender": "동료", "agentId": agent }
+            })).unwrap();
+            append_message_in_connection(db, input)
+        };
+        append(&mut db, &group, "g1", "agent", Some("main")).unwrap();
+        append(&mut db, &group, "g2", "agent", Some("sub")).unwrap();
+        append(&mut db, &direct, "d1", "user", None).unwrap();
+        append(&mut db, &direct, "d2", "agent", Some("sub")).unwrap();
+        assert!(append(&mut db, &direct, "wrong-target", "agent", Some("main")).is_err());
+        assert!(append(&mut db, &group, "wrong-mode", "agent", Some("outsider")).is_err());
+        assert!(append(&mut db, &group, "missing-author", "agent", None).is_err());
+        assert!(append(&mut db, &group, "invalid-author", "user", Some("sub")).is_err());
+        db.execute(
+            "UPDATE operation_mode_agents SET is_active = 0 WHERE agent_id = 'sub'",
+            [],
+        )
+        .unwrap();
+        assert!(append(&mut db, &group, "inactive", "agent", Some("sub")).is_err());
+        db.execute(
+            "DELETE FROM operation_mode_agents WHERE agent_id = 'sub'",
+            [],
+        )
+        .unwrap();
+        assert!(append(&mut db, &direct, "removed", "user", None).is_err());
+
+        let history = load_session_messages(&db, &group).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].agent_id.as_deref(), Some("main"));
+        assert_eq!(history[1].agent_id.as_deref(), Some("sub"));
+        assert_eq!(history[1].sender.as_deref(), Some("동료"));
+        assert_eq!(load_session_messages(&db, &direct).unwrap().len(), 2);
+    }
+
+    #[test]
     fn direct_session_validates_mode_and_survives_agent_removal() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         run_migrations(&mut connection).unwrap();
@@ -581,7 +658,7 @@ mod agent_session_tests {
             )
             .unwrap();
         let invalid = create_session_in_connection(
-            &connection,
+            &mut connection,
             Some(CreateSessionInput {
                 title: None,
                 mode_name: "Other".to_string(),
@@ -590,7 +667,7 @@ mod agent_session_tests {
         );
         assert!(invalid.is_err());
         let session = create_session_in_connection(
-            &connection,
+            &mut connection,
             Some(CreateSessionInput {
                 title: Some("대화".to_string()),
                 mode_name: "Orchestration".to_string(),
@@ -614,7 +691,7 @@ mod agent_session_tests {
         );
 
         let legacy = create_session_in_connection(
-            &connection,
+            &mut connection,
             Some(CreateSessionInput {
                 title: None,
                 mode_name: "Orchestration".to_string(),

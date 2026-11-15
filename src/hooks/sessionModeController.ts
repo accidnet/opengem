@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Dispatch, SetStateAction } from "react";
 
 import { getChatSession } from "@/features/backend/api";
+import { findLatestConversationSession } from "@/pages/chat/conversationTarget";
 import {
   AGENTS,
   LLM_CONFIG,
@@ -27,7 +28,7 @@ import {
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
 type SessionModeControllerParams = {
-  agents: AgentItem[];
+  currentAgentId: string | null;
   currentSessionId: string | null;
   modeDefaultModels: Record<Mode, string>;
   modeIcons: Record<Mode, ModeIcon>;
@@ -38,10 +39,11 @@ type SessionModeControllerParams = {
   setAgents: Setter<AgentItem[]>;
   setCurrentSessionId: Setter<string | null>;
   setCurrentAgentId: Setter<string | null>;
+  hasNewDraft: (mode: Mode, agentId: string | null) => boolean;
+  onModesSaved: (modeItems: OperationModeInput[]) => void;
   restoreDraft: (session: SessionItem) => void;
   setCurrentSessionProjectPaths: Setter<string[]>;
   setCurrentSessionTitle: Setter<string>;
-  setIsSessionLoading: Setter<boolean>;
   setMessages: Setter<SessionDetail["messages"]>;
   setModeDefaultModels: Setter<Record<Mode, string>>;
   setModeIcons: Setter<Record<Mode, ModeIcon>>;
@@ -49,10 +51,11 @@ type SessionModeControllerParams = {
   setModes: Setter<Mode[]>;
   setSelectedMode: Setter<Mode>;
   setSessionsByMode: Setter<Record<Mode, SessionItem[]>>;
-  resetCurrentSession: () => void;
+  resetCurrentSession: (mode: Mode, agentId: string | null) => void;
 };
 
 export function createSessionModeController({
+  currentAgentId,
   currentSessionId,
   modeDefaultModels,
   modeIcons,
@@ -63,10 +66,11 @@ export function createSessionModeController({
   setAgents,
   setCurrentSessionId,
   setCurrentAgentId,
+  hasNewDraft,
+  onModesSaved,
   restoreDraft,
   setCurrentSessionProjectPaths,
   setCurrentSessionTitle,
-  setIsSessionLoading,
   setMessages,
   setModeDefaultModels,
   setModeIcons,
@@ -125,42 +129,32 @@ export function createSessionModeController({
     setMessages(detail.messages);
   };
 
-  const loadSession = async (sessionId: string, nextModes: ReadonlyArray<Mode> = modes) => {
-    setIsSessionLoading(true);
-    try {
-      // 모든 조회가 성공한 뒤에만 세션과 목록을 함께 반영합니다.
-      const [detail, nextSessions] = await Promise.all([
-        getChatSession(sessionId),
-        invoke<SessionItem[]>("list_chat_sessions"),
-      ]);
-      applySessionDetail(detail);
-      applySessionList(nextSessions, nextModes, detail.session.id);
-    } finally {
-      setIsSessionLoading(false);
-    }
-  };
-
   const prepareModeSessions = async (
     mode: Mode,
     nextModes: ReadonlyArray<Mode>,
+    agentId: string | null = null,
     preferredSessionId?: string | null
   ) => {
     const nextSessions = await invoke<SessionItem[]>("list_chat_sessions");
-    const modeSessions = nextSessions.filter((session) => session.modeName === mode);
-    const candidateSessionId =
-      preferredSessionId && modeSessions.some((session) => session.id === preferredSessionId)
-        ? preferredSessionId
-        : modeSessions[0]?.id;
-
-    const detail = candidateSessionId ? await getChatSession(candidateSessionId) : null;
-    return { nextSessions, nextModes, detail };
+    let session = nextSessions.find(
+      (item) =>
+        item.id === preferredSessionId &&
+        item.modeName === mode &&
+        (item.agentId ?? null) === agentId
+    );
+    // 작성 중인 새 대화가 있으면 같은 대상의 예전 기록으로 덮어쓰지 않습니다.
+    if (!session && !hasNewDraft(mode, agentId)) {
+      session = findLatestConversationSession(nextSessions, mode, agentId);
+    }
+    const detail = session ? await getChatSession(session.id) : null;
+    return { mode, agentId, nextSessions, nextModes, detail };
   };
 
   const applyPreparedSessions = (prepared: Awaited<ReturnType<typeof prepareModeSessions>>) => {
     if (prepared.detail) {
       applySessionDetail(prepared.detail);
     } else {
-      resetCurrentSession();
+      resetCurrentSession(prepared.mode, prepared.agentId);
     }
     applySessionList(
       prepared.nextSessions,
@@ -186,7 +180,7 @@ export function createSessionModeController({
       }
       const [nextAgents, prepared] = await Promise.all([
         fetchAgentsForMode(next.selectedMode),
-        prepareModeSessions(next.selectedMode, next.modes, null),
+        prepareModeSessions(next.selectedMode, next.modes),
       ]);
 
       setModes(next.modes);
@@ -220,7 +214,7 @@ export function createSessionModeController({
       if (isTauri()) {
         setAgents([]);
         setSessionsByMode({});
-        resetCurrentSession();
+        resetCurrentSession(selectedMode, null);
         throw new Error("저장된 작업 공간을 불러오지 못했습니다. 앱을 다시 열어 주세요.");
       }
       setModes([...MODES]);
@@ -229,7 +223,7 @@ export function createSessionModeController({
       setModeDefaultModels({});
       setAgents(normalizeAgentsForUi([...AGENTS]));
       setSessionsByMode({});
-      resetCurrentSession();
+      resetCurrentSession(MODES[0], null);
     }
   };
 
@@ -242,9 +236,13 @@ export function createSessionModeController({
 
   const selectOperationMode = async (mode: Mode) => {
     try {
+      if (mode === selectedMode) {
+        if (currentAgentId !== null) applyPreparedSessions(await prepareModeSessions(mode, modes));
+        return;
+      }
       const [nextAgents, prepared] = await Promise.all([
         fetchAgentsForMode(mode),
-        prepareModeSessions(mode, modes, null),
+        prepareModeSessions(mode, modes),
       ]);
       await invoke("select_operation_mode", { selectedMode: mode });
       setSelectedMode(mode);
@@ -252,6 +250,12 @@ export function createSessionModeController({
       applyPreparedSessions(prepared);
     } catch {
       throw new Error("작업 모드를 불러오지 못했습니다.");
+    }
+  };
+
+  const selectAgentConversation = async (agentId: string) => {
+    if (currentAgentId !== agentId) {
+      applyPreparedSessions(await prepareModeSessions(selectedMode, modes, agentId));
     }
   };
 
@@ -291,20 +295,16 @@ export function createSessionModeController({
         return;
       }
 
-      const sameModeSessions = nextSessions.filter((item) => item.modeName === session.modeName);
-      const fallbackSession = sameModeSessions[0];
-      const changingMode = session.modeName !== selectedMode;
-      const [detail, nextAgents] = await Promise.all([
-        fallbackSession ? getChatSession(fallbackSession.id) : Promise.resolve(null),
-        changingMode ? fetchAgentsForMode(session.modeName) : Promise.resolve(null),
-      ]);
-      if (changingMode) {
-        await invoke("select_operation_mode", { selectedMode: session.modeName });
-        setSelectedMode(session.modeName);
-        if (nextAgents) setAgents(nextAgents);
-      }
+      // 삭제한 대화와 같은 참여 범위에서만 다음 기록을 엽니다.
+      const agentId = session.agentId ?? null;
+      const fallbackSession = findLatestConversationSession(
+        nextSessions,
+        session.modeName,
+        agentId
+      );
+      const detail = fallbackSession ? await getChatSession(fallbackSession.id) : null;
       if (detail) applySessionDetail(detail);
-      else resetCurrentSession();
+      else resetCurrentSession(session.modeName, agentId);
       applySessionList(nextSessions, modes, detail?.session.id ?? null);
     } catch {
       if (deleted) {
@@ -316,7 +316,8 @@ export function createSessionModeController({
             ])
           )
         );
-        if (session.id === currentSessionId) resetCurrentSession();
+        if (session.id === currentSessionId)
+          resetCurrentSession(session.modeName, session.agentId ?? null);
       }
       throw new Error(
         deleted ? "대화는 삭제됐지만 목록을 갱신하지 못했습니다." : "대화를 삭제하지 못했습니다."
@@ -343,9 +344,17 @@ export function createSessionModeController({
     try {
       await persistOperationModes(modeItems, nextSelectedMode);
       persisted = true;
+      onModesSaved(modeItems);
+      const selectedItem = modeItems.find((item) => item.name === nextSelectedMode);
+      const sameMode = selectedItem?.originalName === selectedMode;
       const [nextAgents, prepared] = await Promise.all([
         fetchAgentsForMode(nextSelectedMode),
-        prepareModeSessions(nextSelectedMode, nextModes, null),
+        prepareModeSessions(
+          nextSelectedMode,
+          nextModes,
+          sameMode ? currentAgentId : null,
+          currentSessionId
+        ),
       ]);
       setModes(nextModes);
       setModeIcons(nextModeIcons);
@@ -364,7 +373,7 @@ export function createSessionModeController({
         setSelectedMode(nextSelectedMode);
         setAgents([]);
         setSessionsByMode({});
-        resetCurrentSession();
+        resetCurrentSession(nextSelectedMode, null);
       }
       throw new Error(
         persisted
@@ -446,7 +455,7 @@ export function createSessionModeController({
     handleSessionSelect,
     loadAgentsForMode,
     loadOperationModes,
-    loadSession,
+    selectAgentConversation,
     refreshSessions,
     saveAgentsForSelectedMode,
     saveOperationModeSettings,
