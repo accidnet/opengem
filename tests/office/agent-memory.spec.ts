@@ -177,6 +177,7 @@ for (const providerId of ["openai", "anthropic"] as const) {
     await page.getByLabel("전역 프롬프트").fill(prompt);
     await page.getByRole("button", { name: "저장", exact: true }).click();
     await page.getByTitle("메모담당와 대화", { exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "실행 방식" })).toHaveCount(0);
     await page.getByLabel("메시지 입력").fill(preference);
     await page.getByRole("button", { name: "메시지 보내기" }).click();
     await expect(page.getByText(finalText, { exact: true })).toBeVisible();

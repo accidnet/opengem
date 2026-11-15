@@ -6,7 +6,6 @@ mod migrations;
 mod repositories;
 
 use app_state::AppState;
-use commands::codex::CodexTasks;
 use dotenvy::from_path_override;
 use migrations::run_migrations;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -372,7 +371,6 @@ fn main() {
                 Box::<dyn std::error::Error>::from(error)
             })?;
 
-            app_handle.manage(CodexTasks::default());
             app_handle.manage(commands::settings::ChatgptLogin::default());
             app_handle.manage(AppState {
                 db_path: db_path.clone(),
@@ -387,12 +385,6 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::computer::list_computer_windows,
-            commands::computer::get_computer_status,
-            commands::computer::start_computer_session,
-            commands::computer::observe_computer_session,
-            commands::computer::act_computer_session,
-            commands::computer::stop_computer_session,
             commands::google_auth::get_google_settings,
             commands::google_auth::save_google_settings,
             commands::google_auth::begin_google_login,
@@ -421,8 +413,6 @@ fn main() {
             commands::email::cancel_email_login,
             commands::email::disconnect_email,
             commands::email::fetch_email_digest_messages,
-            commands::codex::run_codex_task,
-            commands::codex::cancel_codex_task,
             commands::characters::list_characters,
             commands::characters::save_character,
             commands::characters::delete_character,

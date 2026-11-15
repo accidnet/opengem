@@ -468,10 +468,7 @@
 
 .composer-floating-actions {
   display: flex;
-  gap: 8px;
   margin-bottom: 8px;
-  position: relative;
-  flex-wrap: wrap;
 }
 
 .chip {

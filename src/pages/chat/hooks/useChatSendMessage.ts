@@ -1,18 +1,7 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-  type MutableRefObject,
-} from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import { loadAgentContext, manageAgentRequest } from "@/features/agent/context";
 import type { AgentScope } from "@/features/agent/api";
-import { runComputerTask } from "@/features/computer/runtime";
-
 import { hasAvailableProvider } from "@/features/ai/providers/utils";
 import { getAvailableProviders, getChatSession } from "@/features/backend/api";
 import { getProviderCatalog } from "@/features/ai/catalog";
@@ -38,7 +27,6 @@ import { finalizeAssistantMessage } from "@/pages/chat/activity";
 import { resolveConversationAgent } from "@/pages/chat/conversationTarget";
 
 type SendMessageDeps = {
-  executionMode: "chat" | "codex" | "computer";
   agents: AgentItem[];
   targetAgentId: string | null;
   conversationLockRef: MutableRefObject<boolean>;
@@ -383,7 +371,6 @@ function createAssistantMessage(base: Message, text: string): Message {
 }
 
 export function useChatSendMessage({
-  executionMode,
   agents,
   targetAgentId,
   conversationLockRef,
@@ -404,36 +391,6 @@ export function useChatSendMessage({
   setResourceToken,
   maxAgentSteps = DEFAULT_MAX_AGENT_STEPS,
 }: SendMessageDeps) {
-  const activeCodexRequest = useRef<string | null>(null);
-  const [isCodexRunning, setIsCodexRunning] = useState(false);
-  const [isComputerRunning, setIsComputerRunning] = useState(false);
-  const activeComputerRequest = useRef<AbortController | null>(null);
-  const cancelComputerTask = () => activeComputerRequest.current?.abort();
-  useEffect(() => {
-    const stop = () => activeComputerRequest.current?.abort();
-    window.addEventListener("computer-stop", stop);
-    return () => {
-      window.removeEventListener("computer-stop", stop);
-      stop();
-    };
-  }, []);
-
-  const cancelCodexTask = () => {
-    const requestId = activeCodexRequest.current;
-    if (!requestId) return;
-    void invoke("cancel_codex_task", { requestId }).catch((error) => {
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: "cancel-error-" + Date.now(),
-          side: "status",
-          type: "status",
-          statusText: "작업 취소 실패: " + getErrorMessage(error),
-        },
-      ]);
-    });
-  };
-
   const sendMessage = async (): Promise<void> => {
     if (!canSend || conversationLockRef.current) {
       return;
@@ -493,108 +450,6 @@ export function useChatSendMessage({
       const agentScope = targetAgentId
         ? { modeName: sessionDetail.session.modeName, agentId: targetAgentId }
         : null;
-      if (executionMode === "codex") {
-        if (!targetAgentId) throw new Error("개발 실행은 개별 에이전트 대화에서 선택해 주세요.");
-        const requestId = crypto.randomUUID();
-        const logs: string[] = [];
-        // 다른 세션의 이벤트는 화면에 섞이지 않도록 요청 ID까지 확인합니다.
-        const unlisten = await listen<{
-          sessionId: string;
-          agentId: string;
-          requestId: string;
-          type: "started" | "event" | "stderr";
-          data: string;
-        }>("codex-task-event", (event) => {
-          const payload = event.payload;
-          if (
-            payload.sessionId !== session.id ||
-            payload.agentId !== targetAgentId ||
-            payload.requestId !== requestId
-          )
-            return;
-          let description = "";
-          if (payload.type === "started") {
-            setIsCodexRunning(true);
-            description = "Codex 실행 준비 완료";
-          } else if (payload.type === "stderr") {
-            description = payload.data.trim();
-          } else {
-            try {
-              const parsed = JSON.parse(payload.data) as {
-                type?: string;
-                item?: {
-                  type?: string;
-                  command?: string;
-                  status?: string;
-                  exit_code?: number | null;
-                };
-              };
-              if (parsed.type === "item.started" && parsed.item?.type === "command_execution")
-                description = "명령 실행: " + (parsed.item.command ?? "");
-              else if (
-                parsed.type === "item.completed" &&
-                parsed.item?.type === "command_execution"
-              )
-                description = `명령 종료: ${parsed.item.status ?? "상태 알 수 없음"}${parsed.item.exit_code == null ? "" : ` (exit ${parsed.item.exit_code})`}`;
-              else if (parsed.type === "item.completed" && parsed.item?.type === "file_change")
-                description = `파일 변경: ${parsed.item.status ?? "상태 알 수 없음"}`;
-              else if (parsed.type === "turn.started") description = "Codex 작업 시작";
-              else if (parsed.type === "turn.completed") description = "Codex 작업 완료";
-              else if (parsed.type === "turn.failed" || parsed.type === "error")
-                description = "Codex 작업 오류";
-            } catch {
-              description = "Codex 이벤트를 읽지 못했습니다.";
-            }
-          }
-          if (!description) return;
-          const bounded = description.slice(0, 500);
-          if (logs.length < 100) logs.push(bounded);
-          updateStreamingStatusMessage(setMessages, typingMessage.id, bounded);
-        });
-        activeCodexRequest.current = requestId;
-        try {
-          const result = await invoke<{ output: string }>("run_codex_task", {
-            input: {
-              sessionId: session.id,
-              agentId: targetAgentId,
-              requestId,
-              globalPrompt,
-              agentContext: agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
-              prompt: text,
-            },
-          });
-          const assistantMessage = createAssistantMessage(
-            typingMessage,
-            result.output || "Codex 작업이 완료되었습니다."
-          );
-          finishAssistantMessage(setMessages, typingMessage.id, assistantMessage);
-          await persistMessage(session.id, assistantMessage);
-          await refreshSessions(modes, session.id);
-        } finally {
-          unlisten();
-          activeCodexRequest.current = null;
-          setIsCodexRunning(false);
-          if (logs.length) {
-            const logMessage: Message = {
-              id: "codex-log-" + requestId,
-              side: "agent",
-              type: "search",
-              sender: mainAgent.name + " Codex",
-              byline: nowTime(),
-              icon: "terminal",
-              text: "Codex 실행 기록",
-              logs,
-            };
-            setMessages((previous) => [...previous, logMessage]);
-            try {
-              await persistMessage(session.id, logMessage);
-            } catch {
-              /* 원래 실행 결과를 우선합니다. */
-            }
-          }
-        }
-        return;
-      }
       const [currentSettings, availableProviders] = await Promise.all([
         resolveProviderSettings(),
         getAvailableProviders().catch(() => []),
@@ -627,36 +482,6 @@ export function useChatSendMessage({
       };
 
       moveMessageToBottom(setMessages, typingMessage.id, activeAssistantMessage);
-
-      if (executionMode === "computer") {
-        const controller = new AbortController();
-        activeComputerRequest.current = controller;
-        setIsComputerRunning(true);
-        try {
-          const result = await runComputerTask({
-            text,
-            globalPrompt,
-            agentName: mainAgent.name,
-            agentPrompt: mainAgent.prompt,
-            agentContext: agentScope ? await loadAgentContext(agentScope, mainAgent.name) : "",
-            settings: activeSettings,
-            runtimeApiUrl,
-            signal: controller.signal,
-            maxSteps: maxAgentSteps,
-            onProgress: (description) =>
-              updateStreamingStatusMessage(setMessages, activeAssistantMessage.id, description),
-          });
-          const assistantMessage = createAssistantMessage(activeAssistantMessage, result.text);
-          finishAssistantMessage(setMessages, activeAssistantMessage.id, assistantMessage);
-          await persistMessage(session.id, assistantMessage);
-          await refreshSessions(modes, session.id);
-          updateUsageMetrics(result.totalTokens, setResourceToken, setResourceCost);
-        } finally {
-          activeComputerRequest.current = null;
-          setIsComputerRunning(false);
-        }
-        return;
-      }
 
       let agentContext =
         "This is general chat, without an assigned personal agent workspace. To remember facts or set recurring email tasks, guide the user to select an agent and start that agent conversation. Do not claim any task or memory has been saved in this general chat. Global email settings are under 사용자 메뉴 → Google 연동.";
@@ -730,8 +555,7 @@ export function useChatSendMessage({
         isStreaming: false,
         icon: "error",
         byline: nowTime(),
-        text:
-          executionMode === "codex" ? `Codex 실행 종료: ${reason}` : `Request failed: ${reason}`,
+        text: `Request failed: ${reason}`,
       };
       finishAssistantMessage(setMessages, activeAssistantMessage.id, errorMessage);
 
@@ -749,5 +573,5 @@ export function useChatSendMessage({
     }
   };
 
-  return { sendMessage, cancelCodexTask, isCodexRunning, cancelComputerTask, isComputerRunning };
+  return { sendMessage };
 }

@@ -12,7 +12,6 @@
 
 - 자세한 개발 환경 설정 가이드는 다음 [링크](docs/development-setup.md)를 참고하세요.
 - 개발 시에는 기본적으로 `pnpm`을 활용합니다.
-- Codex CLI 설치, 인증과 작업 공간 주의 사항은 [Codex CLI 가이드](docs/codex-cli.md)를 참고하세요.
 
 ### 1. 사전 설치
 
@@ -103,9 +102,3 @@ GitHub의 **Actions → release → Run workflow**에서 `main`을 선택하고 
 - [에이전트 기억과 반복 업무 사용 안내](docs/agent-workspace.md)
 - [Gmail 연결 설정](docs/email-setup.md)
 - [Google Drive·Calendar 연결과 사용](docs/google-workspace.md)
-
-## 컴퓨터 제어
-
-개별 에이전트 대화에서 **컴퓨터 제어** 모드를 선택하면, 지정한 Windows 창의 화면을 보고 클릭·입력·스크롤을 수행합니다. 기본적으로 동작마다 검토하며, 이번 요청의 일반 동작 자동 실행을 선택할 수 있습니다. 중지 버튼이나 F8로 멈춥니다. 이미지 입력을 지원하는 모델이 필요합니다.
-
-- [컴퓨터 제어 사용법과 구현 구조](docs/computer-use.md)

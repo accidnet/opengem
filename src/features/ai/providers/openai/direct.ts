@@ -1,8 +1,3 @@
-import {
-  buildOpenAIImageMessage,
-  validateMessageImages,
-  imageRequestError,
-} from "@/features/ai/imageMessages";
 import type { AIRequest, AIResponse } from "@/features/ai/types/common";
 import {
   extractFinishReason,
@@ -43,8 +38,10 @@ function buildMessages(messages: AIRequest["messages"]) {
     } else if (message.role === "assistant" && message.responseOutput?.length) {
       items.push(...message.responseOutput);
     } else {
-      if (message.content || !message.toolCalls?.length)
-        items.push(buildOpenAIImageMessage(message));
+      if (message.content || !message.toolCalls?.length) {
+        const type = message.role === "assistant" ? "output_text" : "input_text";
+        items.push({ role: message.role, content: [{ type, text: message.content }] });
+      }
       for (const call of message.toolCalls ?? []) {
         items.push({
           type: "function_call",
@@ -59,7 +56,6 @@ function buildMessages(messages: AIRequest["messages"]) {
 }
 
 function buildRequestBody(input: AIRequest) {
-  validateMessageImages(input.messages);
   const firstMessage = input.messages[0];
   const hasSystemPrompt = firstMessage?.role === "system";
   return {
@@ -96,8 +92,6 @@ export async function sendToOpenAICompatible(input: AIRequest): Promise<AIRespon
   const response = await send(input, input.apiKey);
 
   if (!response.ok) {
-    if (input.messages.some((message) => message.images?.length))
-      throw imageRequestError("OpenAI", response.status);
     const detail = await response.text();
     throw new Error(
       `${input.apiBaseUrl} error (${response.status}): ${detail || response.statusText}`
@@ -133,8 +127,6 @@ export async function sendToOpenAIOAuth(input: AIRequest): Promise<AIResponse> {
   );
 
   if (!response.ok) {
-    if (input.messages.some((message) => message.images?.length))
-      throw imageRequestError("OpenAI", response.status);
     const detail = await response.text();
     throw new Error(`ChatGPT API error (${response.status}): ${detail || response.statusText}`);
   }
