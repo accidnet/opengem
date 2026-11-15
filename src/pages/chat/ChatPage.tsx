@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ComputerUseDialog } from "@/components/ComputerUseDialog";
 import { CalendarEventDraftDialog } from "@/components/CalendarEventDraftDialog";
 import type { CalendarEventDraft } from "@/features/agent/googleApi";
 import { EmailSettingsModal } from "@/components/EmailSettingsModal";
@@ -73,12 +72,6 @@ export function ChatPage() {
   const {
     activity,
     agents,
-    executionMode,
-    setExecutionMode,
-    cancelCodexTask,
-    isCodexRunning,
-    cancelComputerTask,
-    isComputerRunning,
     canSend,
     clearContext,
     costPercent,
@@ -340,13 +333,6 @@ export function ChatPage() {
           }
           conversationModel={conversationAgent?.model ?? ""}
           conversationError={conversationError || unavailableReason}
-          executionMode={executionMode}
-          onExecutionModeChange={setExecutionMode}
-          canUseCodex={Boolean(currentAgentId)}
-          isCodexRunning={isCodexRunning}
-          onCancelCodex={cancelCodexTask}
-          isComputerRunning={isComputerRunning}
-          onCancelComputer={cancelComputerTask}
           isConversationBusy={isConversationBusy}
           onStartAgentChat={(index) => {
             if (agents[index]) void openAgentConversation(agents[index]);
@@ -418,7 +404,6 @@ export function ChatPage() {
         )}
       </main>
 
-      <ComputerUseDialog />
       <CalendarEventDraftDialog
         draft={calendarDraft}
         onClose={() => setCalendarDraft(null)}

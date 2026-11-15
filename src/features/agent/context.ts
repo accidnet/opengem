@@ -45,7 +45,7 @@ export async function loadAgentContext(scope: AgentScope, name: string) {
       recurringTasks: routines,
       latestReports: reports.slice(0, 3).map((r) => ({ ...r, content: r.content.slice(0, 6000) })),
     }),
-    "MEMORY.md is this agent's stored Markdown, editable through its MEMORY.md dialog. In personal chat, append_agent_memory is available on supported turns; otherwise the management step can record notes. Only claim a change after a successful tool or management result. Development and computer execution receive read-only memory.",
+    "MEMORY.md is this agent's stored Markdown, editable through its MEMORY.md dialog. In personal chat, append_agent_memory is available on supported turns; otherwise the management step can record notes. Only claim a change after a successful tool or management result.",
     "Google integrations are global: user menu → Google 연동. Drive supports search/read and Calendar supports viewing schedules and proposing event drafts. Calendar events are created only by the user clicking the review dialog registration button; no invitations are sent. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under this agent's 반복 업무/보고서. Proposed schedules are not calendar events. Only interval schedules (5 minutes–7 days) are supported, not exact clock times.",
   ].join("\n\n");
 }

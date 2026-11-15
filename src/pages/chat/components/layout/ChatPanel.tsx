@@ -12,13 +12,6 @@ type ChatPanelProps = {
   conversationLabel: string;
   conversationModel: string;
   conversationError: string;
-  executionMode: "chat" | "codex" | "computer";
-  onExecutionModeChange: (mode: "chat" | "codex" | "computer") => void;
-  canUseCodex: boolean;
-  isCodexRunning: boolean;
-  onCancelCodex: () => void;
-  isComputerRunning: boolean;
-  onCancelComputer: () => void;
   isConversationBusy: boolean;
   onStartAgentChat: (index: number) => void;
   agents: AgentItem[];
@@ -46,13 +39,6 @@ export function ChatPanel({
   conversationLabel,
   conversationModel,
   conversationError,
-  executionMode,
-  onExecutionModeChange,
-  canUseCodex,
-  isCodexRunning,
-  onCancelCodex,
-  isComputerRunning,
-  onCancelComputer,
   isConversationBusy,
   onStartAgentChat,
   agents,
@@ -280,23 +266,6 @@ export function ChatPanel({
       {workspaceView === "chat" && (
         <footer className="composer-wrap">
           <div className="composer-floating-actions">
-            {canUseCodex && (
-              <label className="chip">
-                실행 방식{" "}
-                <select
-                  aria-label="실행 방식"
-                  value={executionMode}
-                  disabled={isConversationBusy}
-                  onChange={(event) =>
-                    onExecutionModeChange(event.target.value as "chat" | "codex" | "computer")
-                  }
-                >
-                  <option value="chat">일반 대화</option>
-                  <option value="codex">Codex 개발 실행</option>
-                  <option value="computer">컴퓨터 제어</option>
-                </select>
-              </label>
-            )}
             <div className="project-chip-wrap" ref={projectPanelRef}>
               {isProjectPanelOpen && (
                 <div className="project-path-popover">
@@ -395,18 +364,6 @@ export function ChatPanel({
             </div>
           </div>
 
-          {executionMode === "computer" && (
-            <p className="composer-hint">
-              요청을 보내면 제어할 창을 선택합니다. Windows와 이미지 지원 모델이 필요해요. 선택한
-              창을 확인하며 클릭·입력·스크롤하고, 중지 버튼이나 F8로 멈출 수 있습니다.
-            </p>
-          )}
-          {executionMode === "codex" && (
-            <p className="composer-hint">
-              Codex CLI 로그인과 프로젝트 폴더가 필요합니다. 파일을 수정하고 명령을 실행할 수
-              있습니다. 최근 텍스트 대화만 전달되며 이전 CLI 도구 이력은 이어지지 않습니다.
-            </p>
-          )}
           <div className="composer-box">
             <textarea
               value={inputValue}
@@ -427,16 +384,6 @@ export function ChatPanel({
             />
             <div className="composer-actions">
               <span className="composer-hint">Enter로 보내기 · Shift + Enter로 줄바꿈</span>
-              {isComputerRunning && (
-                <button type="button" className="chip" onClick={onCancelComputer}>
-                  컴퓨터 제어 중지
-                </button>
-              )}
-              {isCodexRunning && (
-                <button type="button" className="chip" onClick={onCancelCodex}>
-                  작업 취소
-                </button>
-              )}
               <button
                 className="send-btn"
                 type="button"

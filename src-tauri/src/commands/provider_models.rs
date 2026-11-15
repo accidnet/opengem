@@ -156,7 +156,6 @@ fn openai_text_model(model: &str) -> bool {
     let language_model = id.starts_with("gpt-")
         || id.starts_with("chatgpt-")
         || id.starts_with("codex-")
-        || id.starts_with("computer-use")
         || id
             .strip_prefix('o')
             .and_then(|s| s.bytes().next())

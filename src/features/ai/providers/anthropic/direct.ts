@@ -1,8 +1,3 @@
-import {
-  buildAnthropicImageMessage,
-  validateMessageImages,
-  imageRequestError,
-} from "@/features/ai/imageMessages";
 import { normalizeBaseUrl } from "@/lib/utils";
 
 import type { LLMRequest, LLMResponse } from "@/lib/llm/types";
@@ -11,7 +6,6 @@ import { extractFinishReason, extractTextChunk, extractUsage } from "@/features/
 import { parseSSEStream } from "@/features/ai/stream";
 
 export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
-  validateMessageImages(input.messages);
   const shouldStream = input.stream ?? true;
   const { system, messages } = splitSystemMessages(input.messages);
   const response = await fetch(resolveAnthropicUrl(input.apiBaseUrl), {
@@ -20,7 +14,10 @@ export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
     body: JSON.stringify({
       model: input.model,
       system,
-      messages: messages.map(buildAnthropicImageMessage),
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: [{ type: "text", text: message.content }],
+      })),
       max_tokens: 4096,
       stream: shouldStream,
     }),
@@ -28,8 +25,6 @@ export async function sendToAnthropic(input: LLMRequest): Promise<LLMResponse> {
   });
 
   if (!response.ok) {
-    if (input.messages.some((message) => message.images?.length))
-      throw imageRequestError("Anthropic", response.status);
     const detail = await response.text();
     throw new Error(`Anthropic API error (${response.status}): ${detail || response.statusText}`);
   }
