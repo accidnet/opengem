@@ -5,7 +5,7 @@ const SETTINGS_SCHEMA: &str = include_str!("../sql/migrations/002_llm_settings.s
 const AUTH_PREFERENCES: &str = include_str!("../sql/migrations/016_openai_auth_preferences.sql");
 const REPAIR_PROVIDER_SETTINGS: &str = "022_repair_legacy_provider_settings";
 
-const MIGRATIONS: [(&str, &str); 22] = [
+const MIGRATIONS: [(&str, &str); 23] = [
     ("001_init", include_str!("../sql/migrations/001_init.sql")),
     ("002_llm_settings", SETTINGS_SCHEMA),
     (
@@ -82,6 +82,10 @@ const MIGRATIONS: [(&str, &str); 22] = [
         include_str!("../sql/migrations/021_app_settings.sql"),
     ),
     (REPAIR_PROVIDER_SETTINGS, ""),
+    (
+        "023_schedules",
+        include_str!("../sql/migrations/023_schedules.sql"),
+    ),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), String> {
@@ -321,7 +325,11 @@ mod tests {
         db.execute_batch(AUTH_PREFERENCES).unwrap();
         db.execute_batch("UPDATE llm_settings SET openai_api_key_enabled=0")
             .unwrap();
-        for (name, _) in &MIGRATIONS[..21] {
+        // 이 fixture는 Provider 테이블만 재현합니다.
+        for (name, _) in MIGRATIONS
+            .iter()
+            .filter(|(name, _)| *name != REPAIR_PROVIDER_SETTINGS)
+        {
             db.execute("INSERT INTO schema_migrations(name) VALUES(?1)", [name])
                 .unwrap();
         }
@@ -463,5 +471,39 @@ mod tests {
         assert!(target.is_none());
         run_migrations(&mut connection).unwrap();
         assert_eq!(ids(&connection), original_ids);
+    }
+
+    #[test]
+    fn upgrades_email_routine_without_losing_scope_reports_or_seen_mail() {
+        let mut db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "PRAGMA foreign_keys=ON; CREATE TABLE schema_migrations(name TEXT PRIMARY KEY)",
+        )
+        .unwrap();
+        for (name, sql) in &MIGRATIONS[..22] {
+            db.execute_batch(sql).unwrap();
+            db.execute("INSERT INTO schema_migrations(name) VALUES(?1)", [name])
+                .unwrap();
+        }
+        db.execute_batch("INSERT INTO agent_routines(id,mode_id,agent_id,instruction,interval_minutes,checkpoint,next_run_at,mailbox_email,enabled)
+          SELECT 'old',mode_id,agent_id,'요약',60,123,456,'old@example.com',0 FROM operation_mode_agents LIMIT 1;
+          INSERT INTO agent_reports VALUES('report','old','기존 보고서','success',321);
+          INSERT INTO agent_routine_seen_messages VALUES('old','old@example.com','seen',123);").unwrap();
+        run_migrations(&mut db).unwrap();
+        run_migrations(&mut db).unwrap();
+        let valid: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM agent_routines r
+          JOIN agent_reports p ON p.routine_id=r.id JOIN agent_routine_seen_messages s ON s.routine_id=r.id
+          JOIN operation_mode_agents a ON a.agent_id=r.agent_id AND a.mode_id=r.mode_id
+          WHERE r.kind='email' AND r.id='old' AND r.enabled=0 AND r.checkpoint=123 AND r.scheduled_at=456
+            AND r.next_run_at=456 AND p.content='기존 보고서' AND s.message_id='seen' AND s.mailbox_email=r.mailbox_email)", [], |r| r.get(0)).unwrap();
+        assert!(valid);
+        assert!(db
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .query([])
+            .unwrap()
+            .next()
+            .unwrap()
+            .is_none());
     }
 }

@@ -198,7 +198,7 @@ fn decode_response<T: DeserializeOwned>(response: Response) -> Result<T, String>
     let status = response.status();
     if !status.is_success() {
         return Err(match status.as_u16() {
-            400 | 401 => "Gmail 인증이 만료되었거나 요청이 유효하지 않습니다. 사용자 메뉴 → Google 연동에서 다시 연결해 주세요.".to_string(),
+            400 | 401 => "Gmail 인증이 만료되었거나 요청이 유효하지 않습니다. 플러그인에서 Gmail을 다시 연결해 주세요.".to_string(),
             403 => "Gmail 읽기 권한과 Google Cloud의 Gmail API 사용 설정을 확인해 주세요.".to_string(),
             429 => "Gmail 요청 한도에 도달했습니다. 잠시 후 다시 시도합니다.".to_string(),
             code => format!("Gmail 요청에 실패했습니다 (HTTP {code}). 잠시 후 다시 시도해 주세요."),

@@ -96,13 +96,13 @@ pnpm run tauri:dev
 
 GitHub의 **Actions → release → Run workflow**에서 `main`을 선택하고 배포 버전(예: `0.1.3`)과 대상 커밋 SHA를 입력합니다. SHA를 비우면 실행 시점의 main 커밋을 사용합니다. 선택한 커밋에 태그를 붙여 Windows 설치 파일을 빌드·공개하며, main에 버전 커밋이나 PR을 만들지 않습니다. 버전 주입, 재시도 및 서명키 관리 방법은 [릴리즈 가이드](docs/release.md)를 참고하세요.
 
-## 에이전트 기억과 Google 연동
+## 에이전트 기억과 Google 플러그인
 
-각 에이전트의 성격과 Markdown 기억을 따로 관리하고, 대화로 Gmail 새 메일 요약·일정 정리를 맡길 수 있습니다. Gmail·Drive·Calendar 연결은 사용자 메뉴의 **Google 연동**에서 서비스별로 설정합니다. Drive 문서를 검색·읽고 Calendar 일정을 조회하거나 초안을 검토해 등록할 수 있습니다. 반복 업무는 앱 실행 중 동작합니다.
+각 에이전트의 성격과 Markdown 기억을 따로 관리하고, 대화로 Gmail 새 메일 요약·일정 정리를 맡길 수 있습니다. **플러그인**에서 Gmail, Google Drive, Google Calendar를 선택해 Google 계정으로 로그인합니다. Drive 문서를 검색하고 읽거나 Calendar 일정을 조회하고 초안을 검토해 등록할 수 있습니다. **예약**은 OpenGem이 실행 중일 때 동작합니다.
 
-- [에이전트 기억과 반복 업무 사용 안내](docs/agent-workspace.md)
+- [에이전트 기억과 모드·에이전트별 예약](docs/agent-workspace.md)
 - [Gmail 연결 설정](docs/email-setup.md)
-- [Google Drive·Calendar 연결과 사용](docs/google-workspace.md)
+- [Google 플러그인 연결과 사용](docs/google-workspace.md)
 
 ## 컴퓨터 제어
 

@@ -79,7 +79,7 @@ function CalendarEventDraftContent({
         const connection = settings.services.find((service) => service.service === "calendar");
         if (!connection?.connected || !connection.email)
           throw new Error(
-            "Calendar 연결이 필요합니다. 전체 Google 연동에서 Calendar를 연결해 주세요."
+            "Calendar 연결이 필요합니다. 플러그인에서 Calendar를 연결해 주세요."
           );
         if (connection.email !== draft.expectedAccountEmail)
           throw new Error(

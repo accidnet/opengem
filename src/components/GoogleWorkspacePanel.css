@@ -6,13 +6,6 @@
   color: var(--text-main);
   font-size: 13px;
 }
-.google-workspace-account {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--panel-soft);
-  border-radius: 9px;
-  overflow-wrap: anywhere;
-}
 .google-workspace-help {
   margin: 0;
   font-size: 12px;

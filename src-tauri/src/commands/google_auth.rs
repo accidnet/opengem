@@ -1,3 +1,4 @@
+use super::settings::read_callback_target;
 use crate::app_state::AppState;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::{distributions::Alphanumeric, Rng};
@@ -56,10 +57,7 @@ impl GoogleService {
         }
     }
     fn setup_message(self) -> String {
-        format!(
-            "사용자 메뉴 → Google 연동에서 {}을 연결해 주세요.",
-            self.label()
-        )
+        format!("플러그인에서 {}을 연결해 주세요.", self.label())
     }
 }
 const SERVICES: [GoogleService; 3] = [
@@ -85,6 +83,8 @@ struct Secrets {
     #[serde(default)]
     client_secret: String,
     refresh_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    issued_to: Option<String>,
 }
 struct Settings {
     client_id: String,
@@ -93,6 +93,52 @@ struct Settings {
     email: Option<String>,
     connected: bool,
     granted_scopes: String,
+}
+
+// 배포자는 Google에 등록한 데스크톱 앱을 빌드할 때 지정합니다.
+// 기존 설치에서 직접 저장한 OAuth 클라이언트는 계속 우선합니다.
+fn bundled_oauth_client() -> Option<(&'static str, &'static str)> {
+    let id = option_env!("OPENGEM_GOOGLE_CLIENT_ID")?.trim();
+    let secret = option_env!("OPENGEM_GOOGLE_CLIENT_SECRET")?.trim();
+    (valid_client_id(id) && !secret.is_empty()).then_some((id, secret))
+}
+
+fn valid_client_id(id: &str) -> bool {
+    id.ends_with(".apps.googleusercontent.com")
+        && id.len() <= 256
+        && !id.chars().any(char::is_whitespace)
+}
+
+impl Settings {
+    fn oauth_client_id(&self) -> &str {
+        if self.client_id.is_empty() {
+            bundled_oauth_client().map_or("", |(id, _)| id)
+        } else {
+            &self.client_id
+        }
+    }
+
+    fn oauth_client_secret(&self) -> Result<String, String> {
+        if self.client_id.is_empty() {
+            Ok(bundled_oauth_client()
+                .map_or("", |(_, secret)| secret)
+                .to_owned())
+        } else {
+            Ok(load_secrets(&self.client_key)?.client_secret)
+        }
+    }
+
+    fn refresh_token<'a>(&self, secrets: &'a Secrets) -> Option<&'a str> {
+        // 구버전 토큰은 사용자가 저장한 클라이언트에서만 발급될 수 있었습니다.
+        let matching_client = match &secrets.issued_to {
+            Some(id) => id == self.oauth_client_id(),
+            None => !self.client_id.is_empty(),
+        };
+        secrets
+            .refresh_token
+            .as_deref()
+            .filter(|token| matching_client && !token.is_empty())
+    }
 }
 
 #[derive(Serialize)]
@@ -203,7 +249,7 @@ fn verify_scopes(service: GoogleService, scope: Option<&str>) -> Result<String, 
     let scope = scope.unwrap_or_default();
     if !scopes_sufficient(service, scope) {
         return Err(format!(
-            "{}에 필요한 권한을 모두 받지 못했습니다. Google 연동에서 다시 연결해 주세요.",
+            "{}에 필요한 권한을 모두 받지 못했습니다. 플러그인에서 다시 연결해 주세요.",
             service.label()
         ));
     }
@@ -213,10 +259,10 @@ fn verify_scopes(service: GoogleService, scope: Option<&str>) -> Result<String, 
 pub(crate) fn settings_payload(path: &Path) -> Result<GoogleSettingsPayload, String> {
     let db = connection(path)?;
     let common = load_settings(&db, GoogleService::Gmail)?;
-    let client_secrets = load_secrets(&common.client_key);
-    let has_client_secret = client_secrets
+    let client_secret = common.oauth_client_secret();
+    let has_client_secret = client_secret
         .as_ref()
-        .is_ok_and(|s| !s.client_secret.is_empty());
+        .is_ok_and(|secret| !secret.is_empty());
     let mut states = runtime()?;
     let mut services = Vec::new();
     for service in SERVICES {
@@ -227,13 +273,13 @@ pub(crate) fn settings_payload(path: &Path) -> Result<GoogleSettingsPayload, Str
             && has_client_secret
             && secrets
                 .as_ref()
-                .is_ok_and(|s| s.refresh_token.as_ref().is_some_and(|v| !v.is_empty()))
+                .is_ok_and(|s| settings.refresh_token(s).is_some())
             && scopes_sufficient(service, &settings.granted_scopes);
         let error = status
             .last_error
             .clone()
             .or_else(|| secrets.err())
-            .or_else(|| client_secrets.as_ref().err().cloned())
+            .or_else(|| client_secret.as_ref().err().cloned())
             .or_else(|| (settings.connected && !connected).then(|| service.setup_message()));
         services.push(GoogleServiceStatus {
             service,
@@ -244,7 +290,7 @@ pub(crate) fn settings_payload(path: &Path) -> Result<GoogleSettingsPayload, Str
         });
     }
     Ok(GoogleSettingsPayload {
-        client_id: common.client_id,
+        client_id: common.oauth_client_id().to_owned(),
         has_client_secret,
         services,
     })
@@ -282,10 +328,7 @@ pub(crate) fn save_settings(
     input: SaveGoogleSettingsInput,
 ) -> Result<GoogleSettingsPayload, String> {
     let client_id = input.client_id.trim();
-    if !client_id.ends_with(".apps.googleusercontent.com")
-        || client_id.len() > 256
-        || client_id.chars().any(char::is_whitespace)
-    {
+    if !valid_client_id(client_id) {
         return Err(
             "Google Cloud에서 만든 데스크톱 앱 OAuth 클라이언트 ID를 입력해 주세요.".to_string(),
         );
@@ -299,18 +342,23 @@ pub(crate) fn save_settings(
         let db = connection(path)?;
         let current = load_settings(&db, GoogleService::Gmail)?;
         let old = load_secrets(&current.client_key)?;
-        let same_client = current.client_id == client_id;
+        let same_client = current.oauth_client_id() == client_id;
+        let old_client_secret = if current.client_id.is_empty() {
+            current.oauth_client_secret()?
+        } else {
+            old.client_secret
+        };
         let client_secret = if !secret.is_empty() {
             secret
         } else if same_client {
-            old.client_secret.clone()
+            old_client_secret.clone()
         } else {
             String::new()
         };
         if client_secret.is_empty() {
             return Err("데스크톱 앱 OAuth 클라이언트 보안 비밀번호를 입력해 주세요.".to_string());
         }
-        let changed = !same_client || old.client_secret != client_secret;
+        let changed = !same_client || old_client_secret != client_secret;
         let key = if current.client_key.is_empty() {
             random_string(32)
         } else {
@@ -332,6 +380,7 @@ pub(crate) fn save_settings(
             &Secrets {
                 client_secret,
                 refresh_token: if changed { None } else { old.refresh_token },
+                issued_to: if changed { None } else { old.issued_to },
             },
         )?;
         db.execute("UPDATE email_connection_settings SET client_id=?1,credential_key=?2,connected=CASE WHEN ?3 THEN 0 ELSE connected END,email=CASE WHEN ?3 THEN NULL ELSE email END,updated_at=?4 WHERE id=1",params![client_id,key,changed,now_millis()]).map_err(|e|e.to_string())?;
@@ -354,9 +403,11 @@ pub(crate) fn begin_login(
     let mut states = runtime()?;
     let db = connection(path)?;
     let mut settings = load_settings(&db, service)?;
-    let client_secret = load_secrets(&settings.client_key)?.client_secret;
-    if settings.client_id.is_empty() || client_secret.is_empty() {
-        return Err(service.setup_message());
+    let client_secret = settings.oauth_client_secret()?;
+    if settings.oauth_client_id().is_empty() || client_secret.is_empty() {
+        return Err(
+            "플러그인의 OAuth 클라이언트 설정에서 Google 데스크톱 앱 정보를 저장해 주세요.".into(),
+        );
     }
     if settings.credential_key.is_empty() {
         settings.credential_key = random_string(32);
@@ -370,12 +421,12 @@ pub(crate) fn begin_login(
         .map_err(|_| "Google 로그인용 로컬 포트를 열지 못했습니다.".to_string())?;
     listener.set_nonblocking(true).map_err(|e| e.to_string())?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let redirect_uri = format!("http://127.0.0.1:{port}/oauth/callback");
+    let redirect_uri = format!("http://127.0.0.1:{port}");
     let verifier = random_string(96);
     let expected_state = random_string(48);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let authorization_url = authorize_url(
-        &settings.client_id,
+        settings.oauth_client_id(),
         &redirect_uri,
         &challenge,
         &expected_state,
@@ -486,7 +537,7 @@ fn authorize_url(
         ("response_type", "code"),
         ("scope", scope.as_str()),
         ("access_type", "offline"),
-        ("prompt", "consent"),
+        ("prompt", "consent select_account"),
         ("code_challenge", challenge),
         ("code_challenge_method", "S256"),
         ("state", state),
@@ -503,7 +554,13 @@ fn http_client() -> Result<Client, String> {
 }
 fn error_status(service: GoogleService, status: u16) -> String {
     let label = service.label();
-    match status{400|401=>format!("{label} 인증이 만료되었거나 요청이 유효하지 않습니다. Google 연동에서 다시 연결해 주세요."),403=>format!("{label} 권한과 Google Cloud의 API 사용 설정을 확인해 주세요."),404=>format!("{label} 항목을 찾을 수 없거나 접근할 수 없습니다."),429=>format!("{label} 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."),code=>format!("{label} 요청에 실패했습니다 (HTTP {code}). 잠시 후 다시 시도해 주세요.")}
+    match status {
+        400 | 401 => format!("{label} 인증이 만료되었거나 요청이 유효하지 않습니다. 플러그인에서 다시 연결해 주세요."),
+        403 => format!("{label} 권한과 Google Cloud의 API 사용 설정을 확인해 주세요."),
+        404 => format!("{label} 항목을 찾을 수 없거나 접근할 수 없습니다."),
+        429 => format!("{label} 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."),
+        code => format!("{label} 요청에 실패했습니다 (HTTP {code}). 잠시 후 다시 시도해 주세요."),
+    }
 }
 fn response_bytes(
     response: Response,
@@ -574,12 +631,13 @@ pub(crate) fn record_result(
 }
 
 fn callback_code(target: &str, expected_state: &str) -> Result<Option<String>, String> {
-    let url = Url::parse(&format!("http://127.0.0.1{target}"))
-        .map_err(|_| "로그인 응답이 잘못되었습니다.".to_string())?;
-    if url.path() != "/oauth/callback" {
+    // 브라우저가 요청한 루프백 루트의 쿼리만 이 로그인에 대응시킵니다.
+    let Some(query) = target.strip_prefix("/?") else {
         return Ok(None);
-    }
-    let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
+    };
+    let values: HashMap<_, _> = url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect();
     if values.get("state").map(String::as_str) != Some(expected_state) {
         return Ok(None);
     }
@@ -628,24 +686,13 @@ fn login_flow(
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(2)))
-                    .map_err(|error| error.to_string())?;
-                let mut buffer = [0u8; 8192];
-                let Ok(length) = stream.read(&mut buffer) else {
+                // Windows에서 리스너의 논블로킹 설정을 상속한 소켓도 브라우저의 요청을 기다립니다.
+                stream.set_nonblocking(false).map_err(|e| e.to_string())?;
+                let read_deadline = deadline.min(Instant::now() + Duration::from_secs(3));
+                let Some(target) = read_callback_target(&mut stream, read_deadline) else {
                     continue;
                 };
-                let request = String::from_utf8_lossy(&buffer[..length]);
-                let Some(line) = request.lines().next() else {
-                    continue;
-                };
-                let mut fields = line.split_whitespace();
-                if fields.next() != Some("GET") {
-                    respond(&mut stream, false);
-                    continue;
-                }
-                let target = fields.next().unwrap_or("");
-                let code = match callback_code(target, expected_state) {
+                let code = match callback_code(&target, expected_state) {
                     Ok(Some(code)) => code,
                     Ok(None) => {
                         respond(&mut stream, false);
@@ -693,7 +740,7 @@ fn finish_login(
         client
             .post("https://oauth2.googleapis.com/token")
             .form(&[
-                ("client_id", settings.client_id.as_str()),
+                ("client_id", settings.oauth_client_id()),
                 ("client_secret", client_secret),
                 ("code", code),
                 ("code_verifier", verifier),
@@ -767,6 +814,7 @@ fn finish_login(
                 String::new()
             },
             refresh_token: Some(refresh_token),
+            issued_to: Some(settings.oauth_client_id().to_owned()),
         },
     )?;
     set_service_identity(&mut db, service, Some(&email), &granted_scopes)?;
@@ -808,18 +856,17 @@ pub(crate) fn service_access(
     if let Some(access) = cached.filter(|token| token.expires_at > now_millis() + 60_000) {
         return Ok((access.value, email, generation));
     }
-    let common = load_secrets(&settings.client_key)?;
+    let client_secret = settings.oauth_client_secret()?;
     let mut secrets = load_secrets(&settings.credential_key)?;
-    let refresh = secrets
-        .refresh_token
-        .as_deref()
+    let refresh = settings
+        .refresh_token(&secrets)
         .ok_or_else(|| service.setup_message())?;
     let tokens: TokenResponse = decode_response(
         http_client()?
             .post("https://oauth2.googleapis.com/token")
             .form(&[
-                ("client_id", settings.client_id.as_str()),
-                ("client_secret", common.client_secret.as_str()),
+                ("client_id", settings.oauth_client_id()),
+                ("client_secret", client_secret.as_str()),
                 ("refresh_token", refresh),
                 ("grant_type", "refresh_token"),
             ])
@@ -991,6 +1038,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fresh_install_can_start_login_with_packaged_desktop_client() {
+        let path =
+            std::env::temp_dir().join(format!("opengem-oauth-{}.sqlite3", random_string(16)));
+        let mut db = connection(&path).unwrap();
+        crate::migrations::run_migrations(&mut db).unwrap();
+        drop(db);
+        let status = settings_payload(&path).unwrap();
+        let login = begin_login(&path, GoogleService::Drive);
+        if let Some((client_id, _)) = bundled_oauth_client() {
+            assert!(status.has_client_secret);
+            assert_eq!(status.client_id, client_id);
+            let url = Url::parse(&login.unwrap().authorization_url).unwrap();
+            let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert_eq!(query["client_id"], client_id);
+            assert_eq!(query["scope"], GoogleService::Drive.scopes().join(" "));
+            assert!(!query.contains_key("client_secret"));
+            let redirect = Url::parse(&query["redirect_uri"]).unwrap();
+            assert_eq!(redirect.host_str(), Some("127.0.0.1"));
+            assert!(redirect.port().is_some());
+            cancel_login(&path, GoogleService::Drive).unwrap();
+        } else {
+            assert!(!status.has_client_secret);
+            assert!(status.client_id.is_empty());
+            assert!(login.err().unwrap().contains("OAuth 클라이언트 설정"));
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn saved_client_keeps_legacy_tokens_and_rejects_another_clients_tokens() {
+        let mut db = Connection::open_in_memory().unwrap();
+        crate::migrations::run_migrations(&mut db).unwrap();
+        let mut settings = load_settings(&db, GoogleService::Gmail).unwrap();
+        let mut secrets: Secrets =
+            serde_json::from_str(r#"{"refresh_token":"test-token"}"#).unwrap();
+        assert_eq!(settings.refresh_token(&secrets), None);
+        settings.client_id = "saved-client.apps.googleusercontent.com".into();
+        assert_eq!(settings.oauth_client_id(), settings.client_id);
+        assert_eq!(settings.refresh_token(&secrets), Some("test-token"));
+        secrets.issued_to = Some(settings.client_id.clone());
+        assert_eq!(settings.refresh_token(&secrets), Some("test-token"));
+        settings.client_id = "different-client.apps.googleusercontent.com".into();
+        assert_eq!(settings.refresh_token(&secrets), None);
+    }
+
+    #[test]
     fn migration_preserves_gmail_without_connecting_other_services() {
         let db = Connection::open_in_memory().unwrap();
         db.execute_batch("CREATE TABLE email_connection_settings(id INTEGER PRIMARY KEY,credential_key TEXT,email TEXT,connected INTEGER,updated_at INTEGER);INSERT INTO email_connection_settings VALUES(1,'legacy-key','owner@example.test',1,123);").unwrap();
@@ -1016,7 +1109,7 @@ mod tests {
         for service in SERVICES {
             let url = Url::parse(&authorize_url(
                 "client",
-                "http://127.0.0.1:5555/oauth/callback",
+                "http://127.0.0.1:5555",
                 "challenge",
                 "state",
                 service,
@@ -1027,6 +1120,9 @@ mod tests {
             assert_eq!(query["code_challenge_method"], "S256");
             assert_eq!(query["state"], "state");
             assert_eq!(query["access_type"], "offline");
+            assert!(query["prompt"]
+                .split_whitespace()
+                .any(|value| value == "select_account"));
             assert!(!query.contains_key("include_granted_scopes"));
             assert!(verify_scopes(service, Some(&query["scope"])).is_ok());
             assert!(verify_scopes(service, None).is_err());
@@ -1063,27 +1159,57 @@ mod tests {
     fn callbacks_check_state_before_accepting_success_or_denial() {
         assert_eq!(callback_code("/favicon.ico", "expected").unwrap(), None);
         assert_eq!(
-            callback_code("/oauth/callback?state=wrong&code=secret", "expected").unwrap(),
+            callback_code("/?state=wrong&code=secret", "expected").unwrap(),
             None
         );
         assert_eq!(
-            callback_code(
-                "/oauth/callback?state=wrong&error=access_denied",
-                "expected"
-            )
-            .unwrap(),
+            callback_code("/?state=wrong&error=access_denied", "expected").unwrap(),
             None
         );
-        assert!(callback_code(
-            "/oauth/callback?state=expected&error=access_denied",
-            "expected"
-        )
-        .is_err());
+        assert!(callback_code("/?state=expected&error=access_denied", "expected").is_err());
         assert_eq!(
-            callback_code("/oauth/callback?state=expected&code=valid", "expected").unwrap(),
+            callback_code("/?state=expected&code=valid", "expected").unwrap(),
             Some("valid".into())
         );
     }
+
+    #[test]
+    fn loopback_accepts_browser_callback_after_delayed_headers() {
+        let path = Path::new("test-google-loopback-denial");
+        let service = GoogleService::Drive;
+        let key = runtime_key(path, service);
+        runtime()
+            .unwrap()
+            .insert(key.clone(), ServiceRuntime::default());
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut db = Connection::open_in_memory().unwrap();
+        crate::migrations::run_migrations(&mut db).unwrap();
+        let settings = load_settings(&db, service).unwrap();
+        let server = thread::spawn(move || {
+            login_flow(
+                path, service, 0, listener, &settings, "", "", "", "expected",
+            )
+        });
+        let mut browser = TcpStream::connect(address).unwrap();
+        browser
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        browser.write_all(b"GET /?state=expected&error=").unwrap();
+        thread::sleep(Duration::from_millis(200));
+        browser
+            .write_all(b"access_denied HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            .unwrap();
+        let mut page = String::new();
+        browser.read_to_string(&mut page).unwrap();
+        // 잘린 헤더로 로그인이 계속 대기하는 회귀에서도 테스트를 바로 종료합니다.
+        cancel_login(path, service).unwrap();
+        assert!(server.join().unwrap().unwrap_err().contains("거절"));
+        assert!(page.contains("OpenGem"));
+        runtime().unwrap().remove(&key);
+    }
+
     #[test]
     fn service_transport_rejects_foreign_hosts_redirects_and_write_methods() {
         assert!(validate_endpoint(

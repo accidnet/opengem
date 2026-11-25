@@ -44,7 +44,7 @@ export function useAppUpdater() {
     }
 
     if (install && backgroundBusyRef.current) {
-      setMessage("이메일 반복 업무가 끝난 뒤 업데이트를 설치해 주세요.");
+      setMessage("실행 중인 예약이 끝난 뒤 업데이트를 설치해 주세요.");
       return;
     }
 

@@ -41,11 +41,6 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-.agent-workspace button.is-primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
 .agent-workspace .agent-workspace-help {
   margin: 9px 0;
   color: var(--text-soft);
@@ -60,36 +55,6 @@
 }
 .agent-workspace-tabs button {
   padding: 8px 2px;
-}
-.agent-workspace label {
-  display: grid;
-  gap: 7px;
-  color: var(--text-soft);
-  font-size: 11px;
-}
-.agent-workspace label > span {
-  font-weight: 700;
-}
-.agent-workspace input,
-.agent-workspace textarea {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-soft);
-  color: var(--text-main);
-  font: inherit;
-  line-height: 1.6;
-}
-.agent-workspace textarea {
-  resize: vertical;
-}
-.agent-workspace input:focus,
-.agent-workspace textarea:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
 }
 .agent-memory-dialog {
   width: min(620px, calc(100vw - 32px));
@@ -132,13 +97,6 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-.agent-workspace-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-.agent-workspace .agent-workspace-error,
 .agent-workspace .agent-workspace-notice {
   margin: 9px 0;
   padding: 9px;
@@ -148,21 +106,9 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.agent-workspace .agent-workspace-error {
-  color: #c75d6a;
-}
 .agent-workspace .agent-workspace-notice {
   color: var(--primary);
 }
-.agent-email-connection {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-}
-.agent-routine-card,
 .agent-report-card {
   margin-top: 12px;
   padding: 12px;
@@ -171,51 +117,9 @@
   background: var(--panel-soft);
   font-size: 11px;
 }
-.agent-routine-title {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.agent-routine-title span {
-  color: var(--primary);
-}
-.agent-routine-card p {
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.agent-routine-card dl {
-  margin: 10px 0 0;
-  display: grid;
-  gap: 6px;
-}
-.agent-routine-card dl div {
-  display: grid;
-  grid-template-columns: 55px minmax(0, 1fr);
-  gap: 8px;
-}
-.agent-routine-card dt {
-  color: var(--text-muted);
-}
-.agent-routine-card dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.agent-routine-create {
-  margin-top: 14px;
-  font-size: 11px;
-}
-.agent-routine-create summary,
 .agent-report-card summary {
   cursor: pointer;
   line-height: 1.6;
-}
-.agent-routine-create form {
-  display: grid;
-  gap: 11px;
-  margin-top: 12px;
 }
 .agent-report-card summary {
   color: var(--text-main);

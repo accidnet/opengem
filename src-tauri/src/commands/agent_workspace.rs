@@ -3,9 +3,12 @@ use rand::{distributions::Alphanumeric, Rng};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use tauri::State;
 
+pub mod schedules;
+
 const MEMORY_LIMIT: usize = 24 * 1024;
 const LEASE_MILLIS: i64 = 10 * 60 * 1000;
-const ROUTINE_COLUMNS: &str = "r.id, m.mode_name, r.agent_id, r.instruction, r.interval_minutes, r.enabled, r.checkpoint, r.next_run_at, r.last_run_at, r.last_error, r.mailbox_email";
+const ROUTINE_COLUMNS: &str = "r.id, m.mode_name, r.agent_id, r.instruction, r.interval_minutes, r.enabled, r.checkpoint, r.next_run_at, r.last_run_at, r.last_error, r.mailbox_email, r.title, r.kind";
+const RUNNABLE_SCOPE: &str = "(r.agent_id IS NULL OR EXISTS (SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = r.mode_id AND a.agent_id = r.agent_id AND a.is_active = 1))";
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +31,9 @@ pub struct SaveMemoryInput {
 pub struct AgentRoutine {
     id: String,
     mode_name: String,
-    agent_id: String,
+    agent_id: Option<String>,
+    title: String,
+    kind: String,
     instruction: String,
     interval_minutes: i64,
     enabled: bool,
@@ -59,6 +64,8 @@ pub struct ClaimedRoutine {
     agent_name: String,
     agent_prompt: Option<String>,
     agent_model: Option<String>,
+    memory: String,
+    recent_conversations: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -191,8 +198,16 @@ fn recent_context(
     agent_id: &str,
 ) -> Result<String, String> {
     agent_mode_id(connection, mode_name, agent_id)?;
+    recent_scope_context(connection, mode_name, Some(agent_id))
+}
+
+fn recent_scope_context(
+    connection: &Connection,
+    mode_name: &str,
+    agent_id: Option<&str>,
+) -> Result<String, String> {
     let mut statement = connection.prepare(
-        "SELECT msg.side, msg.text FROM chat_messages msg JOIN chat_sessions s ON s.id = msg.session_id WHERE s.mode_name = ?1 AND s.agent_id = ?2 AND msg.side IN ('user', 'agent') AND msg.type = 'text' AND msg.text IS NOT NULL ORDER BY msg.created_at DESC, msg.message_order DESC LIMIT 20",
+        "SELECT msg.side, msg.text FROM chat_messages msg JOIN chat_sessions s ON s.id = msg.session_id WHERE s.mode_name = ?1 AND s.agent_id IS ?2 AND msg.side IN ('user', 'agent') AND msg.type = 'text' AND msg.text IS NOT NULL ORDER BY msg.created_at DESC, msg.message_order DESC LIMIT 20",
     ).map_err(|error| error.to_string())?;
     let rows = statement
         .query_map(params![mode_name, agent_id], |row| {
@@ -236,6 +251,8 @@ fn routine_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRoutine> {
         last_run_at: row.get(8)?,
         last_error: row.get(9)?,
         mailbox_email: row.get(10)?,
+        title: row.get(11)?,
+        kind: row.get(12)?,
     })
 }
 
@@ -245,7 +262,8 @@ fn read_routines(
     agent_id: &str,
 ) -> Result<Vec<AgentRoutine>, String> {
     let mode_id = agent_mode_id(connection, mode_name, agent_id)?;
-    let mut statement = connection.prepare(&format!("SELECT {ROUTINE_COLUMNS} FROM agent_routines r JOIN operation_modes m ON m.id = r.mode_id WHERE r.mode_id = ?1 AND r.agent_id = ?2")).map_err(|error| error.to_string())?;
+    // 기존 개인 채팅의 Gmail 관리 명령은 이메일 예약만 다룹니다.
+    let mut statement = connection.prepare(&format!("SELECT {ROUTINE_COLUMNS} FROM agent_routines r JOIN operation_modes m ON m.id = r.mode_id WHERE r.mode_id = ?1 AND r.agent_id = ?2 AND r.kind = 'email' ORDER BY r.id")).map_err(|error| error.to_string())?;
     let rows = statement
         .query_map(params![mode_id, agent_id], routine_from_row)
         .map_err(|error| error.to_string())?;
@@ -281,9 +299,20 @@ fn save_routine(
         .map_err(|error| error.to_string())?;
     let mode_id = agent_mode_id(&transaction, &input.mode_name, &input.agent_id)?;
     // 수정 시 확인한 이메일 위치는 보존하고, 이전 실행 결과가 새 지시를 덮어쓰지 못하게 합니다.
+    let existing = read_routines(&transaction, &input.mode_name, &input.agent_id)?;
+    if existing.len() > 1 {
+        return Err(
+            "이메일 예약이 여러 개입니다. 예약에서 변경할 작업을 선택해 주세요.".to_string(),
+        );
+    }
+    let id = existing
+        .into_iter()
+        .next()
+        .map(|r| r.id)
+        .unwrap_or_else(|| new_id("routine"));
     transaction.execute(
-        "INSERT INTO agent_routines (id, mode_id, agent_id, instruction, interval_minutes, enabled, checkpoint, next_run_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7) ON CONFLICT(mode_id, agent_id) DO UPDATE SET instruction = excluded.instruction, interval_minutes = excluded.interval_minutes, enabled = excluded.enabled, next_run_at = excluded.next_run_at, last_error = NULL, lease_id = NULL, lease_expires_at = NULL",
-        params![new_id("routine"), mode_id, input.agent_id, instruction, input.interval_minutes, input.enabled.unwrap_or(true), now],
+        "INSERT INTO agent_routines (id, mode_id, agent_id, instruction, interval_minutes, enabled, checkpoint, next_run_at, scheduled_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7) ON CONFLICT(id) DO UPDATE SET instruction = excluded.instruction, interval_minutes = excluded.interval_minutes, enabled = excluded.enabled, next_run_at = excluded.next_run_at, scheduled_at = excluded.scheduled_at, last_error = NULL, lease_id = NULL, lease_expires_at = NULL",
+        params![id, mode_id, input.agent_id, instruction, input.interval_minutes, input.enabled.unwrap_or(true), now],
     ).map_err(|error| error.to_string())?;
     let routine = read_routines(&transaction, &input.mode_name, &input.agent_id)?
         .into_iter()
@@ -307,10 +336,11 @@ fn update_routine_enabled(
     agent_id: &str,
     routine_id: &str,
     enabled: bool,
-    now: i64,
 ) -> Result<(), String> {
     let mode_id = agent_mode_id(connection, mode_name, agent_id)?;
-    let count = connection.execute("UPDATE agent_routines SET enabled = ?1, next_run_at = ?2, lease_id = NULL, lease_expires_at = NULL WHERE id = ?3 AND mode_id = ?4 AND agent_id = ?5", params![enabled, now, routine_id, mode_id, agent_id]).map_err(|error| error.to_string())?;
+    let count = connection.execute("UPDATE agent_routines SET enabled = ?1,
+        lease_id = CASE WHEN ?1 THEN lease_id END, lease_expires_at = CASE WHEN ?1 THEN lease_expires_at END
+        WHERE id = ?2 AND mode_id = ?3 AND agent_id = ?4", params![enabled, routine_id, mode_id, agent_id]).map_err(|error| error.to_string())?;
     if count == 0 {
         return Err("이 에이전트의 반복 업무를 찾을 수 없습니다.".to_string());
     }
@@ -331,7 +361,6 @@ pub fn set_agent_routine_enabled(
         &agent_id,
         &routine_id,
         enabled,
-        now_millis(),
     )
 }
 
@@ -378,12 +407,33 @@ fn claim_due(connection: &mut Connection, now: i64) -> Result<Vec<ClaimedRoutine
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| error.to_string())?;
     let candidate = transaction.query_row(
-        &format!("SELECT {ROUTINE_COLUMNS}, a.agent_name, a.prompt, COALESCE(a.model, m.default_model) FROM agent_routines r JOIN operation_modes m ON m.id = r.mode_id JOIN operation_mode_agents a ON a.mode_id = r.mode_id AND a.agent_id = r.agent_id WHERE r.enabled = 1 AND a.is_active = 1 AND r.next_run_at <= ?1 AND (r.lease_expires_at IS NULL OR r.lease_expires_at <= ?1) ORDER BY r.next_run_at, r.id LIMIT 1"),
+        &format!("SELECT {ROUTINE_COLUMNS}, COALESCE(a.agent_name, m.mode_name), a.prompt, COALESCE(a.model, m.default_model) FROM agent_routines r JOIN operation_modes m ON m.id = r.mode_id LEFT JOIN operation_mode_agents a ON a.mode_id = r.mode_id AND a.agent_id = r.agent_id WHERE r.enabled = 1 AND (r.agent_id IS NULL OR a.is_active = 1) AND r.next_run_at <= ?1 AND (r.lease_expires_at IS NULL OR r.lease_expires_at <= ?1) ORDER BY r.next_run_at, r.id LIMIT 1"),
         [now],
-        |row| Ok((routine_from_row(row)?, row.get::<_, String>(11)?, row.get::<_, Option<String>>(12)?, row.get::<_, Option<String>>(13)?)),
+        |row| Ok((routine_from_row(row)?, row.get::<_, String>(13)?, row.get::<_, Option<String>>(14)?, row.get::<_, Option<String>>(15)?)),
     ).optional().map_err(|error| error.to_string())?;
     let Some((routine, agent_name, agent_prompt, agent_model)) = candidate else {
         return Ok(Vec::new());
+    };
+    // 실행 대상을 결정한 트랜잭션에서만 컨텍스트를 읽어 모드 이름을 바꿔도 대상이 섞이지 않습니다.
+    let memory = match routine.agent_id.as_deref() {
+        Some(agent) => {
+            read_memory(
+                &transaction,
+                agent_mode_id(&transaction, &routine.mode_name, agent)?,
+                agent,
+            )?
+            .content
+        }
+        None => String::new(),
+    };
+    let recent_conversations = if routine.kind == "prompt" {
+        recent_scope_context(
+            &transaction,
+            &routine.mode_name,
+            routine.agent_id.as_deref(),
+        )?
+    } else {
+        String::new()
     };
     let lease_id = new_id("lease");
     let lease_expires_at = now + LEASE_MILLIS;
@@ -401,11 +451,13 @@ fn claim_due(connection: &mut Connection, now: i64) -> Result<Vec<ClaimedRoutine
         agent_name,
         agent_prompt,
         agent_model,
+        memory,
+        recent_conversations,
     }])
 }
 
 #[tauri::command]
-pub fn claim_due_email_routines(state: State<AppState>) -> Result<Vec<ClaimedRoutine>, String> {
+pub fn claim_due_schedules(state: State<AppState>) -> Result<Vec<ClaimedRoutine>, String> {
     claim_due(&mut state.open_connection()?, now_millis())
 }
 
@@ -425,12 +477,12 @@ fn complete_routine(
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| error.to_string())?;
-    let current: Option<(i64, i64, Option<String>)> = transaction.query_row(
-        "SELECT r.checkpoint, r.interval_minutes, r.mailbox_email FROM agent_routines r JOIN operation_mode_agents a ON a.mode_id = r.mode_id AND a.agent_id = r.agent_id WHERE r.id = ?1 AND r.lease_id = ?2 AND r.lease_expires_at > ?3 AND r.enabled = 1 AND a.is_active = 1",
+    let current = transaction.query_row(
+        &format!("SELECT r.checkpoint, r.interval_minutes, r.mailbox_email, r.kind, r.scheduled_at FROM agent_routines r WHERE r.id = ?1 AND r.lease_id = ?2 AND r.lease_expires_at > ?3 AND r.enabled = 1 AND {RUNNABLE_SCOPE}"),
         params![input.routine_id, input.lease_id, now],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, Option<String>>(2)?, row.get::<_, String>(3)?, row.get::<_, i64>(4)?)),
     ).optional().map_err(|error| error.to_string())?;
-    let Some((checkpoint, interval_minutes, bound_mailbox)) = current else {
+    let Some((checkpoint, interval_minutes, bound_mailbox, kind, scheduled_at)) = current else {
         return Err(
             "반복 업무가 변경되었거나 실행 시간이 만료되었습니다. 이전 결과는 저장하지 않았습니다."
                 .to_string(),
@@ -442,7 +494,8 @@ fn complete_routine(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let success = error.is_none();
-    let next_checkpoint = if success {
+    let email_success = success && kind == "email";
+    let next_checkpoint = if email_success {
         input
             .checkpoint
             .ok_or_else(|| "성공한 실행에는 이메일 확인 시각이 필요합니다.".to_string())?
@@ -453,23 +506,30 @@ fn complete_routine(
         return Err("이메일 확인 시각은 이전 확인 시각과 현재 시각 사이여야 합니다.".to_string());
     }
     validate_message_ids(&input.message_ids)?;
-    let mailbox = if success {
+    let mailbox = if email_success {
         let email = normalize_mailbox(input.mailbox_email.as_deref().unwrap_or_default())?;
         verify_mailbox(bound_mailbox.as_deref(), &email)?;
         Some(email)
     } else {
         bound_mailbox
     };
-    let retry_minutes = if success {
-        interval_minutes
+    // 원래 예약 시각을 기준으로 다음 미래 슬롯을 계산합니다. 수동 실행·지연 후에도 주기를 유지합니다.
+    let period = interval_minutes * 60_000;
+    let next_slot = if now < scheduled_at {
+        scheduled_at
     } else {
-        interval_minutes.min(15)
+        now + period - (now - scheduled_at) % period
+    };
+    let next_run = if success {
+        next_slot
+    } else {
+        next_slot.min(now + 15 * 60_000)
     };
     transaction.execute(
-        "UPDATE agent_routines SET checkpoint = ?1, next_run_at = ?2, last_run_at = ?3, last_error = ?4, lease_id = NULL, lease_expires_at = NULL, mailbox_email = ?7 WHERE id = ?5 AND lease_id = ?6",
-        params![next_checkpoint, now + retry_minutes * 60_000, now, error, input.routine_id, input.lease_id, mailbox],
+        "UPDATE agent_routines SET checkpoint = ?1, next_run_at = ?2, last_run_at = ?3, last_error = ?4, lease_id = NULL, lease_expires_at = NULL, mailbox_email = ?7, scheduled_at = ?8 WHERE id = ?5 AND lease_id = ?6",
+        params![next_checkpoint, next_run, now, error, input.routine_id, input.lease_id, mailbox, next_slot],
     ).map_err(|error| error.to_string())?;
-    if success {
+    if email_success {
         for message_id in &input.message_ids {
             transaction.execute("INSERT INTO agent_routine_seen_messages (routine_id, mailbox_email, message_id, checked_until) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(routine_id, mailbox_email, message_id) DO UPDATE SET checked_until = excluded.checked_until", params![input.routine_id, mailbox, message_id, next_checkpoint]).map_err(|error| error.to_string())?;
         }
@@ -487,7 +547,7 @@ fn complete_routine(
 }
 
 #[tauri::command]
-pub fn complete_email_routine(
+pub fn complete_schedule(
     state: State<AppState>,
     input: CompleteRoutineInput,
 ) -> Result<(), String> {
@@ -504,18 +564,20 @@ pub fn list_agent_reports(
     let mode_id = agent_mode_id(&connection, &mode_name, &agent_id)?;
     let mut statement = connection.prepare("SELECT p.id, p.routine_id, p.content, p.created_at, p.status FROM agent_reports p JOIN agent_routines r ON r.id = p.routine_id WHERE r.mode_id = ?1 AND r.agent_id = ?2 ORDER BY p.created_at DESC, p.id DESC LIMIT 30").map_err(|error| error.to_string())?;
     let rows = statement
-        .query_map(params![mode_id, agent_id], |row| {
-            Ok(AgentReport {
-                id: row.get(0)?,
-                routine_id: row.get(1)?,
-                content: row.get(2)?,
-                created_at: row.get(3)?,
-                status: row.get(4)?,
-            })
-        })
+        .query_map(params![mode_id, agent_id], report_from_row)
         .map_err(|error| error.to_string())?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
+}
+
+fn report_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentReport> {
+    Ok(AgentReport {
+        id: row.get(0)?,
+        routine_id: row.get(1)?,
+        content: row.get(2)?,
+        created_at: row.get(3)?,
+        status: row.get(4)?,
+    })
 }
 
 fn normalize_mailbox(value: &str) -> Result<String, String> {
@@ -551,7 +613,7 @@ fn seen_message_ids(
     validate_message_ids(&message_ids)?;
     let mailbox = normalize_mailbox(mailbox_email)?;
     let bound: Option<Option<String>> = connection.query_row(
-        "SELECT r.mailbox_email FROM agent_routines r JOIN operation_mode_agents a ON a.mode_id = r.mode_id AND a.agent_id = r.agent_id WHERE r.id = ?1 AND r.lease_id = ?2 AND r.lease_expires_at > ?3 AND r.enabled = 1 AND a.is_active = 1",
+        &format!("SELECT r.mailbox_email FROM agent_routines r WHERE r.id = ?1 AND r.kind = 'email' AND r.lease_id = ?2 AND r.lease_expires_at > ?3 AND r.enabled = 1 AND {RUNNABLE_SCOPE}"),
         params![routine_id, lease_id, now], |row| row.get(0),
     ).optional().map_err(|error| error.to_string())?;
     let bound = bound.ok_or_else(|| "반복 업무의 실행 권한이 만료되었습니다.".to_string())?;
@@ -830,37 +892,16 @@ mod tests {
         let (mut connection, ids) = setup();
         let created = routine(&mut connection, &ids[0], 1_000);
         let first = claim_due(&mut connection, 1_000).unwrap().remove(0);
-        assert!(update_routine_enabled(
-            &connection,
-            "Orchestration",
-            &ids[1],
-            &created.id,
-            false,
-            1_001
-        )
-        .is_err());
-        update_routine_enabled(
-            &connection,
-            "Orchestration",
-            &ids[0],
-            &created.id,
-            false,
-            1_001,
-        )
-        .unwrap();
+        assert!(
+            update_routine_enabled(&connection, "Orchestration", &ids[1], &created.id, false,)
+                .is_err()
+        );
+        update_routine_enabled(&connection, "Orchestration", &ids[0], &created.id, false).unwrap();
         assert!(
             complete_routine(&mut connection, finish(&first, Some(1_100), None), 1_200).is_err()
         );
         assert!(claim_due(&mut connection, 1_300).unwrap().is_empty());
-        update_routine_enabled(
-            &connection,
-            "Orchestration",
-            &ids[0],
-            &created.id,
-            true,
-            1_300,
-        )
-        .unwrap();
+        update_routine_enabled(&connection, "Orchestration", &ids[0], &created.id, true).unwrap();
         let second = claim_due(&mut connection, 1_300).unwrap().remove(0);
         connection
             .execute(

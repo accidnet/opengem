@@ -46,11 +46,11 @@ export async function loadAgentContext(scope: AgentScope, name: string) {
       latestReports: reports.slice(0, 3).map((r) => ({ ...r, content: r.content.slice(0, 6000) })),
     }),
     "MEMORY.md is this agent's stored Markdown, editable through its MEMORY.md dialog. In personal chat, append_agent_memory is available on supported turns; otherwise the management step can record notes. Only claim a change after a successful tool or management result. Development and computer execution receive read-only memory.",
-    "Google integrations are global: user menu → Google 연동. Drive supports search/read and Calendar supports viewing schedules and proposing event drafts. Calendar events are created only by the user clicking the review dialog registration button; no invitations are sent. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under this agent's 반복 업무/보고서. Proposed schedules are not calendar events. Only interval schedules (5 minutes–7 days) are supported, not exact clock times.",
+    "Google integrations are global: 플러그인. Drive supports search/read and Calendar supports viewing schedules and proposing event drafts. Calendar events are created only by the user clicking the review dialog registration button; no invitations are sent. Gmail is read-only. Email summaries use the configured AI provider. Periodic tasks run while this app is running, resume overdue work on reopening, and appear under 예약 and the agent’s 보고서. Proposed schedules are not calendar events. For a first run at a particular date and time or a mode-wide task, guide the user to 예약 → 새 작업.",
   ].join("\n\n");
 }
 
-// 관리 단계에는 외부 이메일/웹/도구 결과를 넣지 않아 반복 업무 생성 권한과 분리합니다.
+// 관리 단계에는 외부 이메일/웹/도구 결과를 넣지 않아 예약 생성 권한과 분리합니다.
 export async function manageAgentRequest(
   scope: AgentScope,
   userText: string,
@@ -83,7 +83,7 @@ export async function manageAgentRequest(
               connected: service.connected,
             })) ?? [],
           memory: memory.content,
-          routine: routines[0] ?? null,
+          routine: routines.length === 1 ? routines[0] : null,
         }),
       },
     ],
@@ -93,7 +93,11 @@ export async function manageAgentRequest(
   if (plan.routine) {
     const action = plan.routine;
     const current = routines[0];
-    if (action.action === "save") {
+    if (routines.length > 1) {
+      outcomes.push(
+        "이 에이전트의 이메일 예약이 여러 개입니다. 예약에서 변경할 작업을 선택해 주세요."
+      );
+    } else if (action.action === "save") {
       const saved = await saveEmailRoutine({
         ...scope,
         instruction: action.instruction,
@@ -101,7 +105,7 @@ export async function manageAgentRequest(
         enabled: true,
       });
       outcomes.push(
-        "이메일 반복 업무를 저장했습니다. 간격: " +
+        "이메일 예약을 저장했습니다. 간격: " +
           saved.intervalMinutes +
           "분. 앱이 실행 중일 때 처리하며 결과는 에이전트 실행 기록에 표시합니다."
       );
@@ -109,15 +113,15 @@ export async function manageAgentRequest(
         const email = await getEmailSettings();
         if (!email.connected)
           outcomes.push(
-            "아직 이메일이 연결되지 않았습니다. 사용자 메뉴 → Google 연동에서 Gmail을 연결해야 실행됩니다. 업무는 저장되어 있습니다."
+            "아직 이메일이 연결되지 않았습니다. 플러그인에서 Gmail을 연결해야 실행됩니다. 업무는 저장되어 있습니다."
           );
       } catch {
         outcomes.push(
-          "업무는 저장했지만 이메일 연결 상태를 읽지 못했습니다. 사용자 메뉴 → Google 연동을 확인해 주세요."
+          "업무는 저장했지만 이메일 연결 상태를 읽지 못했습니다. 플러그인을 확인해 주세요."
         );
       }
     } else if (!current) {
-      outcomes.push("등록된 이메일 반복 업무가 없어 요청한 동작을 수행하지 않았습니다.");
+      outcomes.push("등록된 이메일 예약이 없어 요청한 동작을 수행하지 않았습니다.");
     } else {
       const target = { ...scope, routineId: current.id };
       if (action.action === "delete") await deleteAgentRoutine(target);
@@ -125,15 +129,15 @@ export async function manageAgentRequest(
       else await setAgentRoutineEnabled({ ...target, enabled: action.action === "resume" });
       outcomes.push(
         {
-          delete: "반복 업무를 삭제했습니다.",
+          delete: "예약을 삭제했습니다.",
           run: "이메일 확인을 실행 대기열에 넣었습니다.",
-          pause: "반복 업무를 일시 중지했습니다.",
-          resume: "반복 업무를 재개했습니다.",
+          pause: "예약을 일시 중지했습니다.",
+          resume: "예약을 재개했습니다.",
         }[action.action]
       );
     }
   }
-  // 기억 충돌/용량 오류가 이미 저장한 반복 업무의 성공 여부를 가리지 않습니다.
+  // 기억 충돌/용량 오류가 이미 저장한 예약의 성공 여부를 가리지 않습니다.
   try {
     // 도구가 없는 턴만 관리 단계가 기록해 같은 발언을 두 모델이 중복 저장하지 않습니다.
     if (plan.memoryNote && (!useMemoryTool || plan.google)) {
@@ -161,7 +165,7 @@ export async function manageAgentRequest(
       calendarDraft = result.draft;
     } catch {
       outcomes.push(
-        "Google 작업을 완료하지 못했습니다. 사용자 메뉴 → Google 연동에서 연결 상태를 확인해 주세요. 일정 등록은 수행하지 않았습니다."
+        "Google 작업을 완료하지 못했습니다. 플러그인에서 연결 상태를 확인해 주세요. 일정 등록은 수행하지 않았습니다."
       );
     }
   }
@@ -170,7 +174,7 @@ export async function manageAgentRequest(
     googleContext,
     calendarDraft,
     hasGoogleRequest: Boolean(plan.google),
-    text: outcomes.join("\n") || "이번 요청에서 기억이나 반복 업무를 변경하지 않았습니다.",
+    text: outcomes.join("\n") || "이번 요청에서 기억이나 예약을 변경하지 않았습니다.",
     totalTokens: response.usage?.totalTokens ?? 0,
   };
 }

@@ -18,7 +18,7 @@ type AppHeaderProps = {
   onClearContext: () => void;
   onThemeToggle: () => void;
   onOpenPanelModal: () => void;
-  onOpenEmailSettings: () => void;
+  onOpenPlugins: () => void;
   openPanel: "left" | "right" | null;
   onTogglePanel: (panel: "left" | "right") => void;
 };
@@ -34,7 +34,7 @@ export function AppHeader({
   onClearContext,
   onThemeToggle,
   onOpenPanelModal,
-  onOpenEmailSettings,
+  onOpenPlugins,
   openPanel,
   onTogglePanel,
 }: AppHeaderProps) {
@@ -211,10 +211,10 @@ export function AppHeader({
                 role="menuitem"
                 onClick={() => {
                   setIsProfileMenuOpen(false);
-                  onOpenEmailSettings();
+                  onOpenPlugins();
                 }}
               >
-                Google 연동
+                플러그인
               </button>
             </div>
           )}
