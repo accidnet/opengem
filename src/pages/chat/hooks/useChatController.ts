@@ -20,11 +20,7 @@ import type {
   SessionItem,
 } from "@/types/chat";
 import { getErrorMessage, normalizeAgentsForUi } from "@/features/app/appHelpers";
-import {
-  conversationDraftKey,
-  findAgentSession,
-  resolveConversationAgent,
-} from "@/pages/chat/conversationTarget";
+import { conversationDraftKey, resolveConversationAgent } from "@/pages/chat/conversationTarget";
 import { createSessionModeController } from "@/hooks/sessionModeController";
 import { useChatSendMessage } from "./useChatSendMessage";
 
@@ -40,7 +36,7 @@ export function useChatController({
   isInstallingRef,
 }: UseChatControllerParams) {
   const [messages, setMessages] = useState<Message[]>(SESSION_MESSAGES);
-  const [sessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
+  const [allSessionsByMode, setSessionsByMode] = useState<Record<Mode, SessionItem[]>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
   const [conversationError, setConversationError] = useState("");
@@ -53,7 +49,6 @@ export function useChatController({
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [executionMode, setExecutionMode] = useState<"chat" | "codex" | "computer">("chat");
-  const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [modes, setModes] = useState<Mode[]>([...MODES]);
   const [selectedMode, setSelectedMode] = useState<Mode>(MODES[0]);
   const [modeIcons, setModeIcons] = useState<Record<Mode, ModeIcon>>({ ...DEFAULT_MODE_ICONS });
@@ -64,13 +59,14 @@ export function useChatController({
   const [agents, setAgents] = useState<AgentItem[]>(normalizeAgentsForUi([...AGENTS]));
   const [openSelectedModeSignal, setOpenSelectedModeSignal] = useState(0);
 
-  const resetCurrentSession = () => {
+  const resetCurrentSession = (agentId: string | null = null, mode = selectedMode) => {
+    const agent = agentId ? agents.find((item) => item.agentId === agentId) : null;
     setMessages(SESSION_MESSAGES);
     setCurrentSessionId(null);
-    setCurrentAgentId(null);
-    setCurrentSessionTitle("새 채팅");
+    setCurrentAgentId(agentId);
+    setCurrentSessionTitle(agent ? `${agent.name}와 대화` : "새 채팅");
     setCurrentSessionProjectPaths([]);
-    setInputValue("");
+    setInputValue(draftsRef.current.get(conversationDraftKey(null, mode, agentId)) ?? "");
   };
 
   const {
@@ -79,7 +75,7 @@ export function useChatController({
     getModeProjectPaths,
     handleSessionDelete: selectDeleteSession,
     handleSessionSelect: selectSavedSession,
-    loadSession,
+    openAgentSessions,
     loadOperationModes,
     refreshSessions,
     saveAgentsForSelectedMode: persistAgents,
@@ -90,6 +86,7 @@ export function useChatController({
   } = createSessionModeController({
     agents,
     currentSessionId,
+    currentAgentId,
     modeDefaultModels,
     modeIcons,
     modeProjectPaths,
@@ -99,6 +96,8 @@ export function useChatController({
     setAgents,
     setCurrentSessionId,
     setCurrentAgentId,
+    hasUnsentDraft: (mode, agentId) =>
+      Boolean(draftsRef.current.get(conversationDraftKey(null, mode, agentId))),
     restoreDraft: (session) => {
       setInputValue(
         draftsRef.current.get(
@@ -108,7 +107,6 @@ export function useChatController({
     },
     setCurrentSessionProjectPaths,
     setCurrentSessionTitle,
-    setIsSessionLoading,
     setMessages,
     setModeDefaultModels,
     setModeIcons,
@@ -154,7 +152,7 @@ export function useChatController({
         : currentAgentId && !conversationAgent?.active
           ? "비활성 에이전트입니다. 에이전트 설정에서 활성화한 뒤 대화할 수 있어요."
           : "";
-  const isConversationBusy = isLoading || isSessionLoading || isTransitioning || isInstallingUpdate;
+  const isConversationBusy = isLoading || isTransitioning || isInstallingUpdate;
   const canSend = inputValue.trim().length > 0 && !isConversationBusy && !unavailableReason;
 
   const rememberDraft = () => {
@@ -191,19 +189,7 @@ export function useChatController({
     changeConversation(async () => {
       if (!agent.agentId) throw new Error("에이전트를 저장한 뒤 개별 대화를 시작해 주세요.");
       if (currentAgentId === agent.agentId) return;
-      const sessions = await invoke<SessionItem[]>("list_chat_sessions");
-      const existing = findAgentSession(sessions, selectedMode, agent.agentId);
-      if (existing) {
-        await loadSession(existing.id);
-      } else {
-        await refreshSessions(modes, null);
-        resetCurrentSession();
-        setCurrentAgentId(agent.agentId);
-        setCurrentSessionTitle(`${agent.name}와 대화`);
-        setInputValue(
-          draftsRef.current.get(conversationDraftKey(null, selectedMode, agent.agentId)) ?? ""
-        );
-      }
+      await openAgentSessions(agent.agentId);
     });
 
   const handleSessionSelect = (session: SessionItem) =>
@@ -222,6 +208,20 @@ export function useChatController({
   };
 
   const activity = useMemo(() => buildActivityFromMessages(messages), [messages]);
+  const sessionsByMode = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(allSessionsByMode).map(([mode, sessions]) => [
+          mode,
+          sessions.filter((session) => !session.agentId),
+        ])
+      ),
+    [allSessionsByMode]
+  );
+  const agentSessions = useMemo(
+    () => (allSessionsByMode[selectedMode] ?? []).filter((session) => session.agentId),
+    [allSessionsByMode, selectedMode]
+  );
 
   const tokenPercent = useMemo(() => {
     return Math.max(5, Math.min(90, Math.round((resourceToken / 12000) * 100)));
@@ -282,6 +282,8 @@ export function useChatController({
     setCurrentSessionId(created.id);
     setCurrentSessionTitle(created.title);
     setCurrentSessionProjectPaths(created.projectPaths || []);
+    // 첫 메시지를 저장한 뒤 같은 대상의 다음 새 대화에 초안이 다시 나타나지 않게 합니다.
+    draftsRef.current.delete(conversationDraftKey(null, selectedMode, currentAgentId));
     await refreshSessions(modes, created.id);
 
     return created;
@@ -346,20 +348,12 @@ export function useChatController({
     appendStatusMessage("계획 수정 요청을 남겼습니다.");
   };
 
-  const clearContext = () => {
-    return changeConversation(async () => {
+  const startNewChat = (agentId: string | null) =>
+    changeConversation(async () => {
       await refreshSessions(modes, null);
-      resetCurrentSession();
-      setCurrentAgentId(currentAgentId);
+      draftsRef.current.delete(conversationDraftKey(null, selectedMode, agentId));
+      resetCurrentSession(agentId);
     });
-  };
-
-  const startNewChat = () => {
-    return changeConversation(async () => {
-      await refreshSessions(modes, null);
-      resetCurrentSession();
-    });
-  };
 
   const exportChat = async () => {
     const text = messages
@@ -393,6 +387,7 @@ export function useChatController({
   return {
     activity,
     agents,
+    agentSessions,
     executionMode,
     setExecutionMode,
     cancelCodexTask,
@@ -400,7 +395,6 @@ export function useChatController({
     cancelComputerTask,
     isComputerRunning,
     canSend,
-    clearContext,
     costPercent,
     currentSessionId,
     currentAgentId,

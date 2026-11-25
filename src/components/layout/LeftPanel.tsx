@@ -65,6 +65,8 @@ type LeftPanelProps = {
   getModeDefaultModel: (mode: Mode) => string;
   agents: AgentItem[];
   onAgentChat: (agent: AgentItem) => void;
+  onNewAgentChat: (agent: AgentItem) => void;
+  agentSessions: SessionItem[];
   isConversationBusy: boolean;
   currentAgentId: string | null;
   sessionsByMode: Record<Mode, SessionItem[]>;
@@ -86,6 +88,8 @@ export function LeftPanel({
   getModeDefaultModel,
   agents,
   onAgentChat,
+  onNewAgentChat,
+  agentSessions,
   isConversationBusy,
   currentAgentId,
   sessionsByMode,
@@ -288,8 +292,7 @@ export function LeftPanel({
   };
 
   const handleModeClick = (mode: Mode) => {
-    const isSelected = selectedMode === mode;
-    if (!isSelected) {
+    if (selectedMode !== mode || currentAgentId) {
       void onModeSelect(mode);
       setOpenModes((prev) => ({
         ...prev,
@@ -849,8 +852,13 @@ export function LeftPanel({
           onSessionDelete={onSessionDelete}
         />
         <AgentsSection
+          key={selectedMode}
           agents={agents}
+          agentSessions={agentSessions}
           onAgentChat={onAgentChat}
+          onNewAgentChat={onNewAgentChat}
+          onSessionSelect={onSessionSelect}
+          onSessionDelete={onSessionDelete}
           currentAgentId={currentAgentId}
           onOpenSettings={openAgentSettings}
           quickEditAgentIndex={quickEditAgentIndex}

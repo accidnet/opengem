@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   conversationDraftKey,
-  findAgentSession,
+  sessionsForTarget,
   resolveConversationAgent,
 } from "../src/pages/chat/conversationTarget.ts";
 
@@ -24,16 +24,20 @@ test("이름 변경과 재정렬 뒤에도 같은 ID를 참조하며 삭제 대�
   assert.equal(resolveConversationAgent([agents[0]], "designer"), null);
 });
 
-test("모드와 에이전트가 모두 일치하는 최신 대화만 재개한다", () => {
+test("모드와 에이전트가 모두 일치하는 대화만 최근순으로 불러온다", () => {
   const sessions = [
     { id: "general", modeName: "A", agentId: null, updatedAt: 50 },
+    { id: "legacy", modeName: "A", updatedAt: 5 },
     { id: "old", modeName: "A", agentId: "designer", updatedAt: 10 },
     { id: "other-agent", modeName: "A", agentId: "main", updatedAt: 90 },
     { id: "latest", modeName: "A", agentId: "designer", updatedAt: 20 },
     { id: "other-mode", modeName: "B", agentId: "designer", updatedAt: 100 },
   ];
-  assert.equal(findAgentSession(sessions, "A", "designer").id, "latest");
-  assert.equal(findAgentSession(sessions, "A", "missing"), undefined);
+  const ids = (agentId) => sessionsForTarget(sessions, "A", agentId).map((session) => session.id);
+  assert.deepEqual(ids("designer"), ["latest", "old"]);
+  assert.deepEqual(ids("main"), ["other-agent"]);
+  assert.deepEqual(ids("missing"), []);
+  assert.deepEqual(ids(null), ["general", "legacy"]);
   assert.equal(sessions[0].id, "general");
 });
 

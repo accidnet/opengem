@@ -73,6 +73,7 @@ export function ChatPage() {
   const {
     activity,
     agents,
+    agentSessions,
     executionMode,
     setExecutionMode,
     cancelCodexTask,
@@ -80,7 +81,6 @@ export function ChatPage() {
     cancelComputerTask,
     isComputerRunning,
     canSend,
-    clearContext,
     costPercent,
     currentSessionId,
     currentAgentId,
@@ -135,13 +135,19 @@ export function ChatPage() {
     if (selectedAgentId && selectedAgentIndex < 0) setSelectedAgentId(null);
   }, [selectedAgentIndex, selectedAgentId]);
 
+  const showConversation = (agentId: string | null) => {
+    setAgentPanelTab("memory");
+    setWorkspaceView("chat");
+    setSelectedAgentId(agentId);
+    setOpenPanel(null);
+  };
+
   const openAgentConversation = async (agent: AgentItem) => {
-    if (await startAgentChat(agent)) {
-      setAgentPanelTab("memory");
-      setWorkspaceView("chat");
-      setSelectedAgentId(agent.agentId ?? null);
-      setOpenPanel(null);
-    }
+    if (await startAgentChat(agent)) showConversation(agent.agentId ?? null);
+  };
+
+  const openNewConversation = async (agentId: string | null) => {
+    if (await startNewChat(agentId)) showConversation(agentId);
   };
 
   useEffect(() => {
@@ -211,19 +217,14 @@ export function ChatPage() {
   return (
     <div className="app-shell">
       <AppHeader
-        isConversationBusy={isConversationBusy}
+        disableSessionActions={isConversationBusy || Boolean(currentAgentId && unavailableReason)}
         theme={theme}
         isLoggedIn={settings.loggedIn}
         sessionTitle={currentSessionTitle}
         hasActiveSession={Boolean(currentSessionId)}
-        onNewChat={async () => {
-          if (await startNewChat()) {
-            setWorkspaceView("chat");
-            setSelectedAgentId(null);
-          }
-        }}
+        onNewChat={() => void openNewConversation(currentAgentId)}
         onExportChat={exportChat}
-        onClearContext={clearContext}
+        onClearContext={() => void startNewChat(currentAgentId)}
         onThemeToggle={toggleTheme}
         openPanel={openPanel}
         onTogglePanel={(panel) => {
@@ -291,13 +292,16 @@ export function ChatPage() {
         )}
         <LeftPanel
           onAgentChat={(agent) => void openAgentConversation(agent)}
+          onNewAgentChat={(agent) => {
+            if (agent.agentId) void openNewConversation(agent.agentId);
+          }}
           isConversationBusy={isConversationBusy}
           currentAgentId={currentAgentId}
           modes={modes}
           selectedMode={selectedMode}
           openSelectedModeSignal={openSelectedModeSignal}
           onModeSelect={async (mode) => {
-            await selectOperationMode(mode);
+            if (await selectOperationMode(mode)) setSelectedAgentId(null);
           }}
           onSaveModeSettings={saveOperationModeSettings}
           onSaveAgents={saveAgentsForSelectedMode}
@@ -305,11 +309,10 @@ export function ChatPage() {
           getModeProjectPaths={getModeProjectPaths}
           getModeDefaultModel={getModeDefaultModel}
           agents={agents}
+          agentSessions={agentSessions}
           sessionsByMode={sessionsByMode}
           onSessionSelect={async (session) => {
-            if (!(await handleSessionSelect(session))) return;
-            setOpenPanel(null);
-            setWorkspaceView("chat");
+            if (await handleSessionSelect(session)) showConversation(session.agentId ?? null);
           }}
           onSessionDelete={async (session) => {
             await handleSessionDelete(session);

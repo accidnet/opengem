@@ -8,7 +8,7 @@ import "./AppHeader.css";
 import type { ThemeMode } from "@/types/chat";
 
 type AppHeaderProps = {
-  isConversationBusy: boolean;
+  disableSessionActions: boolean;
   theme: ThemeMode;
   isLoggedIn: boolean;
   sessionTitle: string;
@@ -24,7 +24,7 @@ type AppHeaderProps = {
 };
 
 export function AppHeader({
-  isConversationBusy,
+  disableSessionActions,
   theme,
   isLoggedIn,
   sessionTitle,
@@ -120,7 +120,7 @@ export function AppHeader({
           type="button"
           title="새 채팅 시작"
           onClick={onNewChat}
-          disabled={isConversationBusy}
+          disabled={disableSessionActions}
         >
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
@@ -150,7 +150,7 @@ export function AppHeader({
           className="icon-btn"
           title="Clear Context"
           onClick={onClearContext}
-          disabled={isConversationBusy}
+          disabled={disableSessionActions}
         >
           <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
             delete_sweep
