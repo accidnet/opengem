@@ -449,7 +449,7 @@ export function useChatSendMessage({
     conversationLockRef.current = true;
 
     const isFirstMessageInFreshSession = currentSessionId === null && messages.length === 0;
-    if (isFirstMessageInFreshSession) {
+    if (isFirstMessageInFreshSession && !targetAgentId) {
       setOpenSelectedModeSignal((prev) => prev + 1);
     }
 

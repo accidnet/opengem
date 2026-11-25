@@ -1,6 +1,6 @@
-import { formatSessionTime } from "@/pages/chat/utils";
 import type { Mode } from "@/features/app/config/appData";
 import type { SessionItem } from "@/types/chat";
+import { SessionList } from "./SessionList";
 
 type ModeSectionProps = {
   modes: readonly Mode[];
@@ -26,9 +26,11 @@ export function ModeSection({
   onSessionDelete,
 }: ModeSectionProps) {
   return (
-    <section className="panel-block">
+    <section className="panel-block" aria-labelledby="operation-modes-label">
       <div className="section-head-with-action">
-        <h3 className="section-title">Operation Mode</h3>
+        <h3 id="operation-modes-label" className="section-title">
+          Operation Mode
+        </h3>
         <button className="small-icon-btn" type="button" title="모드 설정" onClick={onOpenSettings}>
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
             add
@@ -64,43 +66,14 @@ export function ModeSection({
                 </span>
               </button>
 
-              <div
+              <SessionList
                 id={sessionListId}
-                className={`sub-session-list ${isOpen ? "is-open" : ""}`}
-                aria-hidden={!isOpen}
-              >
-                {modeSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`session-row ${session.active ? "session-row-active" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className="session-row-main"
-                      tabIndex={isOpen ? 0 : -1}
-                      onClick={() => onSessionSelect(session)}
-                    >
-                      <span>{session.title}</span>
-                      <span>{formatSessionTime(session.updatedAt)}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="session-row-delete"
-                      tabIndex={isOpen ? 0 : -1}
-                      title="세션 삭제"
-                      aria-label={`${session.title} 세션 삭제`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onSessionDelete(session);
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                        delete
-                      </span>
-                    </button>
-                  </div>
-                ))}
-              </div>
+                label={`${mode} 대화 목록`}
+                isOpen={isOpen}
+                sessions={modeSessions}
+                onSessionSelect={onSessionSelect}
+                onSessionDelete={onSessionDelete}
+              />
             </div>
           );
         })}

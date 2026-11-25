@@ -7,10 +7,15 @@ export function resolveConversationAgent(agents: AgentItem[], agentId: string | 
     : (agents.find((agent) => agent.role === "main") ?? agents[0] ?? null);
 }
 
-export function findAgentSession(sessions: SessionItem[], modeName: string, agentId: string) {
+/** 대상이 기록되지 않은 이전 세션은 오퍼레이션 모드의 대화로 복원합니다. */
+export function sessionsForTarget(
+  sessions: SessionItem[],
+  modeName: string,
+  agentId: string | null
+) {
   return sessions
-    .filter((session) => session.modeName === modeName && session.agentId === agentId)
-    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    .filter((session) => session.modeName === modeName && (session.agentId ?? null) === agentId)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function conversationDraftKey(

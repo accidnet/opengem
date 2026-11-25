@@ -66,6 +66,7 @@
 
 .sub-session-list.is-open {
   max-height: 360px;
+  overflow-y: auto;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -142,6 +143,12 @@
 .session-row-delete:hover {
   color: #fda4af;
   background: rgba(244, 63, 94, 0.08);
+}
+
+.session-row-delete .material-symbols-outlined,
+.agent-entry-actions .material-symbols-outlined,
+.agent-session-new .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .section-head-with-action {
@@ -623,7 +630,7 @@
 
 .agent-entry-shell {
   display: grid;
-  gap: 8px;
+  min-width: 0;
 }
 
 .agent-entry {
@@ -640,8 +647,40 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
-.agent-entry-menu-btn {
-  align-self: start;
+.agent-entry-actions {
+  display: grid;
+  align-content: space-between;
+  align-self: stretch;
+}
+
+.agent-session-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c5b5f5;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agent-session-new:hover:not(:disabled),
+.agent-session-new:focus-visible {
+  background: #343440;
+}
+
+.agent-session-new:disabled {
+  color: #9693a3;
+  cursor: not-allowed;
+}
+
+.deleted-agent-heading {
+  margin: 8px 6px 4px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 
 .agent-dot {
@@ -1157,6 +1196,10 @@
 
 [data-theme="light"] .left-panel .agent-entry:hover {
   background: #343440;
+}
+
+[data-theme="light"] .left-panel .agent-entry-actions .small-icon-btn:hover {
+  color: #f3f1fa;
 }
 
 [data-theme="light"] .left-panel .session-row-active {
