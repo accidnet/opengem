@@ -166,6 +166,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENGEM_GOOGLE_CLIENT_ID: ${{ vars.OPENGEM_GOOGLE_CLIENT_ID }}
+          OPENGEM_GOOGLE_CLIENT_SECRET: ${{ secrets.OPENGEM_GOOGLE_CLIENT_SECRET }}
         with:
           projectPath: app
           tagName: ${{ steps.target.outputs.tag }}

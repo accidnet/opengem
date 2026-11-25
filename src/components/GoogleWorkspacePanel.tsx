@@ -4,7 +4,6 @@ import {
   readGoogleDriveFile,
   listGoogleCalendars,
   listGoogleCalendarEvents,
-  type GoogleSettings,
   type GoogleDriveFile,
   type GoogleCalendar,
   type GoogleCalendarEvent,
@@ -16,8 +15,7 @@ import "./GoogleWorkspacePanel.css";
 
 type GoogleWorkspacePanelProps = {
   service: "drive" | "calendar";
-  settings: GoogleSettings;
-  onOpenConnections: () => void;
+  accountEmail: string;
 };
 type DriveDocument = Awaited<ReturnType<typeof readGoogleDriveFile>>;
 
@@ -89,10 +87,6 @@ function DriveWorkspace() {
     });
   return (
     <div className="google-workspace">
-      <p className="google-workspace-help">
-        파일명으로 검색하거나 비워 두고 최근 파일을 확인하세요. Google 문서와 지원하는 텍스트 파일을
-        읽을 수 있어요. 지원하지 않는 형식은 원문에서 열어 주세요.
-      </p>
       <form
         className="google-search-form"
         onSubmit={(event: FormEvent) => {
@@ -105,7 +99,7 @@ function DriveWorkspace() {
           <input
             value={query}
             maxLength={500}
-            placeholder="예: 프로젝트 기획안"
+            placeholder="파일 이름 · 비우면 최근 파일"
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
@@ -311,8 +305,7 @@ function CalendarWorkspace({ accountEmail }: { accountEmail: string }) {
   return (
     <div className="google-workspace">
       <p className="google-workspace-help">
-        조회 결과의 시각은 이 기기의 시간대({Intl.DateTimeFormat().resolvedOptions().timeZone})로
-        표시해요. 에이전트에게 “이번 주 일정 알려 줘”라고 요청할 수도 있어요.
+        표시 시간대 · {Intl.DateTimeFormat().resolvedOptions().timeZone}
       </p>
       {loading && <p role="status">캘린더 목록을 불러오고 있어요.</p>}
       {error && (
@@ -429,35 +422,13 @@ function CalendarWorkspace({ accountEmail }: { accountEmail: string }) {
   );
 }
 
-export function GoogleWorkspacePanel({
-  service,
-  settings,
-  onOpenConnections,
-}: GoogleWorkspacePanelProps) {
-  const connection = settings.services.find((item) => item.service === service);
-  if (!connection?.connected || !connection.email)
-    return (
-      <div className="google-workspace">
-        <p>{service === "drive" ? "Google Drive" : "Google Calendar"} 연결이 필요해요.</p>
-        <p className="google-workspace-help">
-          연결 설정에서 사용할 서비스에 필요한 권한을 허용해 주세요. Gmail 연결과 별도로 연결합니다.
-        </p>
-        <button type="button" onClick={onOpenConnections}>
-          Google 연결 설정 열기
-        </button>
-      </div>
-    );
+export function GoogleWorkspacePanel({ service, accountEmail }: GoogleWorkspacePanelProps) {
   return (
     <section
       className="google-workspace"
       aria-label={service === "drive" ? "Google Drive 파일" : "Google Calendar 일정"}
     >
-      <p className="google-workspace-account">연결 계정 · {connection.email}</p>
-      {service === "drive" ? (
-        <DriveWorkspace />
-      ) : (
-        <CalendarWorkspace accountEmail={connection.email} />
-      )}
+      {service === "drive" ? <DriveWorkspace /> : <CalendarWorkspace accountEmail={accountEmail} />}
     </section>
   );
 }

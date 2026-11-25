@@ -1,13 +1,20 @@
-# Google Drive·Calendar 연결과 사용
+# Google 플러그인 연결과 사용
 
-Google OAuth 클라이언트 설정은 전역으로 공유하며 Gmail·Drive·Calendar는 각각 연결하거나 해제합니다. 서비스마다 연결된 계정과 권한을 표시하므로 Gmail만 연결한 기존 사용자에게 다른 서비스의 권한을 자동으로 추가하지 않습니다.
+**플러그인**에서 Gmail, Google Drive, Google Calendar를 각각 연결하거나 해제합니다. 플러그인마다 다른 계정을 선택할 수 있으며, 연결한 계정은 이 기기의 에이전트들이 함께 사용합니다.
 
-## 연결 준비
+## 계정 연결
 
-1. Google Cloud 프로젝트에서 사용할 서비스의 API를 켭니다: Gmail API, Google Drive API, Google Calendar API.
-2. Google Auth Platform에 데스크톱 앱 OAuth 클라이언트를 만들고 앱의 **Google 연동** 설정에 클라이언트 ID와 보안 비밀을 저장합니다. 테스트 상태인 앱에서는 사용할 계정을 테스트 사용자로 추가합니다.
-3. 사용할 서비스의 연결 버튼을 눌러 시스템 브라우저에서 해당 서비스의 권한에 동의합니다. 각 서비스의 연결 계정과 상태를 확인합니다.
-4. 서비스가 연결되지 않았거나 권한이 거절된 상태에서는 조회 대신 같은 설정 화면으로 안내합니다.
+1. **플러그인**에서 사용할 서비스를 열고 **Google로 로그인**을 누릅니다.
+2. 시스템 브라우저에서 Google 계정을 선택하고 요청한 권한을 검토합니다. Gmail은 받은편지함을 읽고, Drive는 파일을 검색하고 읽습니다. Calendar는 일정을 조회하고 사용자가 검토한 초안을 등록할 수 있습니다.
+3. 동의 후 OpenGem으로 돌아와 해당 플러그인에 표시되는 이메일 주소를 확인합니다. **연결 해제**를 누르면 이 기기에서 해당 플러그인의 갱신 토큰이 제거됩니다.
+
+## 배포용 OAuth 클라이언트
+
+Google Cloud 프로젝트에서 사용할 서비스의 API(Gmail API, Google Drive API, Google Calendar API)를 켜고 Google Auth Platform에서 **데스크톱 앱** 클라이언트를 발급합니다. 테스트 상태에서는 사용할 계정을 테스트 사용자로 추가합니다. 외부 사용자에게 배포할 때는 요청하는 권한에 대한 Google의 검증 요건도 확인합니다. [Google 데스크톱 OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app)
+
+공식 릴리스 워크플로에서는 GitHub Actions의 저장소 변수 `OPENGEM_GOOGLE_CLIENT_ID`와 저장소 시크릿 `OPENGEM_GOOGLE_CLIENT_SECRET`를 사용합니다. 로컬에서는 같은 이름의 환경 변수를 설정한 뒤 `pnpm tauri:dev` 또는 `pnpm tauri:build`를 실행합니다. 두 값은 Rust 바이너리에 포함됩니다. Google 데스크톱 클라이언트는 공개 클라이언트이므로 전용 데스크톱 자격 증명을 사용합니다.
+
+기본 클라이언트가 없는 빌드에서는 플러그인 상세의 **OAuth 클라이언트 설정**에 자신의 데스크톱 앱 ID와 클라이언트 보안 비밀을 저장한 뒤 로그인합니다. 기존 설치에 저장된 클라이언트가 있으면 그 설정을 우선합니다.
 
 토큰은 OS 자격 증명 저장소와 백엔드 안에서만 사용합니다. 에이전트·프론트엔드에 토큰을 전달하지 않습니다. 문서나 일정 내용을 대화에서 요약하도록 요청하면 선택한 모델 제공자에게 그 내용이 전달됩니다.
 
@@ -58,8 +65,6 @@ start/end는 dateTime(RFC3339, Z 또는 명시적 오프셋) 또는 date(YYYY-MM
 ## 화면 예시
 
 실제 컴포넌트에 예시 데이터를 연결한 검증 화면입니다. 실제 Google 계정이나 이메일·문서·일정은 포함하지 않습니다.
-
-![Gmail·Drive·Calendar의 독립 연결 설정](screenshots/google-settings.jpg)
 
 ![Drive 파일 검색과 문서 읽기](screenshots/google-drive.jpg)
 

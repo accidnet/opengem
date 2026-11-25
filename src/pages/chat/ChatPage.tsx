@@ -2,18 +2,19 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ComputerUseDialog } from "@/components/ComputerUseDialog";
 import { CalendarEventDraftDialog } from "@/components/CalendarEventDraftDialog";
 import type { CalendarEventDraft } from "@/features/agent/googleApi";
-import { EmailSettingsModal } from "@/components/EmailSettingsModal";
+import { PluginsDialog } from "@/components/PluginsDialog";
+import { SchedulesDialog, type ScheduleEntry } from "@/components/schedules/SchedulesDialog";
 import { useAgentRoutines } from "@/features/agent/useAgentRoutines";
 
 import { AppHeader } from "./components/layout/AppHeader";
 import { ChatPanel } from "./components/layout/ChatPanel";
 import { ProvidersSettingModal } from "./components/ProvidersSettingModal";
-import { LeftPanel } from "../../components/layout/LeftPanel";
-import { RightPanel } from "../../components/layout/RightPanel";
+import { LeftPanel } from "@/components/layout/LeftPanel";
+import { RightPanel } from "@/components/layout/RightPanel";
 import { AgentDetailPanel } from "@/components/AgentDetailPanel";
 import { TOOLS } from "@/features/app/config/appData";
-import { useAppController } from "../../hooks/useAppController";
-import { useAppUpdater } from "../../hooks/useAppUpdater";
+import { useAppController } from "@/hooks/useAppController";
+import { useAppUpdater } from "@/hooks/useAppUpdater";
 import { useChatController } from "./hooks/useChatController";
 import type { AgentItem } from "@/types/chat";
 
@@ -31,11 +32,9 @@ export function ChatPage() {
   const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<"office" | "chat">("office");
-  const pendingAgentIdRef = useRef<string | null>(null);
-  const [agentPanelTab, setAgentPanelTab] = useState<"memory" | "reports">("memory");
-  const [agentPanelOpenCount, setAgentPanelOpenCount] = useState(0);
+  const [scheduleEntry, setScheduleEntry] = useState<ScheduleEntry | null>(null);
   const appUpdater = useAppUpdater();
-  const [emailSettingsOpen, setEmailSettingsOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [calendarDraft, setCalendarDraft] = useState<CalendarEventDraft | null>(null);
   useEffect(() => {
     const showDraft = (event: Event) =>
@@ -127,8 +126,7 @@ export function ChatPage() {
   const selectedAgent = selectedAgentIndex >= 0 ? agents[selectedAgentIndex] : null;
 
   useEffect(() => {
-    setSelectedAgentId(pendingAgentIdRef.current);
-    pendingAgentIdRef.current = null;
+    setSelectedAgentId(null);
   }, [selectedMode]);
 
   useEffect(() => {
@@ -137,7 +135,6 @@ export function ChatPage() {
 
   const openAgentConversation = async (agent: AgentItem) => {
     if (await startAgentChat(agent)) {
-      setAgentPanelTab("memory");
       setWorkspaceView("chat");
       setSelectedAgentId(agent.agentId ?? null);
       setOpenPanel(null);
@@ -234,7 +231,7 @@ export function ChatPage() {
           }
           setOpenPanel((current) => (current === panel ? null : panel));
         }}
-        onOpenEmailSettings={() => setEmailSettingsOpen(true)}
+        onOpenPlugins={() => setPluginsOpen(true)}
         onOpenPanelModal={() => setIsPanelModalOpen(true)}
       />
 
@@ -245,21 +242,10 @@ export function ChatPage() {
           </span>
           <button
             type="button"
-            disabled={isConversationBusy}
-            onClick={async () => {
+            onClick={() => {
               const notice = agentRoutines.notice;
               if (!notice) return;
-              if (notice.modeName !== selectedMode) {
-                pendingAgentIdRef.current = notice.agentId;
-                if (!(await selectOperationMode(notice.modeName))) {
-                  pendingAgentIdRef.current = null;
-                  return;
-                }
-              }
-              setAgentPanelTab("reports");
-              setAgentPanelOpenCount((count) => count + 1);
-              setSelectedAgentId(notice.agentId);
-              setOpenPanel("right");
+              setScheduleEntry({ routineId: notice.routineId });
               agentRoutines.clearNotice();
             }}
           >
@@ -290,6 +276,8 @@ export function ChatPage() {
           />
         )}
         <LeftPanel
+          onOpenSchedules={() => setScheduleEntry({})}
+          onOpenPlugins={() => setPluginsOpen(true)}
           onAgentChat={(agent) => void openAgentConversation(agent)}
           isConversationBusy={isConversationBusy}
           currentAgentId={currentAgentId}
@@ -356,7 +344,6 @@ export function ChatPage() {
           onSelectAgent={(index) => {
             const agent = agents[index];
             if (!agent) return;
-            setAgentPanelTab("memory");
             setSelectedAgentId(agent.agentId ?? null);
             if (window.innerWidth <= 1280) setOpenPanel("right");
           }}
@@ -394,10 +381,11 @@ export function ChatPage() {
 
         {selectedAgent ? (
           <AgentDetailPanel
-            key={selectedMode + ":" + selectedAgent.agentId + ":" + agentPanelOpenCount}
-            initialWorkspaceTab={agentPanelTab}
+            key={selectedMode + ":" + selectedAgent.agentId}
             modeName={selectedMode}
-            onOpenEmailSettings={() => setEmailSettingsOpen(true)}
+            onOpenSchedules={() =>
+              setScheduleEntry({ modeName: selectedMode, agentId: selectedAgent.agentId })
+            }
             isConversationBusy={isConversationBusy}
             onStartChat={() => void openAgentConversation(selectedAgent)}
             agent={selectedAgent}
@@ -424,7 +412,17 @@ export function ChatPage() {
         onClose={() => setCalendarDraft(null)}
         onCreated={() => window.dispatchEvent(new Event("google-calendar-updated"))}
       />
-      <EmailSettingsModal open={emailSettingsOpen} onClose={() => setEmailSettingsOpen(false)} />
+      {scheduleEntry && (
+        <SchedulesDialog
+          entry={scheduleEntry}
+          modes={modes}
+          currentMode={selectedMode}
+          currentAgents={agents}
+          onClose={() => setScheduleEntry(null)}
+          onOpenPlugins={() => setPluginsOpen(true)}
+        />
+      )}
+      <PluginsDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       <ProvidersSettingModal
         settings={settings}
         isOpen={isPanelModalOpen}

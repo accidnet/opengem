@@ -781,7 +781,7 @@ fn save_mode_agents_in_connection(
     // 설정 저장은 에이전트 행을 재생성하므로 재삽입 후 실제로 삭제된 에이전트의 개인 자료만 지웁니다.
     transaction
         .execute(
-            "DELETE FROM agent_routines WHERE mode_id = ?1 AND NOT EXISTS (SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = agent_routines.mode_id AND a.agent_id = agent_routines.agent_id)",
+            "DELETE FROM agent_routines WHERE mode_id = ?1 AND agent_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM operation_mode_agents a WHERE a.mode_id = agent_routines.mode_id AND a.agent_id = agent_routines.agent_id)",
             params![mode_id],
         )
         .map_err(|error| error.to_string())?;

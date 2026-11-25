@@ -7,8 +7,7 @@ import "./AgentDetailPanel.css";
 type AgentDetailPanelProps = {
   agent: AgentItem;
   modeName?: string;
-  onOpenEmailSettings?: () => void;
-  initialWorkspaceTab?: "memory" | "routines" | "reports";
+  onOpenSchedules?: () => void;
   activity: ActivityItem[];
   onClose: () => void;
   onStartChat: () => void;
@@ -26,8 +25,7 @@ const activityLabels: Record<ActivityState, string> = {
 export function AgentDetailPanel({
   agent,
   modeName,
-  onOpenEmailSettings,
-  initialWorkspaceTab,
+  onOpenSchedules,
   activity,
   onClose,
   onStartChat,
@@ -112,12 +110,11 @@ export function AgentDetailPanel({
         </div>
       )}
 
-      {modeName && onOpenEmailSettings && (
+      {modeName && onOpenSchedules && (
         <AgentWorkspacePanel
-          initialTab={initialWorkspaceTab}
           modeName={modeName}
           agent={agent}
-          onOpenEmailSettings={onOpenEmailSettings}
+          onOpenSchedules={onOpenSchedules}
         />
       )}
 

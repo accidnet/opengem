@@ -1,0 +1,305 @@
+/* 연결 목록과 서비스 상세는 같은 창에서 전환합니다. */
+.plugins-dialog {
+  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: min(940px, calc(100vw - 32px));
+  max-width: none;
+  height: min(630px, calc(100dvh - 48px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--text-main);
+}
+.plugins-dialog > button[aria-label="닫기"] {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-soft);
+  font-size: 20px;
+}
+.plugins-sidebar {
+  min-width: 0;
+  padding: 23px 10px;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+.plugins-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 13px;
+  text-align: left;
+}
+.plugins-nav-item[aria-current="page"],
+.plugins-nav-item:hover {
+  background: color-mix(in srgb, var(--text-main) 7%, transparent);
+}
+.plugins-nav-item > .material-symbols-outlined {
+  font-size: 19px;
+}
+.plugins-connected {
+  margin-top: 26px;
+}
+.plugins-connected h3,
+.plugins-connected p {
+  margin: 0 10px 8px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.plugins-connected h3 {
+  font-weight: 650;
+}
+.plugins-main {
+  min-width: 0;
+  overflow: auto;
+  padding: 24px clamp(18px, 3vw, 36px) 32px;
+}
+.plugins-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding-right: 26px;
+}
+.plugins-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.plugins-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: min(210px, 100%);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-soft);
+}
+.plugins-search .material-symbols-outlined {
+  font-size: 17px;
+}
+.plugins-search input {
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12px;
+}
+.plugins-search:focus-within,
+.plugins-dialog :is(button, .plugin-client-form input):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.plugins-search input:focus {
+  outline: 0;
+}
+.plugins-catalog {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin-top: 28px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+.plugin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 8px;
+  border-radius: 11px;
+  text-align: left;
+}
+.plugin-row:hover {
+  background: var(--panel-soft);
+}
+.plugin-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel);
+  color: var(--plugin-color);
+}
+.plugin-icon-gmail {
+  --plugin-color: #d95145;
+}
+.plugin-icon-drive {
+  --plugin-color: #2b9b6b;
+}
+.plugin-icon-calendar {
+  --plugin-color: #4588df;
+}
+.plugin-icon .material-symbols-outlined {
+  font-size: 23px;
+}
+.plugins-nav-item .plugin-icon {
+  width: 19px;
+  height: 19px;
+  border: 0;
+  background: none;
+}
+.plugins-nav-item .plugin-icon .material-symbols-outlined {
+  font-size: 18px;
+}
+.plugin-row-copy {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+}
+.plugin-row-copy strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.plugin-row-copy small,
+.plugins-empty,
+.plugin-detail p {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.plugin-row-action.material-symbols-outlined {
+  font-size: 18px;
+}
+.plugin-detail {
+  display: grid;
+  gap: 22px;
+  margin-top: 20px;
+}
+.plugin-actions,
+.plugin-client-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.plugin-detail p {
+  margin: 0;
+}
+.plugin-section,
+.plugin-client-form,
+.plugin-client-form fieldset,
+.plugin-client-form label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.plugin-section,
+.plugin-client {
+  padding-top: 17px;
+  border-top: 1px solid var(--border);
+}
+.plugin-section h3 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.plugin-actions {
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+.plugin-account {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.plugins-feedback,
+.plugin-detail p.plugins-feedback {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--text-main);
+  background: var(--panel-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.plugins-feedback p {
+  margin: 0 0 8px;
+}
+.plugin-client-toggle {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.plugin-client-toggle .material-symbols-outlined {
+  font-size: 16px;
+}
+.plugin-client-form {
+  margin-top: 13px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.plugin-client-form fieldset {
+  gap: 12px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.plugin-client-form label {
+  font-size: 12px;
+}
+.plugin-client-form input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-main);
+}
+.plugin-client-form button {
+  justify-self: start;
+}
+.plugin-console-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (max-width: 730px) {
+  .plugins-dialog {
+    grid-template-columns: 145px minmax(0, 1fr);
+  }
+  .plugins-catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 540px) {
+  .plugins-dialog {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .plugins-sidebar {
+    padding: 10px 54px 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .plugins-connected {
+    display: none;
+  }
+  .plugins-sidebar .plugins-nav-item {
+    width: auto;
+  }
+  .plugins-main {
+    padding: 18px;
+  }
+  .plugins-header {
+    padding-right: 0;
+  }
+}

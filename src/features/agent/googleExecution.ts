@@ -24,12 +24,12 @@ export async function executeGoogleWorkspace(
     const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
     return /^(Google|Drive|Calendar|이메일|캘린더|문서|파일|지원하지|연결)/.test(text)
       ? text.slice(0, 500)
-      : "서비스 요청에 실패했습니다. Google 연동에서 연결과 권한을 확인해 주세요.";
+      : "서비스 요청에 실패했습니다. 플러그인에서 연결과 권한을 확인해 주세요.";
   };
   if (plan.drive) {
     if (!connected("drive"))
       outcomes.push(
-        "Google Drive가 연결되지 않았습니다. 사용자 메뉴 → Google 연동에서 Drive를 연결해 주세요."
+        "Google Drive가 연결되지 않았습니다. 플러그인에서 Drive를 연결해 주세요."
       );
     else {
       try {
@@ -74,7 +74,7 @@ export async function executeGoogleWorkspace(
   if (plan.calendar || plan.calendarList || plan.calendarDraft) {
     if (!connected("calendar"))
       outcomes.push(
-        "Google Calendar가 연결되지 않았습니다. 사용자 메뉴 → Google 연동에서 Calendar를 연결해 주세요. 일정은 아직 등록하지 않았습니다."
+        "Google Calendar가 연결되지 않았습니다. 플러그인에서 Calendar를 연결해 주세요. 일정은 아직 등록하지 않았습니다."
       );
     else {
       if (plan.calendarList) {

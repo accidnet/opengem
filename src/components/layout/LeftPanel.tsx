@@ -44,6 +44,8 @@ type QuickEditPopoverAnchor = {
 };
 
 type LeftPanelProps = {
+  onOpenSchedules: () => void;
+  onOpenPlugins: () => void;
   modes: readonly Mode[];
   selectedMode: Mode;
   openSelectedModeSignal: number;
@@ -75,6 +77,8 @@ type LeftPanelProps = {
 };
 
 export function LeftPanel({
+  onOpenSchedules,
+  onOpenPlugins,
   modes,
   selectedMode,
   openSelectedModeSignal,
@@ -833,6 +837,20 @@ export function LeftPanel({
           <span>에이전트와 함께 만드는 곳</span>
         </div>
       </div>
+      <nav className="workspace-shortcuts" aria-label="작업 공간 도구">
+        <button type="button" onClick={onOpenSchedules}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            schedule
+          </span>
+          예약
+        </button>
+        <button type="button" onClick={onOpenPlugins}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            extension
+          </span>
+          플러그인
+        </button>
+      </nav>
       <fieldset
         disabled={isConversationBusy}
         style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}

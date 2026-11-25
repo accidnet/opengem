@@ -504,7 +504,7 @@ fn store_chatgpt_login(db: &mut rusqlite::Connection, tokens: TokenResponse) -> 
     connection.commit().map_err(|error| error.to_string())
 }
 
-fn read_callback_target(stream: &mut TcpStream, deadline: Instant) -> Option<String> {
+pub(super) fn read_callback_target(stream: &mut TcpStream, deadline: Instant) -> Option<String> {
     let mut request = Vec::new();
     let mut chunk = [0u8; 2048];
     // 헤더가 여러 TCP 패킷으로 나뉘거나 선연결 후 아무 요청이 오지 않을 수 있습니다.

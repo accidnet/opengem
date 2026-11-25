@@ -659,7 +659,7 @@ export function useChatSendMessage({
       }
 
       let agentContext =
-        "This is general chat, without an assigned personal agent workspace. To remember facts or set recurring email tasks, guide the user to select an agent and start that agent conversation. Do not claim any task or memory has been saved in this general chat. Global email settings are under 사용자 메뉴 → Google 연동.";
+        "This is general chat, without an assigned personal agent workspace. To remember facts or set recurring email tasks, guide the user to select an agent and start that agent conversation. Do not claim any task or memory has been saved in this general chat. Global email settings are under 플러그인.";
       let managementTokens = 0;
       let googleContext = "";
       let hasGoogleRequest = false;
@@ -684,7 +684,7 @@ export function useChatSendMessage({
             );
         } catch {
           managementResult =
-            "기억·반복 업무 자동 처리를 완료하지 못했습니다. 저장 또는 실행 성공을 주장하지 말고, 에이전트 패널에서 등록 상태를 확인하도록 안내하세요.";
+            "기억·예약 자동 처리를 완료하지 못했습니다. 저장 또는 실행 성공을 주장하지 말고, 에이전트 패널에서 등록 상태를 확인하도록 안내하세요.";
         }
         agentContext = await loadAgentContext(agentScope, mainAgent.name);
         agentContext +=

@@ -14,7 +14,12 @@ export type AgentRoutine = AgentScope & {
   lastError: string | null;
   mailboxEmail: string | null;
 };
-export type ClaimedRoutine = AgentRoutine & {
+export type ClaimedRoutine = Omit<AgentRoutine, "agentId"> & {
+  agentId: string | null;
+  memory: string;
+  recentConversations: string;
+  kind: "email" | "prompt";
+  title: string;
   leaseId: string;
   leaseExpiresAt: number;
   agentName: string;
@@ -85,8 +90,8 @@ export const runAgentRoutineNow = (input: AgentScope & { routineId: string }) =>
   invoke<void>("run_agent_routine_now", input);
 export const listAgentReports = (scope: AgentScope) =>
   invoke<AgentReport[]>("list_agent_reports", scope);
-export const claimDueEmailRoutines = () => invoke<ClaimedRoutine[]>("claim_due_email_routines");
-export const completeEmailRoutine = (input: {
+export const claimDueSchedules = () => invoke<ClaimedRoutine[]>("claim_due_schedules");
+export const completeSchedule = (input: {
   routineId: string;
   leaseId: string;
   report: string;
@@ -94,7 +99,7 @@ export const completeEmailRoutine = (input: {
   error?: string;
   mailboxEmail?: string;
   messageIds?: string[];
-}) => invoke<void>("complete_email_routine", { input });
+}) => invoke<void>("complete_schedule", { input });
 export const getEmailRoutineSeenIds = (input: {
   routineId: string;
   leaseId: string;
